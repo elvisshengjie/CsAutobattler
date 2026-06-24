@@ -163,6 +163,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8743974477362424391ad392d69918c3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WeaponSystem
+  projectilePrefab: {fileID: 3065361462871894926, guid: 1b81dea0b0d2c6c4993a03daf971e2d2, type: 3}
+  muzzleOffset: {x: 0.35, y: 0.15}
+  projectileSpawnDelay: 0.15
 --- !u!114 &1588278451507902637
 MonoBehaviour:
   m_ObjectHideFlags: 0
