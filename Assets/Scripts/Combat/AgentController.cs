@@ -1,12 +1,11 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class AgentController : MonoBehaviour
 {
-    [Header("Obstacle Avoidance")]
-    public LayerMask obstacleMask;
-    public float obstacleCheckDistance = 0.8f;
-    public float obstacleCheckRadius = 0.25f;
-    public float avoidanceStrength = 1.2f;
+    [Header("Pathfinding")]
+    public float pathRefreshTime = 0.5f;
+    public float waypointReachDistance = 0.15f;
 
     private AgentStats stats;
     private WeaponSystem weapon;
@@ -14,7 +13,9 @@ public class AgentController : MonoBehaviour
     private Rigidbody2D rb;
 
     private GameObject currentTarget;
-    private Vector2 moveDirection;
+    private List<Vector2> currentPath;
+    private int currentWaypointIndex;
+    private float nextPathRefreshTime;
 
     private void Start()
     {
@@ -30,38 +31,76 @@ public class AgentController : MonoBehaviour
 
         if (currentTarget == null)
         {
-            moveDirection = Vector2.zero;
+            currentPath = null;
             return;
         }
 
         FaceTarget(currentTarget);
 
-        float distance = Vector2.Distance(transform.position, currentTarget.transform.position);
+        float distanceToTarget = Vector2.Distance(transform.position, currentTarget.transform.position);
 
-        if (distance > stats.attackRange)
+        if (distanceToTarget <= stats.attackRange)
         {
-            moveDirection = GetMoveDirection(currentTarget);
-        }
-        else
-        {
-            moveDirection = Vector2.zero;
+            currentPath = null;
             weapon.TryAttack(currentTarget);
+            return;
+        }
+
+        if (Time.time >= nextPathRefreshTime)
+        {
+            RefreshPath();
+            nextPathRefreshTime = Time.time + pathRefreshTime;
         }
     }
 
     private void FixedUpdate()
     {
-        if (rb == null)
+        FollowPath();
+    }
+
+    private void RefreshPath()
+    {
+        if (AStarPathfinder.Instance == null || currentTarget == null)
         {
             return;
         }
 
-        if (moveDirection == Vector2.zero)
+        currentPath = AStarPathfinder.Instance.FindPath(transform.position, currentTarget.transform.position);
+        currentWaypointIndex = 0;
+    }
+
+    private void FollowPath()
+    {
+        if (rb == null || currentPath == null || currentPath.Count == 0)
         {
             return;
         }
 
-        Vector2 newPosition = rb.position + moveDirection * stats.moveSpeed * Time.fixedDeltaTime;
+        if (currentWaypointIndex >= currentPath.Count)
+        {
+            return;
+        }
+
+        Vector2 currentPosition = rb.position;
+        Vector2 targetWaypoint = currentPath[currentWaypointIndex];
+
+        float distanceToWaypoint = Vector2.Distance(currentPosition, targetWaypoint);
+
+        if (distanceToWaypoint <= waypointReachDistance)
+        {
+            currentWaypointIndex++;
+
+            if (currentWaypointIndex >= currentPath.Count)
+            {
+                return;
+            }
+
+            targetWaypoint = currentPath[currentWaypointIndex];
+        }
+
+        Vector2 moveDirection = (targetWaypoint - currentPosition).normalized;
+        Vector2 newPosition = currentPosition + moveDirection * stats.moveSpeed * Time.fixedDeltaTime;
+
         rb.MovePosition(newPosition);
     }
 
@@ -104,46 +143,6 @@ public class AgentController : MonoBehaviour
         }
 
         return closestEnemy;
-    }
-
-    private Vector2 GetMoveDirection(GameObject target)
-    {
-        Vector2 currentPosition = rb != null ? rb.position : (Vector2)transform.position;
-        Vector2 targetPosition = target.transform.position;
-
-        Vector2 directDirection = (targetPosition - currentPosition).normalized;
-
-        RaycastHit2D hit = Physics2D.CircleCast(
-            currentPosition,
-            obstacleCheckRadius,
-            directDirection,
-            obstacleCheckDistance,
-            obstacleMask
-        );
-
-        if (hit.collider == null)
-        {
-            return directDirection;
-        }
-
-        Vector2 perpendicularA = new Vector2(-directDirection.y, directDirection.x);
-        Vector2 perpendicularB = new Vector2(directDirection.y, -directDirection.x);
-
-        Vector2 optionA = (directDirection + perpendicularA * avoidanceStrength).normalized;
-        Vector2 optionB = (directDirection + perpendicularB * avoidanceStrength).normalized;
-
-        Vector2 testA = currentPosition + optionA;
-        Vector2 testB = currentPosition + optionB;
-
-        float distanceA = Vector2.Distance(testA, targetPosition);
-        float distanceB = Vector2.Distance(testB, targetPosition);
-
-        if (distanceA < distanceB)
-        {
-            return optionA;
-        }
-
-        return optionB;
     }
 
     private void FaceTarget(GameObject target)
