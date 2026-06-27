@@ -6,6 +6,11 @@ public class CameraController : MonoBehaviour
     [Header("Drag Settings")]
     public float dragSpeed = 1f;
 
+    [Header("Zoom Settings")]
+    public float zoomSpeed = 3f;
+    public float minZoom = 3f;
+    public float maxZoom = 12f;
+
     [Header("Map Bounds")]
     public SpriteRenderer floorRenderer;
 
@@ -19,6 +24,7 @@ public class CameraController : MonoBehaviour
     private void Update()
     {
         HandleMouseDrag();
+        HandleMouseZoom();
         ClampCameraPositionToFloor();
     }
 
@@ -47,6 +53,24 @@ public class CameraController : MonoBehaviour
         transform.position += movement;
     }
 
+    private void HandleMouseZoom()
+    {
+        if (Mouse.current == null || cam == null)
+        {
+            return;
+        }
+
+        float scrollValue = Mouse.current.scroll.ReadValue().y;
+
+        if (Mathf.Abs(scrollValue) < 0.01f)
+        {
+            return;
+        }
+
+        cam.orthographicSize -= scrollValue * zoomSpeed * Time.deltaTime;
+        cam.orthographicSize = Mathf.Clamp(cam.orthographicSize, minZoom, maxZoom);
+    }
+
     private void ClampCameraPositionToFloor()
     {
         if (floorRenderer == null || cam == null)
@@ -66,8 +90,23 @@ public class CameraController : MonoBehaviour
 
         Vector3 position = transform.position;
 
-        position.x = Mathf.Clamp(position.x, minX, maxX);
-        position.y = Mathf.Clamp(position.y, minY, maxY);
+        if (minX <= maxX)
+        {
+            position.x = Mathf.Clamp(position.x, minX, maxX);
+        }
+        else
+        {
+            position.x = floorBounds.center.x;
+        }
+
+        if (minY <= maxY)
+        {
+            position.y = Mathf.Clamp(position.y, minY, maxY);
+        }
+        else
+        {
+            position.y = floorBounds.center.y;
+        }
 
         transform.position = position;
     }
