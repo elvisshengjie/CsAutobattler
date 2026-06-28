@@ -16,7 +16,7 @@ public class WeaponSystem : MonoBehaviour
     private void Start()
     {
         stats = GetComponent<AgentStats>();
-        animator = GetComponent<Animator>();
+        animator = GetComponentInChildren<Animator>();
         spriteRenderer = GetComponent<SpriteRenderer>();
     }
 

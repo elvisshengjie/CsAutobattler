@@ -16,7 +16,7 @@ public class HealthSystem : MonoBehaviour
     private void Start()
     {
         stats = GetComponent<AgentStats>();
-        animator = GetComponent<Animator>();
+        animator = GetComponentInChildren<Animator>();
         controller = GetComponent<AgentController>();
         weapon = GetComponent<WeaponSystem>();
 
