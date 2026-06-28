@@ -50,5 +50,7 @@ MonoBehaviour:
   obstacleMask:
     serializedVersion: 2
     m_Bits: 8
-  obstacleCheckRadius: 0.3
+  obstacleCheckRadius: 0.5
+  wallProximityPenalty: 4
+  wallBufferPenalty: 1
   drawGrid: 1

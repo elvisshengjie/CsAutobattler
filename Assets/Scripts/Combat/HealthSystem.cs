@@ -11,9 +11,12 @@ public class HealthSystem : MonoBehaviour
     private bool isDead = false;
 
     public float CurrentHealth => currentHealth;
+    public float HealthNormalized => stats != null && stats.maxHealth > 0f
+        ? Mathf.Clamp01(currentHealth / stats.maxHealth)
+        : 0f;
     public bool IsDead => isDead;
 
-    private void Start()
+    private void Awake()
     {
         stats = GetComponent<AgentStats>();
         animator = GetComponent<Animator>();
@@ -49,6 +52,20 @@ public class HealthSystem : MonoBehaviour
         if (controller != null)
         {
             controller.enabled = false;
+        }
+
+        AgentBrain brain = GetComponent<AgentBrain>();
+        AgentMovement movement = GetComponent<AgentMovement>();
+
+        if (brain != null)
+        {
+            brain.enabled = false;
+        }
+
+        if (movement != null)
+        {
+            movement.Stop();
+            movement.enabled = false;
         }
 
         if (weapon != null)

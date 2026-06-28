@@ -12,7 +12,12 @@ public class AStarPathfinder : MonoBehaviour
 
     [Header("Obstacle Settings")]
     public LayerMask obstacleMask;
-    public float obstacleCheckRadius = 0.3f;
+    [Tooltip("Wall clearance. Keep this at least as large as half the widest agent collider in world units.")]
+    public float obstacleCheckRadius = 0.5f;
+    [Tooltip("Cost penalty for nodes cardinally adjacent to walls to keep agents centered.")]
+    public int wallProximityPenalty = 4;
+    [Tooltip("Cost penalty for nodes 2 cells away from walls (including diagonals).")]
+    public int wallBufferPenalty = 1;
 
     [Header("Debug")]
     public bool drawGrid = true;
@@ -20,6 +25,9 @@ public class AStarPathfinder : MonoBehaviour
     private PathNode[,] grid;
     private int gridSizeX;
     private int gridSizeY;
+
+    public int GridSizeX => gridSizeX;
+    public int GridSizeY => gridSizeY;
 
     private void Awake()
     {
@@ -53,6 +61,51 @@ public class AStarPathfinder : MonoBehaviour
         }
     }
 
+    public bool IsWalkable(int x, int y)
+    {
+        return grid != null && x >= 0 && x < gridSizeX && y >= 0 && y < gridSizeY
+            && grid[x, y].walkable;
+    }
+
+    public Vector2 GridToWorld(int x, int y)
+    {
+        if (grid == null || x < 0 || x >= gridSizeX || y < 0 || y >= gridSizeY)
+        {
+            return transform.position;
+        }
+
+        return grid[x, y].worldPosition;
+    }
+
+    public bool TryGetRandomWalkablePosition(
+        Vector2 origin,
+        float minimumDistance,
+        out Vector2 position)
+    {
+        if (grid == null)
+        {
+            CreateGrid();
+        }
+
+        const int maximumAttempts = 100;
+        for (int attempt = 0; attempt < maximumAttempts; attempt++)
+        {
+            int x = Random.Range(0, gridSizeX);
+            int y = Random.Range(0, gridSizeY);
+            PathNode candidate = grid[x, y];
+
+            if (candidate.walkable &&
+                Vector2.Distance(origin, candidate.worldPosition) >= minimumDistance)
+            {
+                position = candidate.worldPosition;
+                return true;
+            }
+        }
+
+        position = origin;
+        return false;
+    }
+
     public List<Vector2> FindPath(Vector2 startWorldPosition, Vector2 targetWorldPosition)
     {
         if (grid == null)
@@ -75,7 +128,12 @@ public class AStarPathfinder : MonoBehaviour
             targetNode = FindNearestWalkableNode(targetNode);
         }
 
-        if (targetNode == null || !startNode.walkable)
+        if (!startNode.walkable)
+        {
+            startNode = FindNearestWalkableNode(startNode);
+        }
+
+        if (targetNode == null || startNode == null)
         {
             return null;
         }
@@ -116,7 +174,10 @@ public class AStarPathfinder : MonoBehaviour
                     continue;
                 }
 
-                int newMovementCost = currentNode.gCost + GetDistance(currentNode, neighbor);
+                int newMovementCost =
+                    currentNode.gCost +
+                    GetDistance(currentNode, neighbor) +
+                    GetWallPenalty(neighbor);
 
                 if (newMovementCost < neighbor.gCost || !openSet.Contains(neighbor))
                 {
@@ -245,6 +306,56 @@ public class AStarPathfinder : MonoBehaviour
         int distanceY = Mathf.Abs(nodeA.gridY - nodeB.gridY);
 
         return distanceX + distanceY;
+    }
+
+    private int GetWallPenalty(PathNode node)
+    {
+        if (HasBlockedNeighbor(node, 1, false))
+        {
+            return wallProximityPenalty;
+        }
+
+        if (HasBlockedNeighbor(node, 2, true))
+        {
+            return wallBufferPenalty;
+        }
+
+        return 0;
+    }
+
+    private bool HasBlockedNeighbor(PathNode node, int distance, bool includeDiagonals)
+    {
+        for (int offsetX = -distance; offsetX <= distance; offsetX++)
+        {
+            for (int offsetY = -distance; offsetY <= distance; offsetY++)
+            {
+                if (offsetX == 0 && offsetY == 0)
+                {
+                    continue;
+                }
+
+                if (!includeDiagonals && Mathf.Abs(offsetX) + Mathf.Abs(offsetY) != distance)
+                {
+                    continue;
+                }
+
+                int checkX = node.gridX + offsetX;
+                int checkY = node.gridY + offsetY;
+
+                // Treat map edges like walls so paths remain inside the playable area.
+                if (checkX < 0 || checkX >= gridSizeX || checkY < 0 || checkY >= gridSizeY)
+                {
+                    return true;
+                }
+
+                if (!grid[checkX, checkY].walkable)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private void OnDrawGizmos()

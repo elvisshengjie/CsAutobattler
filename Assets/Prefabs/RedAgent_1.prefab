@@ -17,6 +17,11 @@ GameObject:
   - component: {fileID: 2012844644151365765}
   - component: {fileID: -553414703926365790}
   - component: {fileID: 4723131015080064542}
+  - component: {fileID: 7695782011563518904}
+  - component: {fileID: 6301733876046368449}
+  - component: {fileID: 673653756553163297}
+  - component: {fileID: 5719298917177912084}
+  - component: {fileID: 8601592263761696315}
   m_Layer: 0
   m_Name: RedAgent_1
   m_TagString: Untagged
@@ -141,6 +146,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8743974477362424391ad392d69918c3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WeaponSystem
+  magazineSize: 10
+  currentAmmo: 10
+  reloadDuration: 2
   projectilePrefab: {fileID: 0}
   muzzleOffset: {x: 0.35, y: 0.15}
   projectileSpawnDelay: 0.15
@@ -244,3 +252,90 @@ CapsuleCollider2D:
   m_Offset: {x: 0, y: 0}
   m_Size: {x: 0.31, y: 0.7}
   m_Direction: 0
+--- !u!114 &7695782011563518904
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3165516773797943217}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e6fb5e5034a64cfda4807fa324888e4f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AgentPerception
+  sightRange: 15
+  obstacleMask:
+    serializedVersion: 2
+    m_Bits: 0
+--- !u!114 &6301733876046368449
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3165516773797943217}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7bd5a5f37b34e2683434414ae09a91d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AgentMovement
+  pathRefreshTime: 0.5
+  waypointReachDistance: 0.15
+  useAvoidance: 1
+  ignoreAgentCollisions: 0
+  avoidanceRadius: 1.1
+  avoidanceWeight: 1.5
+  sideStepWeight: 0.8
+  minimumAgentSpacing: 0.9
+--- !u!114 &673653756553163297
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3165516773797943217}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 340d40ca1b694dfdafef19c2cf26fd81, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UtilityEvaluator
+  supportRadius: 4
+  dangerRadius: 5
+--- !u!114 &5719298917177912084
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3165516773797943217}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 461da9988d3c4b8497b9943ba7d1fd7f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AgentBrain
+  evaluationInterval: 0.35
+  commitmentTime: 1
+  maximumCoverDistance: 6
+  showDecisionLabel: 1
+--- !u!114 &8601592263761696315
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3165516773797943217}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11277adad9e77604f97f3ddae05163bd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AgentPersonality
+  aggressiveness: 0.6
+  courage: 0.6
+  discipline: 0.5
+  teamwork: 0.5
+  caution: 0.4
+  preferredCombatDistance: 3
+  minimumCombatDistance: 1.5
+  maximumCombatDistance: 5
+  distanceTolerance: 0.4

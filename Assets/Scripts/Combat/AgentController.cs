@@ -1,166 +1,45 @@
-using System.Collections.Generic;
 using UnityEngine;
 
+[RequireComponent(typeof(AgentPerception))]
+[RequireComponent(typeof(AgentMovement))]
+[RequireComponent(typeof(UtilityEvaluator))]
+[RequireComponent(typeof(AgentBrain))]
 public class AgentController : MonoBehaviour
 {
     [Header("Pathfinding")]
     public float pathRefreshTime = 0.5f;
     public float waypointReachDistance = 0.15f;
 
-    private AgentStats stats;
-    private WeaponSystem weapon;
-    private SpriteRenderer spriteRenderer;
-    private Rigidbody2D rb;
-
-    private GameObject currentTarget;
-    private List<Vector2> currentPath;
-    private int currentWaypointIndex;
-    private float nextPathRefreshTime;
-
-    private void Start()
+    private void Awake()
     {
-        stats = GetComponent<AgentStats>();
-        weapon = GetComponent<WeaponSystem>();
-        spriteRenderer = GetComponent<SpriteRenderer>();
-        rb = GetComponent<Rigidbody2D>();
-    }
-
-    private void Update()
-    {
-        currentTarget = FindClosestEnemy();
-
-        if (currentTarget == null)
+        AgentPerception perception = GetComponent<AgentPerception>();
+        if (perception == null)
         {
-            currentPath = null;
-            return;
+            gameObject.AddComponent<AgentPerception>();
         }
 
-        FaceTarget(currentTarget);
-
-        float distanceToTarget = Vector2.Distance(transform.position, currentTarget.transform.position);
-
-        if (distanceToTarget <= stats.attackRange)
+        AgentMovement movement = GetComponent<AgentMovement>();
+        if (movement == null)
         {
-            currentPath = null;
-            weapon.TryAttack(currentTarget);
-            return;
+            movement = gameObject.AddComponent<AgentMovement>();
         }
 
-        if (Time.time >= nextPathRefreshTime)
+        if (GetComponent<UtilityEvaluator>() == null)
         {
-            RefreshPath();
-            nextPathRefreshTime = Time.time + pathRefreshTime;
-        }
-    }
-
-    private void FixedUpdate()
-    {
-        FollowPath();
-    }
-
-    private void RefreshPath()
-    {
-        if (AStarPathfinder.Instance == null || currentTarget == null)
-        {
-            return;
+            gameObject.AddComponent<UtilityEvaluator>();
         }
 
-        currentPath = AStarPathfinder.Instance.FindPath(transform.position, currentTarget.transform.position);
-        currentWaypointIndex = 0;
-    }
-
-    private void FollowPath()
-    {
-        if (rb == null || currentPath == null || currentPath.Count == 0)
+        if (GetComponent<AgentPersonality>() == null)
         {
-            return;
+            gameObject.AddComponent<AgentPersonality>();
         }
 
-        if (currentWaypointIndex >= currentPath.Count)
+        if (GetComponent<AgentBrain>() == null)
         {
-            return;
+            gameObject.AddComponent<AgentBrain>();
         }
 
-        Vector2 currentPosition = rb.position;
-        Vector2 targetWaypoint = currentPath[currentWaypointIndex];
-
-        float distanceToWaypoint = Vector2.Distance(currentPosition, targetWaypoint);
-
-        if (distanceToWaypoint <= waypointReachDistance)
-        {
-            currentWaypointIndex++;
-
-            if (currentWaypointIndex >= currentPath.Count)
-            {
-                return;
-            }
-
-            targetWaypoint = currentPath[currentWaypointIndex];
-        }
-
-        Vector2 moveDirection = (targetWaypoint - currentPosition).normalized;
-        Vector2 newPosition = currentPosition + moveDirection * stats.moveSpeed * Time.fixedDeltaTime;
-
-        rb.MovePosition(newPosition);
-    }
-
-    private GameObject FindClosestEnemy()
-    {
-        AgentStats[] allAgents = FindObjectsByType<AgentStats>(
-            FindObjectsInactive.Exclude,
-            FindObjectsSortMode.None
-        );
-
-        GameObject closestEnemy = null;
-        float closestDistance = Mathf.Infinity;
-
-        foreach (AgentStats agent in allAgents)
-        {
-            if (agent == stats)
-            {
-                continue;
-            }
-
-            if (agent.team == stats.team)
-            {
-                continue;
-            }
-
-            HealthSystem health = agent.GetComponent<HealthSystem>();
-
-            if (health == null || health.IsDead)
-            {
-                continue;
-            }
-
-            float distance = Vector2.Distance(transform.position, agent.transform.position);
-
-            if (distance < closestDistance)
-            {
-                closestDistance = distance;
-                closestEnemy = agent.gameObject;
-            }
-        }
-
-        return closestEnemy;
-    }
-
-    private void FaceTarget(GameObject target)
-    {
-        if (spriteRenderer == null)
-        {
-            return;
-        }
-
-        float directionX = target.transform.position.x - transform.position.x;
-
-        if (directionX > 0)
-        {
-            spriteRenderer.flipX = false;
-        }
-        else if (directionX < 0)
-        {
-            spriteRenderer.flipX = true;
-        }
+        movement.pathRefreshTime = pathRefreshTime;
+        movement.waypointReachDistance = waypointReachDistance;
     }
 }

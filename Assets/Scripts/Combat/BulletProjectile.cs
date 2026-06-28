@@ -7,7 +7,6 @@ public class BulletProjectile : MonoBehaviour
     public float maxLifetime = 2f;
     public float defaultColliderRadius = 0.08f;
 
-    private GameObject target;
     private float damage;
     private TeamType ownerTeam;
     private float spawnTime;
@@ -31,24 +30,31 @@ public class BulletProjectile : MonoBehaviour
         projectileCollider.isTrigger = true;
     }
 
-    public void Initialize(GameObject newTarget, float newDamage, TeamType newOwnerTeam)
+    public void Initialize(Vector2 direction, float newDamage, TeamType newOwnerTeam)
     {
-        target = newTarget;
         damage = newDamage;
         ownerTeam = newOwnerTeam;
         spawnTime = Time.time;
-        AimAtTarget();
-    }
 
-    private void FixedUpdate()
-    {
-        if (target == null || Time.time >= spawnTime + maxLifetime)
+        if (direction.sqrMagnitude <= 0.0001f)
         {
             Destroy(gameObject);
             return;
         }
 
-        AimAtTarget();
+        direction.Normalize();
+        rb.linearVelocity = direction * speed;
+
+        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+        transform.rotation = Quaternion.Euler(0f, 0f, angle);
+    }
+
+    private void FixedUpdate()
+    {
+        if (Time.time >= spawnTime + maxLifetime)
+        {
+            Destroy(gameObject);
+        }
     }
 
     private void OnTriggerEnter2D(Collider2D other)
@@ -61,24 +67,14 @@ public class BulletProjectile : MonoBehaviour
         TryDamage(collision.gameObject);
     }
 
-    private void AimAtTarget()
+    private void TryDamage(GameObject hitObject)
     {
-        Vector2 direction = target.transform.position - transform.position;
-
-        if (direction.sqrMagnitude <= 0.0001f)
+        if (hitObject.layer == LayerMask.NameToLayer("Obstacle"))
         {
-            rb.linearVelocity = Vector2.zero;
+            Destroy(gameObject);
             return;
         }
 
-        rb.linearVelocity = direction.normalized * speed;
-
-        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
-        transform.rotation = Quaternion.Euler(0f, 0f, angle);
-    }
-
-    private void TryDamage(GameObject hitObject)
-    {
         AgentStats targetStats = hitObject.GetComponent<AgentStats>();
 
         if (targetStats == null || targetStats.team == ownerTeam)
