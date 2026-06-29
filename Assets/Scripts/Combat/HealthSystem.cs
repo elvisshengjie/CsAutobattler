@@ -34,11 +34,16 @@ public class HealthSystem : MonoBehaviour
         }
     }
 
-    public void TakeDamage(float amount)
+    public void TakeDamage(float amount, GameObject attacker = null)
     {
         if (isDead)
         {
             return;
+        }
+
+        if (attacker != null && controller3D != null)
+        {
+            controller3D.NotifyAttackedBy(attacker);
         }
 
         currentHealth -= amount;
@@ -73,7 +78,7 @@ public class HealthSystem : MonoBehaviour
         }
 
         Rigidbody body3D = GetComponent<Rigidbody>();
-        if (body3D != null)
+        if (body3D != null && !body3D.isKinematic)
         {
             body3D.linearVelocity = Vector3.zero;
             body3D.angularVelocity = Vector3.zero;

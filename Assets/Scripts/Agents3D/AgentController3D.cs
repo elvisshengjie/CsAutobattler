@@ -6,13 +6,18 @@ public class AgentController3D : MonoBehaviour
     [Header("Pathfinding")]
     public float pathRefreshTime = 0.3f;
     public float waypointReachDistance = 0.3f;
+    public float rotationSpeed = 720f;
 
     [Header("Agent Avoidance")]
     public float separationRadius = 1.2f;
     public float separationStrength = 1.5f;
 
     [Header("Vision and Memory")]
-    public float sightRange = 18f;
+    public float sightRange = 60f;
+    [Range(1f, 360f)]
+    public float fieldOfViewAngle = 90f;
+    [Tooltip("Short 360-degree awareness range for nearby enemies.")]
+    public float proximityDetectionRange = 7f;
     public float eyeHeight = 0.8f;
     public float memoryDuration = 4f;
     public LayerMask lineOfSightMask = ~0;
@@ -31,6 +36,24 @@ public class AgentController3D : MonoBehaviour
 
     public Vector3 LastKnownEnemyPosition => lastKnownEnemyPosition;
     public bool HasLastKnownEnemyPosition => hasLastKnownEnemyPosition;
+
+    public void NotifyAttackedBy(GameObject attacker)
+    {
+        if (attacker == null)
+        {
+            return;
+        }
+
+        AgentStats attackerStats = attacker.GetComponentInParent<AgentStats>();
+        if (attackerStats == null || attackerStats.team == stats.team)
+        {
+            return;
+        }
+
+        lastKnownEnemyPosition = attackerStats.transform.position;
+        lastSeenEnemyTime = Time.time;
+        hasLastKnownEnemyPosition = true;
+    }
 
     private void Start()
     {
@@ -68,9 +91,19 @@ public class AgentController3D : MonoBehaviour
 
         if (!hasLastKnownEnemyPosition || Time.time > lastSeenEnemyTime + memoryDuration)
         {
-            hasLastKnownEnemyPosition = false;
-            currentPath = null;
-            return;
+            GameObject fallbackEnemy = FindClosestEnemy();
+            if (fallbackEnemy != null)
+            {
+                lastKnownEnemyPosition = fallbackEnemy.transform.position;
+                hasLastKnownEnemyPosition = true;
+                lastSeenEnemyTime = Time.time;
+            }
+            else
+            {
+                hasLastKnownEnemyPosition = false;
+                currentPath = null;
+                return;
+            }
         }
 
         if (currentTarget == null &&
@@ -162,6 +195,12 @@ public class AgentController3D : MonoBehaviour
 
         finalDirection.Normalize();
 
+        Quaternion movementRotation = Quaternion.LookRotation(finalDirection, Vector3.up);
+        rb.MoveRotation(Quaternion.RotateTowards(
+            rb.rotation,
+            movementRotation,
+            rotationSpeed * Time.fixedDeltaTime));
+
         Vector3 newPosition = currentPosition + finalDirection * stats.moveSpeed * Time.fixedDeltaTime;
         newPosition.y = currentPosition.y;
 
@@ -232,7 +271,12 @@ public class AgentController3D : MonoBehaviour
 
             float distance = GetFlatDistance(transform.position, agent.transform.position);
 
-            if (distance > sightRange || !HasLineOfSight(agent.gameObject))
+            bool detectedNearby = distance <= proximityDetectionRange;
+            bool detectedInCone = distance <= sightRange &&
+                                  IsInsideFieldOfView(agent.transform.position);
+
+            if ((!detectedNearby && !detectedInCone) ||
+                !HasLineOfSight(agent.gameObject))
             {
                 continue;
             }
@@ -245,6 +289,53 @@ public class AgentController3D : MonoBehaviour
         }
 
         return closestEnemy;
+    }
+
+    private GameObject FindClosestEnemy()
+    {
+        AgentStats[] allAgents = FindObjectsByType<AgentStats>(FindObjectsInactive.Exclude);
+
+        GameObject closestEnemy = null;
+        float closestDistance = Mathf.Infinity;
+
+        foreach (AgentStats agent in allAgents)
+        {
+            if (agent == stats || agent.team == stats.team)
+            {
+                continue;
+            }
+
+            HealthSystem health = agent.GetComponent<HealthSystem>();
+            if (health == null || health.IsDead)
+            {
+                continue;
+            }
+
+            float distance = GetFlatDistance(transform.position, agent.transform.position);
+            if (distance < closestDistance)
+            {
+                closestDistance = distance;
+                closestEnemy = agent.gameObject;
+            }
+        }
+
+        return closestEnemy;
+    }
+
+    private bool IsInsideFieldOfView(Vector3 targetPosition)
+    {
+        Vector3 directionToTarget = targetPosition - transform.position;
+        directionToTarget.y = 0f;
+
+        if (directionToTarget.sqrMagnitude <= 0.001f)
+        {
+            return true;
+        }
+
+        Vector3 flatForward = transform.forward;
+        flatForward.y = 0f;
+
+        return Vector3.Angle(flatForward, directionToTarget) <= fieldOfViewAngle * 0.5f;
     }
 
     private bool HasLineOfSight(GameObject target)

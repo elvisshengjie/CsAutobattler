@@ -17,6 +17,18 @@ public class BulletProjectile : MonoBehaviour
 
     private void Awake()
     {
+        // Destroy any leftover 2D physics components to prevent conflict with 3D Rigidbody
+        Rigidbody2D rb2d = GetComponent<Rigidbody2D>();
+        if (rb2d != null)
+        {
+            DestroyImmediate(rb2d);
+        }
+        Collider2D col2d = GetComponent<Collider2D>();
+        if (col2d != null)
+        {
+            DestroyImmediate(col2d);
+        }
+
         rb = GetComponent<Rigidbody>();
         if (rb == null)
         {
@@ -35,12 +47,6 @@ public class BulletProjectile : MonoBehaviour
 
         sphereCollider.radius = ballRadius;
         sphereCollider.isTrigger = true;
-
-        SpriteRenderer oldSprite = GetComponent<SpriteRenderer>();
-        if (oldSprite != null)
-        {
-            oldSprite.enabled = false;
-        }
 
         EnsureBallVisual();
     }
@@ -135,7 +141,7 @@ public class BulletProjectile : MonoBehaviour
 
         if (targetHealth != null && !targetHealth.IsDead)
         {
-            targetHealth.TakeDamage(damage);
+            targetHealth.TakeDamage(damage, owner);
         }
 
         // Any solid wall or enemy collision consumes the projectile.
