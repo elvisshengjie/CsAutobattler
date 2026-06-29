@@ -1,98 +1,191 @@
 using UnityEngine;
 
-[RequireComponent(typeof(Rigidbody2D))]
 public class BulletProjectile : MonoBehaviour
 {
-    public float speed = 8f;
-    public float maxLifetime = 2f;
-    public float defaultColliderRadius = 0.08f;
+    public float speed = 18f;
+    public float maxLifetime = 3f;
+    public float ballRadius = 0.1f;
+    public Color ballColor = new Color(1f, 0.75f, 0.1f);
 
-    private GameObject target;
     private float damage;
     private TeamType ownerTeam;
-    private float spawnTime;
-    private Rigidbody2D rb;
+    private GameObject owner;
+    private Rigidbody rb;
+    private bool initialized;
+    private Vector3 previousPosition;
+    private static Material sharedBallMaterial;
 
     private void Awake()
     {
-        rb = GetComponent<Rigidbody2D>();
-        rb.gravityScale = 0f;
-        rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
-
-        Collider2D projectileCollider = GetComponent<Collider2D>();
-
-        if (projectileCollider == null)
+        rb = GetComponent<Rigidbody>();
+        if (rb == null)
         {
-            CircleCollider2D circleCollider = gameObject.AddComponent<CircleCollider2D>();
-            circleCollider.radius = defaultColliderRadius;
-            projectileCollider = circleCollider;
+            rb = gameObject.AddComponent<Rigidbody>();
         }
 
-        projectileCollider.isTrigger = true;
+        rb.useGravity = false;
+        rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+        rb.interpolation = RigidbodyInterpolation.Interpolate;
+
+        SphereCollider sphereCollider = GetComponent<SphereCollider>();
+        if (sphereCollider == null)
+        {
+            sphereCollider = gameObject.AddComponent<SphereCollider>();
+        }
+
+        sphereCollider.radius = ballRadius;
+        sphereCollider.isTrigger = true;
+
+        SpriteRenderer oldSprite = GetComponent<SpriteRenderer>();
+        if (oldSprite != null)
+        {
+            oldSprite.enabled = false;
+        }
+
+        EnsureBallVisual();
     }
 
-    public void Initialize(GameObject newTarget, float newDamage, TeamType newOwnerTeam)
+    public void Initialize(
+        Vector3 direction,
+        float newDamage,
+        TeamType newOwnerTeam,
+        GameObject newOwner)
     {
-        target = newTarget;
         damage = newDamage;
         ownerTeam = newOwnerTeam;
-        spawnTime = Time.time;
-        AimAtTarget();
+        owner = newOwner;
+        initialized = true;
+        previousPosition = transform.position;
+
+        Vector3 normalizedDirection = direction.sqrMagnitude > 0.001f
+            ? direction.normalized
+            : transform.forward;
+
+        transform.forward = normalizedDirection;
+        rb.linearVelocity = normalizedDirection * speed;
+        Destroy(gameObject, maxLifetime);
     }
 
-    private void FixedUpdate()
+    private void Update()
     {
-        if (target == null || Time.time >= spawnTime + maxLifetime)
+        if (!initialized)
         {
-            Destroy(gameObject);
             return;
         }
 
-        AimAtTarget();
+        Vector3 movement = transform.position - previousPosition;
+        float distance = movement.magnitude;
+
+        if (distance > 0.001f)
+        {
+            RaycastHit[] hits = Physics.SphereCastAll(
+                previousPosition,
+                ballRadius,
+                movement / distance,
+                distance,
+                ~0,
+                QueryTriggerInteraction.Ignore);
+
+            System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+            foreach (RaycastHit hit in hits)
+            {
+                if (TryDamage(hit.collider.gameObject))
+                {
+                    return;
+                }
+            }
+        }
+
+        previousPosition = transform.position;
     }
 
-    private void OnTriggerEnter2D(Collider2D other)
+    private void OnTriggerEnter(Collider other)
     {
+        if (!initialized || other.isTrigger)
+        {
+            return;
+        }
+
         TryDamage(other.gameObject);
     }
 
-    private void OnCollisionEnter2D(Collision2D collision)
+    private void OnCollisionEnter(Collision collision)
     {
         TryDamage(collision.gameObject);
     }
 
-    private void AimAtTarget()
+    private bool TryDamage(GameObject hitObject)
     {
-        Vector2 direction = target.transform.position - transform.position;
-
-        if (direction.sqrMagnitude <= 0.0001f)
+        if (!initialized ||
+            (owner != null &&
+             (hitObject == owner || hitObject.transform.IsChildOf(owner.transform))))
         {
-            rb.linearVelocity = Vector2.zero;
-            return;
+            return false;
         }
 
-        rb.linearVelocity = direction.normalized * speed;
+        AgentStats targetStats = hitObject.GetComponentInParent<AgentStats>();
 
-        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
-        transform.rotation = Quaternion.Euler(0f, 0f, angle);
-    }
-
-    private void TryDamage(GameObject hitObject)
-    {
-        AgentStats targetStats = hitObject.GetComponent<AgentStats>();
-
-        if (targetStats == null || targetStats.team == ownerTeam)
+        if (targetStats != null && targetStats.team == ownerTeam)
         {
-            return;
+            return false;
         }
 
-        HealthSystem targetHealth = hitObject.GetComponent<HealthSystem>();
+        HealthSystem targetHealth = hitObject.GetComponentInParent<HealthSystem>();
 
         if (targetHealth != null && !targetHealth.IsDead)
         {
             targetHealth.TakeDamage(damage);
         }
 
+        // Any solid wall or enemy collision consumes the projectile.
+        initialized = false;
+        rb.linearVelocity = Vector3.zero;
         Destroy(gameObject);
+        return true;
+    }
+
+    private void EnsureBallVisual()
+    {
+        Transform existingVisual = transform.Find("BallVisual");
+        if (existingVisual != null)
+        {
+            return;
+        }
+
+        GameObject visual = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        visual.name = "BallVisual";
+        visual.transform.SetParent(transform, false);
+        visual.transform.localScale = Vector3.one * ballRadius * 2f;
+
+        Collider visualCollider = visual.GetComponent<Collider>();
+        if (visualCollider != null)
+        {
+            Destroy(visualCollider);
+        }
+
+        Renderer visualRenderer = visual.GetComponent<Renderer>();
+        if (visualRenderer != null)
+        {
+            visualRenderer.sharedMaterial = GetBallMaterial();
+        }
+    }
+
+    private Material GetBallMaterial()
+    {
+        if (sharedBallMaterial != null)
+        {
+            return sharedBallMaterial;
+        }
+
+        Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+        if (shader == null)
+        {
+            shader = Shader.Find("Standard");
+        }
+
+        sharedBallMaterial = new Material(shader);
+        sharedBallMaterial.color = ballColor;
+        return sharedBallMaterial;
     }
 }

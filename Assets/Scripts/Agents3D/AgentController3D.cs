@@ -11,6 +11,12 @@ public class AgentController3D : MonoBehaviour
     public float separationRadius = 1.2f;
     public float separationStrength = 1.5f;
 
+    [Header("Vision and Memory")]
+    public float sightRange = 18f;
+    public float eyeHeight = 0.8f;
+    public float memoryDuration = 4f;
+    public LayerMask lineOfSightMask = ~0;
+
     private AgentStats stats;
     private WeaponSystem weapon;
     private Rigidbody rb;
@@ -19,6 +25,12 @@ public class AgentController3D : MonoBehaviour
     private List<Vector3> currentPath;
     private int currentWaypointIndex;
     private float nextPathRefreshTime;
+    private Vector3 lastKnownEnemyPosition;
+    private float lastSeenEnemyTime = Mathf.NegativeInfinity;
+    private bool hasLastKnownEnemyPosition;
+
+    public Vector3 LastKnownEnemyPosition => lastKnownEnemyPosition;
+    public bool HasLastKnownEnemyPosition => hasLastKnownEnemyPosition;
 
     private void Start()
     {
@@ -29,28 +41,49 @@ public class AgentController3D : MonoBehaviour
 
     private void Update()
     {
-        currentTarget = FindClosestEnemy();
+        currentTarget = FindClosestVisibleEnemy();
 
-        if (currentTarget == null)
+        if (currentTarget != null)
         {
+            lastKnownEnemyPosition = currentTarget.transform.position;
+            lastSeenEnemyTime = Time.time;
+            hasLastKnownEnemyPosition = true;
+        }
+
+        if (currentTarget != null)
+        {
+            FaceTarget(currentTarget.transform.position);
+
+            float distanceToTarget = GetFlatDistance(
+                transform.position,
+                currentTarget.transform.position);
+
+            if (distanceToTarget <= stats.attackRange && HasLineOfSight(currentTarget))
+            {
+                currentPath = null;
+                weapon.TryAttack(currentTarget);
+                return;
+            }
+        }
+
+        if (!hasLastKnownEnemyPosition || Time.time > lastSeenEnemyTime + memoryDuration)
+        {
+            hasLastKnownEnemyPosition = false;
             currentPath = null;
             return;
         }
 
-        FaceTarget(currentTarget);
-
-        float distanceToTarget = GetFlatDistance(transform.position, currentTarget.transform.position);
-
-        if (distanceToTarget <= stats.attackRange)
+        if (currentTarget == null &&
+            GetFlatDistance(transform.position, lastKnownEnemyPosition) <= waypointReachDistance)
         {
+            hasLastKnownEnemyPosition = false;
             currentPath = null;
-            weapon.TryAttack(currentTarget);
             return;
         }
 
         if (Time.time >= nextPathRefreshTime)
         {
-            RefreshPath();
+            RefreshPath(lastKnownEnemyPosition);
             nextPathRefreshTime = Time.time + pathRefreshTime;
         }
     }
@@ -60,16 +93,16 @@ public class AgentController3D : MonoBehaviour
         FollowPath();
     }
 
-    private void RefreshPath()
+    private void RefreshPath(Vector3 destination)
     {
-        if (AStarPathfinder3D.Instance == null || currentTarget == null)
+        if (AStarPathfinder3D.Instance == null)
         {
             return;
         }
 
         currentPath = AStarPathfinder3D.Instance.FindPath(
             transform.position,
-            currentTarget.transform.position
+            destination
         );
 
         currentWaypointIndex = 0;
@@ -137,10 +170,7 @@ public class AgentController3D : MonoBehaviour
 
     private Vector3 GetSeparationDirection()
     {
-        AgentStats[] allAgents = FindObjectsByType<AgentStats>(
-            FindObjectsInactive.Exclude,
-            FindObjectsSortMode.None
-        );
+        AgentStats[] allAgents = FindObjectsByType<AgentStats>(FindObjectsInactive.Exclude);
 
         Vector3 separation = Vector3.zero;
 
@@ -174,12 +204,9 @@ public class AgentController3D : MonoBehaviour
         return separation;
     }
 
-    private GameObject FindClosestEnemy()
+    private GameObject FindClosestVisibleEnemy()
     {
-        AgentStats[] allAgents = FindObjectsByType<AgentStats>(
-            FindObjectsInactive.Exclude,
-            FindObjectsSortMode.None
-        );
+        AgentStats[] allAgents = FindObjectsByType<AgentStats>(FindObjectsInactive.Exclude);
 
         GameObject closestEnemy = null;
         float closestDistance = Mathf.Infinity;
@@ -205,6 +232,11 @@ public class AgentController3D : MonoBehaviour
 
             float distance = GetFlatDistance(transform.position, agent.transform.position);
 
+            if (distance > sightRange || !HasLineOfSight(agent.gameObject))
+            {
+                continue;
+            }
+
             if (distance < closestDistance)
             {
                 closestDistance = distance;
@@ -215,9 +247,40 @@ public class AgentController3D : MonoBehaviour
         return closestEnemy;
     }
 
-    private void FaceTarget(GameObject target)
+    private bool HasLineOfSight(GameObject target)
     {
-        Vector3 direction = target.transform.position - transform.position;
+        Vector3 origin = transform.position + Vector3.up * eyeHeight;
+        Collider targetCollider = target.GetComponentInChildren<Collider>();
+        Vector3 targetPoint = targetCollider != null
+            ? targetCollider.bounds.center
+            : target.transform.position + Vector3.up * eyeHeight;
+
+        Vector3 direction = targetPoint - origin;
+        float distance = direction.magnitude;
+
+        if (distance <= 0.001f)
+        {
+            return true;
+        }
+
+        if (!Physics.Raycast(
+                origin,
+                direction / distance,
+                out RaycastHit hit,
+                distance,
+                lineOfSightMask,
+                QueryTriggerInteraction.Ignore))
+        {
+            return false;
+        }
+
+        AgentStats hitAgent = hit.collider.GetComponentInParent<AgentStats>();
+        return hitAgent != null && hitAgent.gameObject == target;
+    }
+
+    private void FaceTarget(Vector3 targetPosition)
+    {
+        Vector3 direction = targetPosition - transform.position;
         direction.y = 0f;
 
         if (direction.sqrMagnitude < 0.001f)

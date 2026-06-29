@@ -5,22 +5,33 @@ public class HealthSystem : MonoBehaviour
     private AgentStats stats;
     private Animator animator;
     private AgentController controller;
+    private AgentController3D controller3D;
     private WeaponSystem weapon;
 
     private float currentHealth;
     private bool isDead = false;
 
     public float CurrentHealth => currentHealth;
+    public float NormalizedHealth => stats == null || stats.maxHealth <= 0f
+        ? 0f
+        : Mathf.Clamp01(currentHealth / stats.maxHealth);
     public bool IsDead => isDead;
 
-    private void Start()
+    private void Awake()
     {
         stats = GetComponent<AgentStats>();
         animator = GetComponentInChildren<Animator>();
         controller = GetComponent<AgentController>();
+        controller3D = GetComponent<AgentController3D>();
         weapon = GetComponent<WeaponSystem>();
 
         currentHealth = stats.maxHealth;
+
+        if (GetComponent<AgentController3D>() != null &&
+            GetComponent<AgentHealthBar3D>() == null)
+        {
+            gameObject.AddComponent<AgentHealthBar3D>();
+        }
     }
 
     public void TakeDamage(float amount)
@@ -51,9 +62,21 @@ public class HealthSystem : MonoBehaviour
             controller.enabled = false;
         }
 
+        if (controller3D != null)
+        {
+            controller3D.enabled = false;
+        }
+
         if (weapon != null)
         {
             weapon.enabled = false;
+        }
+
+        Rigidbody body3D = GetComponent<Rigidbody>();
+        if (body3D != null)
+        {
+            body3D.linearVelocity = Vector3.zero;
+            body3D.angularVelocity = Vector3.zero;
         }
 
         if (animator != null)
