@@ -91,13 +91,19 @@ public class WeaponSystem : MonoBehaviour
         float randomYaw = Random.Range(-spread, spread);
         Vector3 shotDirection = Quaternion.AngleAxis(randomYaw, Vector3.up) * flatDirection;
 
-        Vector3 spawnPosition = transform.position
+        Collider shooterCollider = GetComponent<Collider>();
+        Vector3 shooterCenter = shooterCollider != null
+            ? shooterCollider.bounds.center
+            : transform.position + Vector3.up * 0.8f;
+
+        Vector3 spawnPosition = shooterCenter
             + Vector3.up * muzzleOffset.y
             + shotDirection * muzzleOffset.z
             + transform.right * muzzleOffset.x;
 
-        // Aim at the target's vertical center while preserving the horizontal accuracy spread.
-        shotDirection.y = targetPoint.y - spawnPosition.y;
+        // The prototype map is flat. Keep shots horizontal so their sphere collider
+        // cannot drift downward and collide with the floor before reaching the target.
+        shotDirection.y = 0f;
         shotDirection.Normalize();
 
         GameObject projectileObject = projectilePrefab != null

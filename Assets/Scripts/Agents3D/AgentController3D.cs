@@ -91,19 +91,9 @@ public class AgentController3D : MonoBehaviour
 
         if (!hasLastKnownEnemyPosition || Time.time > lastSeenEnemyTime + memoryDuration)
         {
-            GameObject fallbackEnemy = FindClosestEnemy();
-            if (fallbackEnemy != null)
-            {
-                lastKnownEnemyPosition = fallbackEnemy.transform.position;
-                hasLastKnownEnemyPosition = true;
-                lastSeenEnemyTime = Time.time;
-            }
-            else
-            {
-                hasLastKnownEnemyPosition = false;
-                currentPath = null;
-                return;
-            }
+            hasLastKnownEnemyPosition = false;
+            currentPath = null;
+            return;
         }
 
         if (currentTarget == null &&
@@ -281,37 +271,6 @@ public class AgentController3D : MonoBehaviour
                 continue;
             }
 
-            if (distance < closestDistance)
-            {
-                closestDistance = distance;
-                closestEnemy = agent.gameObject;
-            }
-        }
-
-        return closestEnemy;
-    }
-
-    private GameObject FindClosestEnemy()
-    {
-        AgentStats[] allAgents = FindObjectsByType<AgentStats>(FindObjectsInactive.Exclude);
-
-        GameObject closestEnemy = null;
-        float closestDistance = Mathf.Infinity;
-
-        foreach (AgentStats agent in allAgents)
-        {
-            if (agent == stats || agent.team == stats.team)
-            {
-                continue;
-            }
-
-            HealthSystem health = agent.GetComponent<HealthSystem>();
-            if (health == null || health.IsDead)
-            {
-                continue;
-            }
-
-            float distance = GetFlatDistance(transform.position, agent.transform.position);
             if (distance < closestDistance)
             {
                 closestDistance = distance;

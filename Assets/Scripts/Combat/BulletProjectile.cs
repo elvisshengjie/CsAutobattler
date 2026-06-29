@@ -124,6 +124,8 @@ public class BulletProjectile : MonoBehaviour
     private bool TryDamage(GameObject hitObject)
     {
         if (!initialized ||
+            hitObject == gameObject ||
+            hitObject.transform.IsChildOf(transform) ||
             (owner != null &&
              (hitObject == owner || hitObject.transform.IsChildOf(owner.transform))))
         {

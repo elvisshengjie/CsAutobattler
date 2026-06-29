@@ -47,7 +47,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BulletProjectile
   speed: 8
-  maxLifetime: 4
+  maxLifetime: 10
   ballRadius: 0.1
   ballColor: {r: 1, g: 0.75, b: 0.1, a: 1}
 --- !u!54 &2635709039412111118
