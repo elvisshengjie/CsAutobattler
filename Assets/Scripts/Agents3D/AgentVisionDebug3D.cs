@@ -132,8 +132,13 @@ public class AgentVisionDebug3D : MonoBehaviour
                 continue;
             }
 
-            float radius = Mathf.Max(0f, agent.sightRange);
-            float halfAngle = Mathf.Clamp(agent.fieldOfViewAngle, 1f, 360f) * 0.5f;
+            AgentSensors sensors = agent.GetComponent<AgentSensors>();
+            float sightRange = sensors != null ? sensors.sightRange : agent.sightRange;
+            float fieldOfViewAngle = sensors != null
+                ? sensors.fieldOfViewAngle
+                : agent.fieldOfViewAngle;
+            float radius = Mathf.Max(0f, sightRange);
+            float halfAngle = Mathf.Clamp(fieldOfViewAngle, 1f, 360f) * 0.5f;
 
             ring.SetPosition(0, new Vector3(0f, 0.05f, 0f));
 
@@ -145,7 +150,7 @@ public class AgentVisionDebug3D : MonoBehaviour
                     Mathf.Sin(angle),
                     0f,
                     Mathf.Cos(angle));
-                float visibleDistance = GetVisibleDistance(agent, localDirection, radius);
+                float visibleDistance = GetVisibleDistance(agent, sensors, localDirection, radius);
 
                 ring.SetPosition(i + 1, new Vector3(
                     localDirection.x * visibleDistance,
@@ -157,7 +162,10 @@ public class AgentVisionDebug3D : MonoBehaviour
 
             if (proximityRings.TryGetValue(agent, out LineRenderer proximityRing))
             {
-                float proximityRadius = Mathf.Max(0f, agent.proximityDetectionRange);
+                float proximityRange = sensors != null
+                    ? sensors.proximityDetectionRange
+                    : agent.proximityDetectionRange;
+                float proximityRadius = Mathf.Max(0f, proximityRange);
                 for (int i = 0; i <= ConeArcSegments; i++)
                 {
                     float angle = i * Mathf.PI * 2f / ConeArcSegments;
@@ -172,10 +180,15 @@ public class AgentVisionDebug3D : MonoBehaviour
 
     private float GetVisibleDistance(
         AgentController3D agent,
+        AgentSensors sensors,
         Vector3 localDirection,
         float maximumDistance)
     {
-        Vector3 origin = agent.transform.position + Vector3.up * agent.eyeHeight;
+        float eyeHeight = sensors != null ? sensors.eyeHeight : agent.eyeHeight;
+        LayerMask lineOfSightMask = sensors != null
+            ? sensors.lineOfSightMask
+            : agent.lineOfSightMask;
+        Vector3 origin = agent.transform.position + Vector3.up * eyeHeight;
         Vector3 worldDirection = agent.transform.TransformDirection(localDirection).normalized;
 
         if (Physics.Raycast(
@@ -183,7 +196,7 @@ public class AgentVisionDebug3D : MonoBehaviour
                 worldDirection,
                 out RaycastHit hit,
                 maximumDistance,
-                agent.lineOfSightMask,
+                lineOfSightMask,
                 QueryTriggerInteraction.Ignore))
         {
             return Mathf.Max(0f, hit.distance - 0.03f);

@@ -17,6 +17,10 @@ GameObject:
   - component: {fileID: 7281949139303139008}
   - component: {fileID: 2351408465721977180}
   - component: {fileID: 133949881649033800}
+  - component: {fileID: 5436739730202823160}
+  - component: {fileID: 2881214125445684948}
+  - component: {fileID: 525220706737884587}
+  - component: {fileID: 8320268443704871189}
   m_Layer: 0
   m_Name: BlueAgent3D_1
   m_TagString: Untagged
@@ -133,8 +137,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::AgentController3D
   pathRefreshTime: 0.3
   waypointReachDistance: 0.3
+  rotationSpeed: 720
   separationRadius: 1.5
   separationStrength: 2
+  sightRange: 60
+  fieldOfViewAngle: 90
+  proximityDetectionRange: 7
+  eyeHeight: 0.8
+  memoryDuration: 4
+  lineOfSightMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
 --- !u!54 &1049553346364696826
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -180,6 +193,7 @@ MonoBehaviour:
   attackRange: 3
   damage: 10
   attackCooldown: 1
+  accuracy: 75
 --- !u!114 &2351408465721977180
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -205,5 +219,67 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WeaponSystem
   projectilePrefab: {fileID: 0}
-  muzzleOffset: {x: 0.35, y: 0.15}
+  muzzleOffset: {x: 0.35, y: 0.15, z: 0.6}
   projectileSpawnDelay: 0.15
+  maximumSpreadDegrees: 15
+--- !u!114 &5436739730202823160
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5946759024282905899}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c336650f1db54c46b27e9f486eb8ad12, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AgentSensors
+  sightRange: 60
+  fieldOfViewAngle: 90
+  proximityDetectionRange: 7
+  eyeHeight: 0.8
+  lineOfSightMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+--- !u!114 &2881214125445684948
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5946759024282905899}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bf862f186ae043ed874a951683d12065, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AgentMemory
+  memoryDuration: 5
+--- !u!114 &525220706737884587
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5946759024282905899}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: afb443f914064acaa15cc67d062cd1da, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AgentMotor
+  pathRefreshTime: 0.3
+  waypointReachDistance: 0.3
+  rotationSpeed: 720
+  separationRadius: 1.5
+  separationStrength: 2
+--- !u!114 &8320268443704871189
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5946759024282905899}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d1a4afe308ef42d6a520f5a20a25fe28, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AgentBrain

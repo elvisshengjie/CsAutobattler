@@ -6,6 +6,8 @@ public class HealthSystem : MonoBehaviour
     private Animator animator;
     private AgentController controller;
     private AgentController3D controller3D;
+    private AgentBrain brain3D;
+    private AgentMotor motor3D;
     private WeaponSystem weapon;
 
     private float currentHealth;
@@ -23,6 +25,8 @@ public class HealthSystem : MonoBehaviour
         animator = GetComponentInChildren<Animator>();
         controller = GetComponent<AgentController>();
         controller3D = GetComponent<AgentController3D>();
+        brain3D = GetComponent<AgentBrain>();
+        motor3D = GetComponent<AgentMotor>();
         weapon = GetComponent<WeaponSystem>();
 
         currentHealth = stats.maxHealth;
@@ -70,6 +74,17 @@ public class HealthSystem : MonoBehaviour
         if (controller3D != null)
         {
             controller3D.enabled = false;
+        }
+
+        if (brain3D != null)
+        {
+            brain3D.enabled = false;
+        }
+
+        if (motor3D != null)
+        {
+            motor3D.Stop();
+            motor3D.enabled = false;
         }
 
         if (weapon != null)
