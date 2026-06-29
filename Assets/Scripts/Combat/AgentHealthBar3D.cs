@@ -12,6 +12,7 @@ public class AgentHealthBar3D : MonoBehaviour
     private Transform barRoot;
     private Transform fill;
     private Renderer fillRenderer;
+    private TextMesh actionStatusText;
     private Camera targetCamera;
 
     private static Material backgroundMaterial;
@@ -25,6 +26,26 @@ public class AgentHealthBar3D : MonoBehaviour
         targetCamera = Camera.main;
         CreateBar();
         UpdateBar();
+    }
+
+    public void SetActionStatus(string actionName, float timeRemaining)
+    {
+        if (actionStatusText == null)
+        {
+            return;
+        }
+
+        actionStatusText.text = $"{actionName} {Mathf.Max(0f, timeRemaining):0.0}s";
+        actionStatusText.gameObject.SetActive(true);
+    }
+
+    public void ClearActionStatus()
+    {
+        if (actionStatusText != null)
+        {
+            actionStatusText.text = string.Empty;
+            actionStatusText.gameObject.SetActive(false);
+        }
     }
 
     private void LateUpdate()
@@ -69,6 +90,19 @@ public class AgentHealthBar3D : MonoBehaviour
         fill = fillObject.transform;
         fill.localPosition = new Vector3(0f, 0f, -0.01f);
         fillRenderer = fillObject.GetComponent<Renderer>();
+
+        GameObject statusObject = new GameObject("ActionStatus");
+        statusObject.transform.SetParent(barRoot, false);
+        statusObject.transform.localPosition = new Vector3(0f, 0.18f, -0.02f);
+        actionStatusText = statusObject.AddComponent<TextMesh>();
+        actionStatusText.anchor = TextAnchor.MiddleCenter;
+        actionStatusText.alignment = TextAlignment.Center;
+        actionStatusText.fontSize = 64;
+        actionStatusText.characterSize = 0.035f;
+        actionStatusText.fontStyle = FontStyle.Bold;
+        actionStatusText.color = Color.white;
+        actionStatusText.text = string.Empty;
+        statusObject.SetActive(false);
     }
 
     private void UpdateBar()

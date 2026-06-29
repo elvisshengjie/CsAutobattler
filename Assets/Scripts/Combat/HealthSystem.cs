@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 public class HealthSystem : MonoBehaviour
@@ -18,6 +19,7 @@ public class HealthSystem : MonoBehaviour
         ? 0f
         : Mathf.Clamp01(currentHealth / stats.maxHealth);
     public bool IsDead => isDead;
+    public event Action<HealthSystem> Died;
 
     private void Awake()
     {
@@ -65,6 +67,7 @@ public class HealthSystem : MonoBehaviour
         isDead = true;
 
         Debug.Log(gameObject.name + " died.");
+        Died?.Invoke(this);
 
         if (controller != null)
         {

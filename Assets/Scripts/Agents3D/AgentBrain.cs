@@ -54,6 +54,14 @@ public class AgentBrain : MonoBehaviour
             }
         }
 
+        // Immediate combat stays decentralized, while ObjectiveManager supplies
+        // the squad's claimed destination (assault, escort, defend, or rotate).
+        if (ObjectiveManager.Instance != null &&
+            ObjectiveManager.Instance.TryExecuteTacticalObjective(gameObject, motor))
+        {
+            return;
+        }
+
         if (memory.TryGetKnownPosition(out Vector3 knownPosition))
         {
             if (CurrentTarget == null &&

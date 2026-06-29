@@ -142,6 +142,57 @@ public class AStarPathfinder3D : MonoBehaviour
         return null;
     }
 
+    public bool TryGetNearestWalkablePositionInBounds(
+        Vector3 requestedPosition,
+        Bounds allowedBounds,
+        out Vector3 walkablePosition)
+    {
+        if (grid == null)
+        {
+            CreateGrid();
+        }
+
+        PathNode nearestNode = null;
+        float nearestDistanceSquared = Mathf.Infinity;
+
+        foreach (PathNode node in grid)
+        {
+            if (!node.walkable)
+            {
+                continue;
+            }
+
+            Vector3 position = node.worldPosition;
+            bool insideXZ = position.x >= allowedBounds.min.x &&
+                            position.x <= allowedBounds.max.x &&
+                            position.z >= allowedBounds.min.z &&
+                            position.z <= allowedBounds.max.z;
+            if (!insideXZ)
+            {
+                continue;
+            }
+
+            Vector2 difference = new Vector2(
+                position.x - requestedPosition.x,
+                position.z - requestedPosition.z);
+            float distanceSquared = difference.sqrMagnitude;
+            if (distanceSquared < nearestDistanceSquared)
+            {
+                nearestDistanceSquared = distanceSquared;
+                nearestNode = node;
+            }
+        }
+
+        if (nearestNode == null)
+        {
+            walkablePosition = default;
+            return false;
+        }
+
+        walkablePosition = nearestNode.worldPosition;
+        return true;
+    }
+
     private void ResetNodes()
     {
         for (int x = 0; x < gridSizeX; x++)

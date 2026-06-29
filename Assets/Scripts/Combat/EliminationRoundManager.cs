@@ -26,6 +26,12 @@ public class EliminationRoundManager : MonoBehaviour
 
     private void Update()
     {
+        // Bomb rounds own their own elimination rules, especially after planting.
+        if (RoundManager.Instance != null && RoundManager.Instance.enabled)
+        {
+            return;
+        }
+
         if (roundEnded || Time.time < nextCheckTime)
         {
             return;
