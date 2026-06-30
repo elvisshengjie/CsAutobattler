@@ -6,6 +6,7 @@ using UnityEngine.SceneManagement;
 public sealed class RedTeamStatsPanelUI : MonoBehaviour
 {
     private const int RequiredSlotCount = 5;
+    private const string RedAgentNamePrefix = "RedAgent3D_";
 
     [SerializeField] private RedTeamStatsSlotUI[] slots = new RedTeamStatsSlotUI[RequiredSlotCount];
     [SerializeField, Min(0.05f)] private float refreshInterval = 0.2f;
@@ -46,9 +47,7 @@ public sealed class RedTeamStatsPanelUI : MonoBehaviour
     private void AssignRedTeamAgents()
     {
         Scene activeScene = SceneManager.GetActiveScene();
-        AgentStats[] allAgents = FindObjectsByType<AgentStats>(
-            FindObjectsInactive.Include,
-            FindObjectsSortMode.None);
+        AgentStats[] allAgents = FindObjectsByType<AgentStats>(FindObjectsInactive.Include);
 
         List<AgentStats> redAgents = new List<AgentStats>();
         foreach (AgentStats candidate in allAgents)
@@ -64,14 +63,26 @@ public sealed class RedTeamStatsPanelUI : MonoBehaviour
         redAgents.Sort((left, right) =>
             string.Compare(left.gameObject.name, right.gameObject.name, StringComparison.Ordinal));
 
-        for (int i = 0; i < RequiredSlotCount; i++)
+        for (int slotIndex = 0; slotIndex < RequiredSlotCount; slotIndex++)
         {
-            if (slots == null || i >= slots.Length || slots[i] == null)
+            if (slots == null || slotIndex >= slots.Length || slots[slotIndex] == null)
             {
                 continue;
             }
 
-            slots[i].SetAgent(i < redAgents.Count ? redAgents[i] : null);
+            string expectedAgentName = RedAgentNamePrefix + (slotIndex + 1);
+            AgentStats matchingAgent = null;
+
+            foreach (AgentStats candidate in redAgents)
+            {
+                if (string.Equals(candidate.gameObject.name, expectedAgentName, StringComparison.Ordinal))
+                {
+                    matchingAgent = candidate;
+                    break;
+                }
+            }
+
+            slots[slotIndex].SetAgent(matchingAgent);
         }
     }
 

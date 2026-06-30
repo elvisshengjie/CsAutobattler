@@ -9,12 +9,92 @@ using UnityEngine.UI;
 public static class RedTeamStatsPanelBuilder
 {
     private const string MenuPath = "Tools/CS Auto Battler/Build Red Team Stats Panel";
+    private const string AssignPortraitDataMenuPath =
+        "Tools/CS Auto Battler/Assign Default Red Agent Portrait Data";
     private const string PanelName = "RedTeamStatsPanel";
     private const string TemporaryPanelName = "RedTeamStatsPanel__Building";
     private const int SlotCount = 5;
     private const float SlotWidth = 150f;
     private const float SlotHeight = 75f;
     private const float SlotSpacing = 10f;
+
+    private static readonly Color[] DefaultFallbackPortraitColors =
+    {
+        new Color(0.35f, 0.06f, 0.06f, 1f),
+        new Color(0.85f, 0.25f, 0.08f, 1f),
+        new Color(0.42f, 0.22f, 0.12f, 1f),
+        new Color(0.48f, 0.08f, 0.22f, 1f),
+        new Color(0.64f, 0.28f, 0.34f, 1f)
+    };
+
+    [MenuItem(AssignPortraitDataMenuPath, false, 2009)]
+    private static void AssignDefaultRedAgentPortraitData()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode)
+        {
+            Debug.LogWarning("Red agent portrait data assignment skipped: exit Play Mode first.");
+            return;
+        }
+
+        Scene activeScene = SceneManager.GetActiveScene();
+        if (!activeScene.IsValid() || !activeScene.isLoaded)
+        {
+            Debug.LogError("Red agent portrait data assignment failed: there is no valid, loaded active scene.");
+            return;
+        }
+
+        Undo.IncrementCurrentGroup();
+        int undoGroup = Undo.GetCurrentGroup();
+        Undo.SetCurrentGroupName("Assign Default Red Agent Portrait Data");
+
+        int configuredCount = 0;
+        for (int index = 0; index < SlotCount; index++)
+        {
+            string agentName = "RedAgent3D_" + (index + 1);
+            GameObject agentObject = FindSceneObjectByName(agentName);
+            if (agentObject == null)
+            {
+                Debug.LogWarning("Could not assign portrait data because " + agentName + " was not found.");
+                continue;
+            }
+
+            AgentPortraitData portraitData = agentObject.GetComponent<AgentPortraitData>();
+            if (portraitData == null)
+            {
+                portraitData = Undo.AddComponent<AgentPortraitData>(agentObject);
+            }
+
+            Renderer sourceRenderer = agentObject.GetComponent<Renderer>();
+            if (sourceRenderer == null)
+            {
+                sourceRenderer = agentObject.GetComponentInChildren<Renderer>(true);
+            }
+
+            Undo.RecordObject(portraitData, "Configure " + agentName + " Portrait Data");
+            if (portraitData.sourceRenderer == null)
+            {
+                portraitData.sourceRenderer = sourceRenderer;
+            }
+
+            portraitData.fallbackPortraitColor = DefaultFallbackPortraitColors[index];
+            EditorUtility.SetDirty(portraitData);
+            configuredCount++;
+        }
+
+        if (configuredCount > 0)
+        {
+            EditorSceneManager.MarkSceneDirty(activeScene);
+        }
+
+        Undo.CollapseUndoOperations(undoGroup);
+        Debug.Log("Configured portrait data for " + configuredCount + " red agent(s).");
+    }
+
+    [MenuItem(AssignPortraitDataMenuPath, true)]
+    private static bool ValidateAssignDefaultRedAgentPortraitData()
+    {
+        return !EditorApplication.isPlayingOrWillChangePlaymode;
+    }
 
     [MenuItem(MenuPath, false, 2010)]
     private static void BuildRedTeamStatsPanel()
@@ -225,7 +305,7 @@ public static class RedTeamStatsPanelBuilder
         portraitRect.sizeDelta = new Vector2(50f, 50f);
 
         Image portrait = Undo.AddComponent<Image>(portraitObject);
-        portrait.color = new Color(0.58f, 0.16f, 0.10f, 1f);
+        portrait.color = Color.white;
         portrait.raycastTarget = false;
         return portrait;
     }

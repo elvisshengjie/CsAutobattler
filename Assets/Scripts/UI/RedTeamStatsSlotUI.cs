@@ -1,8 +1,11 @@
 using UnityEngine;
 using UnityEngine.UI;
 
+[RequireComponent(typeof(CanvasGroup))]
 public sealed class RedTeamStatsSlotUI : MonoBehaviour
 {
+    private static readonly Color NeutralPortraitColor = new Color(0.65f, 0.65f, 0.65f, 1f);
+
     [Header("Wired by RedTeamStatsPanelBuilder")]
     [SerializeField] private Image portraitImage;
     [SerializeField] private Text hpText;
@@ -13,8 +16,6 @@ public sealed class RedTeamStatsSlotUI : MonoBehaviour
     private HealthSystem healthSystem;
     private CanvasGroup canvasGroup;
     private bool hadAssignedAgent;
-    private Color normalBackgroundColor;
-    private bool hasBackgroundColor;
 
     private void Awake()
     {
@@ -28,6 +29,7 @@ public sealed class RedTeamStatsSlotUI : MonoBehaviour
         tacticText = tactic;
         backgroundImage = background;
         CacheVisualState();
+        ApplyPortrait();
         Refresh();
     }
 
@@ -39,6 +41,7 @@ public sealed class RedTeamStatsSlotUI : MonoBehaviour
             ? assignedAgent.GetComponent<HealthSystem>()
             : null;
 
+        ApplyPortrait();
         Refresh();
     }
 
@@ -86,35 +89,65 @@ public sealed class RedTeamStatsSlotUI : MonoBehaviour
     private void CacheVisualState()
     {
         canvasGroup = GetComponent<CanvasGroup>();
-
-        if (backgroundImage != null)
-        {
-            normalBackgroundColor = backgroundImage.color;
-            hasBackgroundColor = true;
-        }
     }
 
     private void SetDimmed(bool dimmed)
     {
-        if (canvasGroup != null)
+        if (canvasGroup == null)
         {
-            canvasGroup.alpha = dimmed ? 0.4f : 1f;
+            canvasGroup = GetComponent<CanvasGroup>();
+        }
+
+        if (canvasGroup == null)
+        {
             return;
         }
 
-        if (backgroundImage != null && hasBackgroundColor)
+        float targetAlpha = dimmed ? 0.4f : 1f;
+        if (!Mathf.Approximately(canvasGroup.alpha, targetAlpha))
         {
-            Color color = normalBackgroundColor;
-            color.a *= dimmed ? 0.4f : 1f;
-            backgroundImage.color = color;
+            canvasGroup.alpha = targetAlpha;
+        }
+    }
+
+    private void ApplyPortrait()
+    {
+        if (portraitImage == null)
+        {
+            return;
         }
 
-        if (portraitImage != null)
+        Sprite portraitSprite = null;
+        Color portraitColor = NeutralPortraitColor;
+
+        if (agent != null)
         {
-            Color color = portraitImage.color;
-            color.a = dimmed ? 0.4f : 1f;
-            portraitImage.color = color;
+            AgentPortraitData portraitData = agent.GetComponent<AgentPortraitData>();
+            if (portraitData != null)
+            {
+                portraitSprite = portraitData.GetPortraitSprite();
+                portraitColor = portraitSprite != null
+                    ? Color.white
+                    : portraitData.GetPortraitColor();
+            }
+            else
+            {
+                Renderer renderer = agent.GetComponent<Renderer>();
+                if (renderer == null)
+                {
+                    renderer = agent.GetComponentInChildren<Renderer>(true);
+                }
+
+                if (AgentPortraitData.TryGetRendererColor(renderer, out Color rendererColor))
+                {
+                    portraitColor = rendererColor;
+                }
+            }
         }
+
+        portraitImage.sprite = portraitSprite;
+        portraitImage.color = portraitColor;
+        portraitImage.preserveAspect = portraitSprite != null;
     }
 
     private static string FormatHealth(float value)

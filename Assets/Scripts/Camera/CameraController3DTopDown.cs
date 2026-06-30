@@ -19,6 +19,9 @@ public class CameraController3DTopDown : MonoBehaviour
     [Header("Map Bounds")]
     public Renderer floorRenderer;
 
+    [Tooltip("How far the camera focus point can stay away from the map edge.")]
+    public float edgePadding = 1f;
+
     private Camera cam;
 
     private void Start()
@@ -30,7 +33,7 @@ public class CameraController3DTopDown : MonoBehaviour
     {
         HandleMouseDrag();
         HandleMouseZoomToCursor();
-        ClampCameraToFloorByGroundView();
+        ClampCameraFocusPointToFloor();
     }
 
     private void HandleMouseDrag()
@@ -145,105 +148,54 @@ public class CameraController3DTopDown : MonoBehaviour
         return true;
     }
 
-    private void ClampCameraToFloorByGroundView()
+    private bool TryGetCameraFocusGroundPoint(out Vector3 focusPoint)
+    {
+        focusPoint = Vector3.zero;
+
+        if (cam == null)
+        {
+            return false;
+        }
+
+        Ray centerRay = cam.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
+        Plane groundPlane = new Plane(Vector3.up, Vector3.zero);
+
+        if (!groundPlane.Raycast(centerRay, out float enter))
+        {
+            return false;
+        }
+
+        focusPoint = centerRay.GetPoint(enter);
+        return true;
+    }
+
+    private void ClampCameraFocusPointToFloor()
     {
         if (floorRenderer == null || cam == null)
         {
             return;
         }
 
-        if (!TryGetCameraGroundBounds(out float viewMinX, out float viewMaxX, out float viewMinZ, out float viewMaxZ))
+        if (!TryGetCameraFocusGroundPoint(out Vector3 focusPoint))
         {
             return;
         }
 
         Bounds mapBounds = floorRenderer.bounds;
 
-        float viewWidth = viewMaxX - viewMinX;
-        float viewDepth = viewMaxZ - viewMinZ;
+        float minX = mapBounds.min.x + edgePadding;
+        float maxX = mapBounds.max.x - edgePadding;
+        float minZ = mapBounds.min.z + edgePadding;
+        float maxZ = mapBounds.max.z - edgePadding;
 
-        float mapWidth = mapBounds.max.x - mapBounds.min.x;
-        float mapDepth = mapBounds.max.z - mapBounds.min.z;
+        Vector3 clampedFocusPoint = focusPoint;
 
-        Vector3 correction = Vector3.zero;
+        clampedFocusPoint.x = Mathf.Clamp(focusPoint.x, minX, maxX);
+        clampedFocusPoint.z = Mathf.Clamp(focusPoint.z, minZ, maxZ);
 
-        if (viewWidth >= mapWidth)
-        {
-            float viewCenterX = (viewMinX + viewMaxX) * 0.5f;
-            correction.x = mapBounds.center.x - viewCenterX;
-        }
-        else
-        {
-            if (viewMinX < mapBounds.min.x)
-            {
-                correction.x += mapBounds.min.x - viewMinX;
-            }
-
-            if (viewMaxX > mapBounds.max.x)
-            {
-                correction.x += mapBounds.max.x - viewMaxX;
-            }
-        }
-
-        if (viewDepth >= mapDepth)
-        {
-            float viewCenterZ = (viewMinZ + viewMaxZ) * 0.5f;
-            correction.z = mapBounds.center.z - viewCenterZ;
-        }
-        else
-        {
-            if (viewMinZ < mapBounds.min.z)
-            {
-                correction.z += mapBounds.min.z - viewMinZ;
-            }
-
-            if (viewMaxZ > mapBounds.max.z)
-            {
-                correction.z += mapBounds.max.z - viewMaxZ;
-            }
-        }
+        Vector3 correction = clampedFocusPoint - focusPoint;
+        correction.y = 0f;
 
         transform.position += correction;
-    }
-
-    private bool TryGetCameraGroundBounds(out float minX, out float maxX, out float minZ, out float maxZ)
-    {
-        minX = float.PositiveInfinity;
-        maxX = float.NegativeInfinity;
-        minZ = float.PositiveInfinity;
-        maxZ = float.NegativeInfinity;
-
-        Plane groundPlane = new Plane(Vector3.up, Vector3.zero);
-
-        Vector3[] viewportCorners =
-        {
-            new Vector3(0f, 0f, 0f),
-            new Vector3(0f, 1f, 0f),
-            new Vector3(1f, 0f, 0f),
-            new Vector3(1f, 1f, 0f)
-        };
-
-        bool foundPoint = false;
-
-        foreach (Vector3 viewportCorner in viewportCorners)
-        {
-            Ray ray = cam.ViewportPointToRay(viewportCorner);
-
-            if (!groundPlane.Raycast(ray, out float enter))
-            {
-                continue;
-            }
-
-            Vector3 worldPoint = ray.GetPoint(enter);
-
-            minX = Mathf.Min(minX, worldPoint.x);
-            maxX = Mathf.Max(maxX, worldPoint.x);
-            minZ = Mathf.Min(minZ, worldPoint.z);
-            maxZ = Mathf.Max(maxZ, worldPoint.z);
-
-            foundPoint = true;
-        }
-
-        return foundPoint;
     }
 }
