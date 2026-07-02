@@ -230,6 +230,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 64
   obstacleCheckRadius: 0.45
+  minimumAgentClearance: 0.5
   drawGrid: 1
   gizmoHeight: 0.05
 --- !u!4 &77720927
@@ -955,7 +956,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentStats
   team: 1
-  maxHealth: 100
+  maxHealth: 50
   moveSpeed: 3
   attackRange: 10
   damage: 10
@@ -1137,6 +1138,23 @@ MonoBehaviour:
   rotationSpeed: 720
   separationRadius: 1.5
   separationStrength: 2
+  agentRadius: 0.4
+  obstacleClearance: 0.1
+  wallAvoidanceDistance: 0.2
+  maximumTargetAdjustment: 4
+  stuckDistanceThreshold: 0.05
+  stuckTimeThreshold: 1.2
+  hardStuckTimeThreshold: 3
+  recoveryWaypointDistance: 1.25
+  emergencySnapDistance: 2
+  drawMovementGizmos: 1
+  requestedDestination: {x: 0, y: 0, z: 0}
+  lastPosition: {x: 0, y: 0, z: 0}
+  lastMoveProgressTime: 0
+  stuckTimer: 0
+  isStuck: 0
+  recoveryAttempts: 0
+  targetWasAdjusted: 0
 --- !u!114 &384940715
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1253,7 +1271,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentStats
   team: 0
-  maxHealth: 100
+  maxHealth: 50
   moveSpeed: 3
   attackRange: 10
   damage: 10
@@ -1435,6 +1453,23 @@ MonoBehaviour:
   rotationSpeed: 720
   separationRadius: 1.5
   separationStrength: 2
+  agentRadius: 0.4
+  obstacleClearance: 0.1
+  wallAvoidanceDistance: 0.2
+  maximumTargetAdjustment: 4
+  stuckDistanceThreshold: 0.05
+  stuckTimeThreshold: 1.2
+  hardStuckTimeThreshold: 3
+  recoveryWaypointDistance: 1.25
+  emergencySnapDistance: 2
+  drawMovementGizmos: 1
+  requestedDestination: {x: 0, y: 0, z: 0}
+  lastPosition: {x: 0, y: 0, z: 0}
+  lastMoveProgressTime: 0
+  stuckTimer: 0
+  isStuck: 0
+  recoveryAttempts: 0
+  targetWasAdjusted: 0
 --- !u!114 &389118799
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1691,7 +1726,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentStats
   team: 1
-  maxHealth: 100
+  maxHealth: 50
   moveSpeed: 3
   attackRange: 10
   damage: 10
@@ -1873,6 +1908,23 @@ MonoBehaviour:
   rotationSpeed: 720
   separationRadius: 1.5
   separationStrength: 2
+  agentRadius: 0.4
+  obstacleClearance: 0.1
+  wallAvoidanceDistance: 0.2
+  maximumTargetAdjustment: 4
+  stuckDistanceThreshold: 0.05
+  stuckTimeThreshold: 1.2
+  hardStuckTimeThreshold: 3
+  recoveryWaypointDistance: 1.25
+  emergencySnapDistance: 2
+  drawMovementGizmos: 1
+  requestedDestination: {x: 0, y: 0, z: 0}
+  lastPosition: {x: 0, y: 0, z: 0}
+  lastMoveProgressTime: 0
+  stuckTimer: 0
+  isStuck: 0
+  recoveryAttempts: 0
+  targetWasAdjusted: 0
 --- !u!114 &409528794
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2915,7 +2967,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentStats
   team: 1
-  maxHealth: 100
+  maxHealth: 50
   moveSpeed: 3
   attackRange: 10
   damage: 10
@@ -3097,6 +3149,23 @@ MonoBehaviour:
   rotationSpeed: 720
   separationRadius: 1.5
   separationStrength: 2
+  agentRadius: 0.4
+  obstacleClearance: 0.1
+  wallAvoidanceDistance: 0.2
+  maximumTargetAdjustment: 4
+  stuckDistanceThreshold: 0.05
+  stuckTimeThreshold: 1.2
+  hardStuckTimeThreshold: 3
+  recoveryWaypointDistance: 1.25
+  emergencySnapDistance: 2
+  drawMovementGizmos: 1
+  requestedDestination: {x: 0, y: 0, z: 0}
+  lastPosition: {x: 0, y: 0, z: 0}
+  lastMoveProgressTime: 0
+  stuckTimer: 0
+  isStuck: 0
+  recoveryAttempts: 0
+  targetWasAdjusted: 0
 --- !u!114 &842311404
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3297,10 +3366,10 @@ MonoBehaviour:
   dragSpeed: 1
   zoomSpeed: 200
   minZoom: 5
-  maxZoom: 35
+  maxZoom: 45
   perspectiveZoomStep: 5
   minFieldOfView: 25
-  maxFieldOfView: 92
+  maxFieldOfView: 100
   floorRenderer: {fileID: 1783825703}
   edgePadding: 0
 --- !u!1 &922926103
@@ -4256,6 +4325,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RoundManager
   attackingTeam: 1
   defendingTeam: 0
+  randomizeTeamRoles: 0
   swapStartingSidesByRole: 1
   preparationDuration: 5
   roundDuration: 90
@@ -4498,7 +4568,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentStats
   team: 0
-  maxHealth: 100
+  maxHealth: 50
   moveSpeed: 3
   attackRange: 10
   damage: 10
@@ -4680,6 +4750,23 @@ MonoBehaviour:
   rotationSpeed: 720
   separationRadius: 1.5
   separationStrength: 2
+  agentRadius: 0.4
+  obstacleClearance: 0.1
+  wallAvoidanceDistance: 0.2
+  maximumTargetAdjustment: 4
+  stuckDistanceThreshold: 0.05
+  stuckTimeThreshold: 1.2
+  hardStuckTimeThreshold: 3
+  recoveryWaypointDistance: 1.25
+  emergencySnapDistance: 2
+  drawMovementGizmos: 1
+  requestedDestination: {x: 0, y: 0, z: 0}
+  lastPosition: {x: 0, y: 0, z: 0}
+  lastMoveProgressTime: 0
+  stuckTimer: 0
+  isStuck: 0
+  recoveryAttempts: 0
+  targetWasAdjusted: 0
 --- !u!114 &1335506317
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5330,6 +5417,11 @@ MonoBehaviour:
   siteA: {fileID: 1397702674}
   siteB: {fileID: 435204847}
   allowedMovementWhilePlanting: 0.15
+  immediatePlantThreatDistance: 3
+  plantThreatRadius: 7
+  plantSupportRadius: 8
+  heavyPlantDamageThreshold: 25
+  minimumPlantHealth: 20
   defuseInteractionRange: 1.25
   tacticalSpacing: 2.5
   randomizeTacticalPositions: 1
@@ -5340,6 +5432,9 @@ MonoBehaviour:
   activeDefuser: {fileID: 0}
   defuseProgress: 0
   selectedAttackSite: {fileID: 0}
+  bombPlanted: 0
+  plantedSite: {fileID: 0}
+  plantedBombPosition: {x: 0, y: 0, z: 0}
 --- !u!4 &1430245549
 Transform:
   m_ObjectHideFlags: 0
@@ -5616,7 +5711,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentStats
   team: 1
-  maxHealth: 100
+  maxHealth: 50
   moveSpeed: 3
   attackRange: 10
   damage: 10
@@ -5798,6 +5893,23 @@ MonoBehaviour:
   rotationSpeed: 720
   separationRadius: 1.5
   separationStrength: 2
+  agentRadius: 0.4
+  obstacleClearance: 0.1
+  wallAvoidanceDistance: 0.2
+  maximumTargetAdjustment: 4
+  stuckDistanceThreshold: 0.05
+  stuckTimeThreshold: 1.2
+  hardStuckTimeThreshold: 3
+  recoveryWaypointDistance: 1.25
+  emergencySnapDistance: 2
+  drawMovementGizmos: 1
+  requestedDestination: {x: 0, y: 0, z: 0}
+  lastPosition: {x: 0, y: 0, z: 0}
+  lastMoveProgressTime: 0
+  stuckTimer: 0
+  isStuck: 0
+  recoveryAttempts: 0
+  targetWasAdjusted: 0
 --- !u!114 &1459890613
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6217,7 +6329,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentStats
   team: 0
-  maxHealth: 100
+  maxHealth: 50
   moveSpeed: 3
   attackRange: 10
   damage: 10
@@ -6399,6 +6511,23 @@ MonoBehaviour:
   rotationSpeed: 720
   separationRadius: 1.5
   separationStrength: 2
+  agentRadius: 0.4
+  obstacleClearance: 0.1
+  wallAvoidanceDistance: 0.2
+  maximumTargetAdjustment: 4
+  stuckDistanceThreshold: 0.05
+  stuckTimeThreshold: 1.2
+  hardStuckTimeThreshold: 3
+  recoveryWaypointDistance: 1.25
+  emergencySnapDistance: 2
+  drawMovementGizmos: 1
+  requestedDestination: {x: 0, y: 0, z: 0}
+  lastPosition: {x: 0, y: 0, z: 0}
+  lastMoveProgressTime: 0
+  stuckTimer: 0
+  isStuck: 0
+  recoveryAttempts: 0
+  targetWasAdjusted: 0
 --- !u!114 &1514125962
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6735,7 +6864,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentStats
   team: 0
-  maxHealth: 100
+  maxHealth: 50
   moveSpeed: 3
   attackRange: 10
   damage: 10
@@ -6917,6 +7046,23 @@ MonoBehaviour:
   rotationSpeed: 720
   separationRadius: 1.5
   separationStrength: 2
+  agentRadius: 0.4
+  obstacleClearance: 0.1
+  wallAvoidanceDistance: 0.2
+  maximumTargetAdjustment: 4
+  stuckDistanceThreshold: 0.05
+  stuckTimeThreshold: 1.2
+  hardStuckTimeThreshold: 3
+  recoveryWaypointDistance: 1.25
+  emergencySnapDistance: 2
+  drawMovementGizmos: 1
+  requestedDestination: {x: 0, y: 0, z: 0}
+  lastPosition: {x: 0, y: 0, z: 0}
+  lastMoveProgressTime: 0
+  stuckTimer: 0
+  isStuck: 0
+  recoveryAttempts: 0
+  targetWasAdjusted: 0
 --- !u!114 &1691728181
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7941,7 +8087,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentStats
   team: 0
-  maxHealth: 100
+  maxHealth: 50
   moveSpeed: 3
   attackRange: 10
   damage: 10
@@ -8123,6 +8269,23 @@ MonoBehaviour:
   rotationSpeed: 720
   separationRadius: 1.5
   separationStrength: 2
+  agentRadius: 0.4
+  obstacleClearance: 0.1
+  wallAvoidanceDistance: 0.2
+  maximumTargetAdjustment: 4
+  stuckDistanceThreshold: 0.05
+  stuckTimeThreshold: 1.2
+  hardStuckTimeThreshold: 3
+  recoveryWaypointDistance: 1.25
+  emergencySnapDistance: 2
+  drawMovementGizmos: 1
+  requestedDestination: {x: 0, y: 0, z: 0}
+  lastPosition: {x: 0, y: 0, z: 0}
+  lastMoveProgressTime: 0
+  stuckTimer: 0
+  isStuck: 0
+  recoveryAttempts: 0
+  targetWasAdjusted: 0
 --- !u!114 &1903467721
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8802,7 +8965,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentStats
   team: 1
-  maxHealth: 100
+  maxHealth: 50
   moveSpeed: 3
   attackRange: 10
   damage: 10
@@ -8984,6 +9147,23 @@ MonoBehaviour:
   rotationSpeed: 720
   separationRadius: 1.5
   separationStrength: 2
+  agentRadius: 0.4
+  obstacleClearance: 0.1
+  wallAvoidanceDistance: 0.2
+  maximumTargetAdjustment: 4
+  stuckDistanceThreshold: 0.05
+  stuckTimeThreshold: 1.2
+  hardStuckTimeThreshold: 3
+  recoveryWaypointDistance: 1.25
+  emergencySnapDistance: 2
+  drawMovementGizmos: 1
+  requestedDestination: {x: 0, y: 0, z: 0}
+  lastPosition: {x: 0, y: 0, z: 0}
+  lastMoveProgressTime: 0
+  stuckTimer: 0
+  isStuck: 0
+  recoveryAttempts: 0
+  targetWasAdjusted: 0
 --- !u!114 &2050983418
 MonoBehaviour:
   m_ObjectHideFlags: 0

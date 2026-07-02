@@ -16,6 +16,10 @@ public class WeaponSystem : MonoBehaviour
     private Animator animator;
     private float nextAttackTime = 0f;
 
+    public bool IsReady => Time.time >= nextAttackTime;
+    public float LastShotTime { get; private set; } = Mathf.NegativeInfinity;
+    public float TimeSinceLastShot => Time.time - LastShotTime;
+
     private void Start()
     {
         stats = GetComponent<AgentStats>();
@@ -38,6 +42,8 @@ public class WeaponSystem : MonoBehaviour
         {
             animator.SetTrigger("Attack");
         }
+
+        LastShotTime = Time.time;
 
         if (projectilePrefab != null)
         {

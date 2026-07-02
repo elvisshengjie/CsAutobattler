@@ -19,6 +19,8 @@ public class HealthSystem : MonoBehaviour
         ? 0f
         : Mathf.Clamp01(currentHealth / stats.maxHealth);
     public bool IsDead => isDead;
+    public GameObject LastAttacker { get; private set; }
+    public event Action<HealthSystem, float, GameObject> Damaged;
     public event Action<HealthSystem> Died;
 
     private void Awake()
@@ -47,12 +49,17 @@ public class HealthSystem : MonoBehaviour
             return;
         }
 
-        if (attacker != null && controller3D != null)
+        if (attacker != null)
         {
-            controller3D.NotifyAttackedBy(attacker);
+            LastAttacker = attacker;
+            if (controller3D != null)
+            {
+                controller3D.NotifyAttackedBy(attacker);
+            }
         }
 
         currentHealth -= amount;
+        Damaged?.Invoke(this, amount, attacker);
 
         Debug.Log(gameObject.name + " took " + amount + " damage. HP: " + currentHealth);
 

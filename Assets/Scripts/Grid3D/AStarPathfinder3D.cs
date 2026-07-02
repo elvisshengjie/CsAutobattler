@@ -13,6 +13,7 @@ public class AStarPathfinder3D : MonoBehaviour
     [Header("Obstacle Settings")]
     public LayerMask obstacleMask;
     public float obstacleCheckRadius = 0.45f;
+    public float minimumAgentClearance = 0.5f;
 
     [Header("Debug")]
     public bool drawGrid = true;
@@ -49,7 +50,7 @@ public class AStarPathfinder3D : MonoBehaviour
 
                 bool blocked = Physics.CheckSphere(
                     worldPosition + Vector3.up * 0.5f,
-                    obstacleCheckRadius,
+                    Mathf.Max(obstacleCheckRadius, minimumAgentClearance),
                     obstacleMask
                 );
 
@@ -82,7 +83,12 @@ public class AStarPathfinder3D : MonoBehaviour
             targetNode = FindNearestWalkableNode(targetNode);
         }
 
-        if (targetNode == null || !startNode.walkable)
+        if (!startNode.walkable)
+        {
+            startNode = FindNearestWalkableNode(startNode);
+        }
+
+        if (targetNode == null || startNode == null)
         {
             return null;
         }
@@ -142,9 +148,169 @@ public class AStarPathfinder3D : MonoBehaviour
         return null;
     }
 
+    public bool IsInsideGrid(Vector3 position)
+    {
+        Vector3 bottomLeft = transform.position -
+                             new Vector3(gridWidth / 2f, 0f, gridDepth / 2f);
+        return position.x >= bottomLeft.x && position.x <= bottomLeft.x + gridWidth &&
+               position.z >= bottomLeft.z && position.z <= bottomLeft.z + gridDepth;
+    }
+
+    public bool IsValidAgentPosition(Vector3 position, float clearanceRadius)
+    {
+        if (!IsInsideGrid(position))
+        {
+            return false;
+        }
+
+        PathNode node = NodeFromWorldPoint(position);
+        return node != null && node.walkable &&
+               !Physics.CheckSphere(
+                   position + Vector3.up * 0.55f,
+                   Mathf.Max(0.05f, clearanceRadius),
+                   obstacleMask,
+                   QueryTriggerInteraction.Ignore);
+    }
+
+    public bool TryGetNearestWalkablePosition(
+        Vector3 requestedPosition,
+        float maximumDistance,
+        float clearanceRadius,
+        out Vector3 walkablePosition)
+    {
+        if (grid == null)
+        {
+            CreateGrid();
+        }
+
+        PathNode best = null;
+        float bestDistanceSquared = maximumDistance * maximumDistance;
+        foreach (PathNode node in grid)
+        {
+            if (!node.walkable ||
+                !IsValidAgentPosition(node.worldPosition, clearanceRadius))
+            {
+                continue;
+            }
+
+            Vector3 difference = node.worldPosition - requestedPosition;
+            difference.y = 0f;
+            float distanceSquared = difference.sqrMagnitude;
+            if (distanceSquared <= bestDistanceSquared)
+            {
+                bestDistanceSquared = distanceSquared;
+                best = node;
+            }
+        }
+
+        walkablePosition = best != null ? best.worldPosition : default;
+        return best != null;
+    }
+
+    public bool TryGetNearestReachablePosition(
+        Vector3 startPosition,
+        Vector3 requestedPosition,
+        float maximumAdjustment,
+        float clearanceRadius,
+        out Vector3 reachablePosition,
+        out List<Vector3> path)
+    {
+        if (grid == null)
+        {
+            CreateGrid();
+        }
+
+        if (IsValidAgentPosition(requestedPosition, clearanceRadius))
+        {
+            List<Vector3> directPath = FindPath(startPosition, requestedPosition);
+            if (directPath != null)
+            {
+                if (directPath.Count == 0 ||
+                    FlatDistanceSquared(
+                        directPath[directPath.Count - 1],
+                        requestedPosition) > 0.04f)
+                {
+                    directPath.Add(requestedPosition);
+                }
+
+                reachablePosition = requestedPosition;
+                path = directPath;
+                return true;
+            }
+        }
+
+        List<PathNode> candidates = new List<PathNode>();
+        float maxDistanceSquared = maximumAdjustment * maximumAdjustment;
+        foreach (PathNode node in grid)
+        {
+            if (!node.walkable ||
+                !IsValidAgentPosition(node.worldPosition, clearanceRadius))
+            {
+                continue;
+            }
+
+            Vector3 difference = node.worldPosition - requestedPosition;
+            difference.y = 0f;
+            if (difference.sqrMagnitude <= maxDistanceSquared)
+            {
+                candidates.Add(node);
+            }
+        }
+
+        candidates.Sort((left, right) =>
+        {
+            float leftDistance = FlatDistanceSquared(
+                left.worldPosition,
+                requestedPosition);
+            float rightDistance = FlatDistanceSquared(
+                right.worldPosition,
+                requestedPosition);
+            return leftDistance.CompareTo(rightDistance);
+        });
+
+        foreach (PathNode candidate in candidates)
+        {
+            List<Vector3> candidatePath = FindPath(
+                startPosition,
+                candidate.worldPosition);
+            if (candidatePath == null)
+            {
+                continue;
+            }
+
+            reachablePosition = candidate.worldPosition;
+            path = candidatePath;
+            return true;
+        }
+
+        reachablePosition = default;
+        path = null;
+        return false;
+    }
+
+    private static float FlatDistanceSquared(Vector3 a, Vector3 b)
+    {
+        float x = a.x - b.x;
+        float z = a.z - b.z;
+        return x * x + z * z;
+    }
+
     public bool TryGetNearestWalkablePositionInBounds(
         Vector3 requestedPosition,
         Bounds allowedBounds,
+        out Vector3 walkablePosition)
+    {
+        return TryGetNearestWalkablePositionInBounds(
+            requestedPosition,
+            allowedBounds,
+            obstacleCheckRadius,
+            out walkablePosition);
+    }
+
+    public bool TryGetNearestWalkablePositionInBounds(
+        Vector3 requestedPosition,
+        Bounds allowedBounds,
+        float clearanceRadius,
         out Vector3 walkablePosition)
     {
         if (grid == null)
@@ -157,7 +323,8 @@ public class AStarPathfinder3D : MonoBehaviour
 
         foreach (PathNode node in grid)
         {
-            if (!node.walkable)
+            if (!node.walkable ||
+                !IsValidAgentPosition(node.worldPosition, clearanceRadius))
             {
                 continue;
             }

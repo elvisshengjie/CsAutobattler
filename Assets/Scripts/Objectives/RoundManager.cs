@@ -23,6 +23,8 @@ public class RoundManager : MonoBehaviour
     [Header("Teams")]
     public TeamType attackingTeam = TeamType.Red;
     public TeamType defendingTeam = TeamType.Blue;
+    [Tooltip("When disabled, Red always attacks as the player-controlled terrorist side.")]
+    public bool randomizeTeamRoles;
     [Tooltip("Blue and Red exchange their starting sides whenever Blue is selected as attacker.")]
     public bool swapStartingSidesByRole = true;
 
@@ -69,7 +71,7 @@ public class RoundManager : MonoBehaviour
 
         Instance = this;
         CacheTeamStartingPositions();
-        RandomizeTeamRoles();
+        ConfigureTeamRoles();
     }
 
     private void Start()
@@ -85,6 +87,12 @@ public class RoundManager : MonoBehaviour
         switch (currentState)
         {
             case RoundState.Preparation:
+                if (TeamTacticManager.Instance != null &&
+                    TeamTacticManager.Instance.RequiresInitialSelection(this))
+                {
+                    break;
+                }
+
                 preparationTimeRemaining = Mathf.Max(
                     0f,
                     preparationTimeRemaining - Time.deltaTime);
@@ -124,7 +132,7 @@ public class RoundManager : MonoBehaviour
     {
         if (!firstRoundStart)
         {
-            RandomizeTeamRoles();
+            ConfigureTeamRoles();
         }
 
         firstRoundStart = false;
@@ -143,6 +151,19 @@ public class RoundManager : MonoBehaviour
         attackingTeam = redAttacks ? TeamType.Red : TeamType.Blue;
         defendingTeam = redAttacks ? TeamType.Blue : TeamType.Red;
         Debug.Log($"Round roles: {attackingTeam} attacks, {defendingTeam} defends.");
+    }
+
+    private void ConfigureTeamRoles()
+    {
+        if (randomizeTeamRoles)
+        {
+            RandomizeTeamRoles();
+            return;
+        }
+
+        attackingTeam = TeamType.Red;
+        defendingTeam = TeamType.Blue;
+        Debug.Log("Round roles: Red attacks, Blue defends (player-controlled sides).");
     }
 
     private void CacheTeamStartingPositions()

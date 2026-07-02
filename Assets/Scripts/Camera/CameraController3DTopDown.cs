@@ -31,6 +31,12 @@ public class CameraController3DTopDown : MonoBehaviour
 
     private void Update()
     {
+        if (TeamTacticManager.Instance != null &&
+            TeamTacticManager.Instance.IsInitialSelectionBlockingInput)
+        {
+            return;
+        }
+
         HandleMouseDrag();
         HandleMouseZoomToCursor();
         ClampCameraFocusPointToFloor();

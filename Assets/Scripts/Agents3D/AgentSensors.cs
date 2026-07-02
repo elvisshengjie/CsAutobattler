@@ -41,12 +41,7 @@ public class AgentSensors : MonoBehaviour
             }
 
             float distance = FlatDistance(transform.position, candidate.transform.position);
-            bool detectedNearby = distance <= proximityDetectionRange;
-            bool detectedInCone = distance <= sightRange &&
-                                  IsInsideFieldOfView(candidate.transform.position);
-
-            if ((!detectedNearby && !detectedInCone) ||
-                !HasLineOfSight(candidate.gameObject))
+            if (!CanDetect(candidate.gameObject))
             {
                 continue;
             }
@@ -59,6 +54,28 @@ public class AgentSensors : MonoBehaviour
         }
 
         return closestEnemy;
+    }
+
+    public bool CanDetect(GameObject target)
+    {
+        if (target == null)
+        {
+            return false;
+        }
+
+        AgentStats candidate = target.GetComponent<AgentStats>();
+        HealthSystem health = target.GetComponent<HealthSystem>();
+        if (candidate == null || stats == null || candidate.team == stats.team ||
+            health == null || health.IsDead)
+        {
+            return false;
+        }
+
+        float distance = FlatDistance(transform.position, candidate.transform.position);
+        bool detectedNearby = distance <= proximityDetectionRange;
+        bool detectedInCone = distance <= sightRange &&
+                              IsInsideFieldOfView(candidate.transform.position);
+        return (detectedNearby || detectedInCone) && HasLineOfSight(target);
     }
 
     public bool HasLineOfSight(GameObject target)

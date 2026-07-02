@@ -62,11 +62,17 @@ public class BombSite : MonoBehaviour
 
     public Vector3 GetNearestPlantPosition(Vector3 agentPosition)
     {
+        if (ObjectiveManager.Instance != null)
+        {
+            return ObjectiveManager.Instance.FindBestPlantPosition(this, agentPosition);
+        }
+
         BoxCollider siteTrigger = GetComponent<BoxCollider>();
         if (siteTrigger != null && AStarPathfinder3D.Instance != null &&
             AStarPathfinder3D.Instance.TryGetNearestWalkablePositionInBounds(
                 agentPosition,
                 siteTrigger.bounds,
+                0.5f,
                 out Vector3 gridPosition))
         {
             gridPosition.y = PlantPosition.y;

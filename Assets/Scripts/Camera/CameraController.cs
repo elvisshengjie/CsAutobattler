@@ -23,6 +23,12 @@ public class CameraController : MonoBehaviour
 
     private void Update()
     {
+        if (TeamTacticManager.Instance != null &&
+            TeamTacticManager.Instance.IsInitialSelectionBlockingInput)
+        {
+            return;
+        }
+
         HandleMouseDrag();
         HandleMouseZoom();
         ClampCameraPositionToFloor();

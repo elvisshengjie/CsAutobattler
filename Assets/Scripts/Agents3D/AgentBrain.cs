@@ -14,6 +14,8 @@ public class AgentBrain : MonoBehaviour
     private AgentMemory memory;
     private AgentMotor motor;
     private WeaponSystem weapon;
+    private DefenderAgentAI defenderAI;
+    private AttackerCombatAI attackerCombatAI;
 
     public GameObject CurrentTarget { get; private set; }
 
@@ -24,6 +26,8 @@ public class AgentBrain : MonoBehaviour
         memory = GetComponent<AgentMemory>();
         motor = GetComponent<AgentMotor>();
         weapon = GetComponent<WeaponSystem>();
+        defenderAI = GetComponent<DefenderAgentAI>();
+        attackerCombatAI = GetComponent<AttackerCombatAI>();
     }
 
     private void Update()
@@ -33,11 +37,50 @@ public class AgentBrain : MonoBehaviour
             return;
         }
 
-        CurrentTarget = sensors.FindClosestDetectedEnemy();
+        GameObject normallyDetectedTarget = sensors.FindClosestDetectedEnemy();
+        TeamTacticExecutor tacticExecutor = TeamTacticManager.Instance != null
+            ? TeamTacticManager.Instance.GetComponent<TeamTacticExecutor>()
+            : null;
+        CurrentTarget = tacticExecutor != null
+            ? tacticExecutor.SelectCombatTarget(
+                gameObject,
+                sensors,
+                normallyDetectedTarget)
+            : normallyDetectedTarget;
 
         if (CurrentTarget != null)
         {
             memory.ObserveEnemy(CurrentTarget);
+        }
+
+        if (ObjectiveManager.Instance != null &&
+            ObjectiveManager.Instance.TryStartPriorityPlant(gameObject, CurrentTarget))
+        {
+            return;
+        }
+
+        if (defenderAI == null)
+        {
+            defenderAI = GetComponent<DefenderAgentAI>();
+        }
+
+        if (defenderAI != null && defenderAI.TryExecute(CurrentTarget))
+        {
+            return;
+        }
+
+        if (attackerCombatAI == null)
+        {
+            attackerCombatAI = GetComponent<AttackerCombatAI>();
+        }
+
+        if (attackerCombatAI != null && attackerCombatAI.TryExecute(CurrentTarget))
+        {
+            return;
+        }
+
+        if (CurrentTarget != null)
+        {
             float distance = FlatDistance(transform.position, CurrentTarget.transform.position);
 
             if (distance <= stats.attackRange &&
