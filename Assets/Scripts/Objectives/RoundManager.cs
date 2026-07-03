@@ -70,6 +70,10 @@ public class RoundManager : MonoBehaviour
         }
 
         Instance = this;
+        if (GetComponent<RoundResultUI>() == null)
+        {
+            gameObject.AddComponent<RoundResultUI>();
+        }
         CacheTeamStartingPositions();
         ConfigureTeamRoles();
     }

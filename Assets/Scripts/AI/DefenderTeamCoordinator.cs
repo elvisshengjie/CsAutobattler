@@ -112,6 +112,11 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
     [SerializeField] private float bombVisualConfirmationRange = 24f;
     [SerializeField] private float searchAssignmentSpreadPenalty = 5f;
 
+    [Header("Influence Map")]
+    [SerializeField] private float postPlantSweepInterval = 2.25f;
+    [SerializeField] private float postPlantMinimumHoldRadius = 2.5f;
+    [SerializeField] private float postPlantMaximumHoldRadius = 7f;
+
     [Header("Pursuit Limits")]
     [SerializeField] private float pursuitMaxDistanceFromSite = 12f;
     [SerializeField] private float pursuitLocalThreatRadius = 9f;
@@ -131,6 +136,11 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
     private readonly List<Transform> coverPoints = new List<Transform>();
     private readonly List<VisionDebugLine> visionDebugLines =
         new List<VisionDebugLine>();
+    private readonly DefenderInfluenceMap influenceMap = new DefenderInfluenceMap();
+    private readonly Dictionary<GameObject, Vector3> postPlantSweepPositions =
+        new Dictionary<GameObject, Vector3>();
+    private readonly Dictionary<GameObject, float> nextPostPlantSweepTimes =
+        new Dictionary<GameObject, float>();
     private AgentStats designatedDefuser;
     private GameObject defusePositionOwner;
     private Vector3 designatedDefusePosition;
@@ -155,6 +165,10 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
                                     knownPlantedSite != null;
     public BombSite KnownPlantedSite => PlantedSiteKnown ? knownPlantedSite : null;
     public bool BombPositionKnown => PlantedSiteKnown && bombPositionKnown;
+    public GameObject DesignatedDefuser => designatedDefuser != null &&
+                                           IsLivingDefender(designatedDefuser.gameObject)
+        ? designatedDefuser.gameObject
+        : null;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void EnsureInstance()
@@ -405,14 +419,9 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
                 }
                 defusePosition = designatedDefusePosition;
             }
-            bool timerCritical = roundManager.BombTimeRemaining <= bombTimerRiskThreshold;
-            bool hasSupport = HasRetakeSupport(defender, bombPosition);
             bool hasKnownThreat = TryGetLatestKnownPosition(
                 plantedSite,
                 out Vector3 known);
-            bool knownThreatNearBomb = hasKnownThreat &&
-                                       FlatDistance(known, bombPosition) <=
-                                       defuseSafetyRadius;
             Vector3 retakeWatchPosition = hasKnownThreat
                 ? known
                 : GetLikelyRetakeEntranceWatch(defender, bombPosition);
@@ -420,11 +429,12 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
                 ? DefenderOrderType.Defuse
                 : DefenderOrderType.CoverDefuser;
             order.site = plantedSite;
-            order.destination = isDefuser &&
-                                (hasSupport || timerCritical || !knownThreatNearBomb)
+            order.destination = isDefuser
                 ? defusePosition
-                : GetHoldPosition(defender, plantedSite, retakeWatchPosition,
-                    isDefuser ? 6f : 4f);
+                : GetPostPlantSweepPosition(
+                    defender,
+                    bombPosition,
+                    retakeWatchPosition);
             order.watchPosition = retakeWatchPosition;
             order.speedMultiplier = isDefuser ? 1.3f : 1.15f;
             return true;
@@ -542,12 +552,10 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
         }
 
         BombSite plantedSite = objectiveManager.ActiveBomb.PlantedSite;
-        bool recentThreatNearBomb = TryGetLatestKnownPosition(
-                                        plantedSite,
-                                        out Vector3 known) &&
-                                    FlatDistance(known, bombPosition) <=
-                                    defuseSafetyRadius;
-        return !recentThreatNearBomb || HasRetakeSupport(defender, bombPosition);
+        // Last-known information guides escorts and cover selection, but cannot
+        // deadlock the only defuser forever. A current visible threat above is the
+        // only non-critical reason to delay once the defender reaches the bomb.
+        return true;
     }
 
     public bool ShouldEngagePostPlantThreat(GameObject defender, GameObject attacker)
@@ -751,6 +759,7 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
             return false;
         }
 
+        BuildInfluenceMap(defender, objectivePosition, threatPosition);
         float bestScore = Mathf.NegativeInfinity;
         foreach (Transform cover in coverPoints)
         {
@@ -791,7 +800,8 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
                           (canPeek ? 4f : 0f) +
                           Mathf.Clamp01(1f - objectiveDistance / 16f) * 3f +
                           (occupantCount == 0 ? 4f : -8f * occupantCount) -
-                          Mathf.Clamp01(1f - enemyDistance / 5f) * 5f;
+                          Mathf.Clamp01(1f - enemyDistance / 5f) * 5f +
+                          influenceMap.Evaluate(hiddenPosition);
             if (score <= bestScore)
             {
                 continue;
@@ -908,6 +918,8 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
 
         checkedBombSites.Clear();
         bombSearchAssignments.Clear();
+        postPlantSweepPositions.Clear();
+        nextPostPlantSweepTimes.Clear();
         designatedDefuser = null;
         defusePositionOwner = null;
         knownBombPosition = bombPosition;
@@ -1381,6 +1393,108 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
                Quaternion.Euler(0f, angle, 0f) * Vector3.forward * fallbackRadius;
     }
 
+    private Vector3 GetPostPlantSweepPosition(
+        GameObject defender,
+        Vector3 bombPosition,
+        Vector3 threatPosition)
+    {
+        bool needsNewPosition = !postPlantSweepPositions.TryGetValue(
+                                    defender,
+                                    out Vector3 position) ||
+                                !nextPostPlantSweepTimes.TryGetValue(
+                                    defender,
+                                    out float refreshTime) ||
+                                Time.time >= refreshTime;
+        if (!needsNewPosition)
+        {
+            return position;
+        }
+
+        position = GetInfluenceMapPosition(
+            defender,
+            bombPosition,
+            threatPosition,
+            postPlantMinimumHoldRadius,
+            postPlantMaximumHoldRadius);
+        postPlantSweepPositions[defender] = position;
+        nextPostPlantSweepTimes[defender] = Time.time + postPlantSweepInterval;
+        return position;
+    }
+
+    private Vector3 GetInfluenceMapPosition(
+        GameObject defender,
+        Vector3 objectivePosition,
+        Vector3 threatPosition,
+        float minimumRadius,
+        float maximumRadius)
+    {
+        BuildInfluenceMap(defender, objectivePosition, threatPosition);
+        AStarPathfinder3D pathfinder = AStarPathfinder3D.Instance;
+        Vector3 best = defender.transform.position;
+        float bestScore = Mathf.NegativeInfinity;
+        int defenderIndex = GetLivingDefenders().FindIndex(
+            candidate => candidate.gameObject == defender);
+
+        const int directionCount = 16;
+        const int ringCount = 3;
+        for (int ring = 0; ring < ringCount; ring++)
+        {
+            float radius = Mathf.Lerp(
+                minimumRadius,
+                maximumRadius,
+                ring / (float)(ringCount - 1));
+            for (int directionIndex = 0; directionIndex < directionCount; directionIndex++)
+            {
+                float angle = directionIndex * (360f / directionCount) + defenderIndex * 17f;
+                Vector3 candidate = objectivePosition +
+                    Quaternion.Euler(0f, angle, 0f) * Vector3.forward * radius;
+                List<Vector3> path = null;
+                if (pathfinder != null &&
+                    (!pathfinder.IsValidAgentPosition(candidate, 0.5f) ||
+                     (path = pathfinder.FindPath(defender.transform.position, candidate)) == null))
+                {
+                    continue;
+                }
+
+                float pathCost = path != null ? path.Count * 0.08f :
+                    FlatDistance(defender.transform.position, candidate) * 0.08f;
+                float score = influenceMap.Evaluate(candidate) - pathCost;
+                if (!IsLineBlocked(candidate, objectivePosition))
+                {
+                    score += 1.5f;
+                }
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    best = candidate;
+                }
+            }
+        }
+
+        return best;
+    }
+
+    private void BuildInfluenceMap(
+        GameObject defender,
+        Vector3 objectivePosition,
+        Vector3 threatPosition)
+    {
+        influenceMap.Clear();
+        influenceMap.Add(objectivePosition, 8f, 18f);
+        if (FlatDistance(threatPosition, objectivePosition) > 0.1f)
+        {
+            influenceMap.Add(threatPosition, -10f, 9f);
+        }
+
+        foreach (AgentStats teammate in GetLivingDefenders())
+        {
+            if (teammate.gameObject != defender)
+            {
+                influenceMap.Add(teammate.transform.position, -4f, 3.25f);
+            }
+        }
+    }
+
     private Vector3 GetPositionBehindCover(Transform cover, Vector3 threatPosition)
     {
         Collider collider = cover.GetComponent<Collider>();
@@ -1587,6 +1701,8 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
             knownBombPosition = default;
             checkedBombSites.Clear();
             bombSearchAssignments.Clear();
+            postPlantSweepPositions.Clear();
+            nextPostPlantSweepTimes.Clear();
             alertA.suspicionScore = 0f;
             alertB.suspicionScore = 0f;
             rotationLogged.Clear();

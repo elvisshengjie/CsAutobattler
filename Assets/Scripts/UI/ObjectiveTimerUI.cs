@@ -62,6 +62,28 @@ public class ObjectiveTimerUI : MonoBehaviour
 
         if (round.CurrentState == RoundState.BombPlanted)
         {
+            DefenderTeamCoordinator coordinator = DefenderTeamCoordinator.Instance;
+            GameObject defuser = coordinator != null
+                ? coordinator.DesignatedDefuser
+                : null;
+            if (defuser != null && objective.ActiveBomb != null)
+            {
+                float distance = FlatDistance(
+                    defuser.transform.position,
+                    objective.ActiveBomb.transform.position);
+                string action = distance <= objective.defuseInteractionRange
+                    ? "SECURING BOMB"
+                    : "DEFUSER APPROACHING";
+                return $"{TeamName(round.defendingTeam)} {action}  |  " +
+                       $"{DisplaySeconds(round.BombTimeRemaining)}s";
+            }
+
+            if (coordinator != null)
+            {
+                return $"{TeamName(round.defendingTeam)} SEARCHING / RETAKING  |  " +
+                       $"{DisplaySeconds(round.BombTimeRemaining)}s";
+            }
+
             return $"{TeamName(round.attackingTeam)} BOMB EXPLODES  |  " +
                    $"{DisplaySeconds(round.BombTimeRemaining)}s";
         }
@@ -77,6 +99,13 @@ public class ObjectiveTimerUI : MonoBehaviour
     private static string TeamName(TeamType team)
     {
         return team.ToString().ToUpperInvariant();
+    }
+
+    private static float FlatDistance(Vector3 a, Vector3 b)
+    {
+        a.y = 0f;
+        b.y = 0f;
+        return Vector3.Distance(a, b);
     }
 
     private void EnsureStyles()
