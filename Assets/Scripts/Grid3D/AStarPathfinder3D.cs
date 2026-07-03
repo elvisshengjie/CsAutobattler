@@ -13,7 +13,7 @@ public class AStarPathfinder3D : MonoBehaviour
     [Header("Obstacle Settings")]
     public LayerMask obstacleMask;
     public float obstacleCheckRadius = 0.45f;
-    public float minimumAgentClearance = 0.5f;
+    public float minimumAgentClearance = 0.65f;
 
     [Header("Debug")]
     public bool drawGrid = true;
@@ -27,6 +27,14 @@ public class AStarPathfinder3D : MonoBehaviour
     {
         Instance = this;
         CreateGrid();
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
     }
 
     private void CreateGrid()
@@ -150,33 +158,87 @@ public class AStarPathfinder3D : MonoBehaviour
 
     public bool IsInsideGrid(Vector3 position)
     {
+        return IsInsideGrid(position, 0f);
+    }
+
+    public bool IsInsideGrid(Vector3 position, float clearanceRadius)
+    {
         Vector3 bottomLeft = transform.position -
                              new Vector3(gridWidth / 2f, 0f, gridDepth / 2f);
-        return position.x >= bottomLeft.x && position.x <= bottomLeft.x + gridWidth &&
-               position.z >= bottomLeft.z && position.z <= bottomLeft.z + gridDepth;
+        float clearance = Mathf.Max(0f, clearanceRadius);
+        return position.x >= bottomLeft.x + clearance &&
+               position.x <= bottomLeft.x + gridWidth - clearance &&
+               position.z >= bottomLeft.z + clearance &&
+               position.z <= bottomLeft.z + gridDepth - clearance;
     }
 
     public bool IsValidAgentPosition(Vector3 position, float clearanceRadius)
     {
-        if (!IsInsideGrid(position))
+        return IsValidAgentPosition(position, clearanceRadius, null, true);
+    }
+
+    public bool IsValidAgentPosition(
+        Vector3 position,
+        float clearanceRadius,
+        GameObject ignoredAgent,
+        bool includeAgents,
+        float agentOverlapRadius = -1f)
+    {
+        if (!IsInsideGrid(position, clearanceRadius))
         {
             return false;
         }
 
         PathNode node = NodeFromWorldPoint(position);
-        return node != null && node.walkable &&
-               !Physics.CheckSphere(
-                   position + Vector3.up * 0.55f,
-                   Mathf.Max(0.05f, clearanceRadius),
-                   obstacleMask,
-                   QueryTriggerInteraction.Ignore);
+        if (node == null || !node.walkable ||
+            Physics.CheckSphere(
+                position + Vector3.up * 0.55f,
+                Mathf.Max(0.05f, clearanceRadius),
+                obstacleMask,
+                QueryTriggerInteraction.Ignore))
+        {
+            return false;
+        }
+
+        if (!includeAgents)
+        {
+            return true;
+        }
+
+        Collider[] overlaps = Physics.OverlapSphere(
+            position + Vector3.up * 0.55f,
+            agentOverlapRadius >= 0f
+                ? Mathf.Max(0.05f, agentOverlapRadius)
+                : Mathf.Max(0.05f, clearanceRadius),
+            ~0,
+            QueryTriggerInteraction.Ignore);
+        foreach (Collider overlap in overlaps)
+        {
+            AgentStats other = overlap != null
+                ? overlap.GetComponentInParent<AgentStats>()
+                : null;
+            if (other == null || other.gameObject == ignoredAgent)
+            {
+                continue;
+            }
+
+            HealthSystem health = other.GetComponent<HealthSystem>();
+            if (health == null || !health.IsDead)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public bool TryGetNearestWalkablePosition(
         Vector3 requestedPosition,
         float maximumDistance,
         float clearanceRadius,
-        out Vector3 walkablePosition)
+        out Vector3 walkablePosition,
+        GameObject ignoredAgent = null,
+        bool includeAgents = true)
     {
         if (grid == null)
         {
@@ -188,7 +250,11 @@ public class AStarPathfinder3D : MonoBehaviour
         foreach (PathNode node in grid)
         {
             if (!node.walkable ||
-                !IsValidAgentPosition(node.worldPosition, clearanceRadius))
+                !IsValidAgentPosition(
+                    node.worldPosition,
+                    clearanceRadius,
+                    ignoredAgent,
+                    includeAgents))
             {
                 continue;
             }
@@ -207,20 +273,44 @@ public class AStarPathfinder3D : MonoBehaviour
         return best != null;
     }
 
+    public Vector3 FindNearestValidPosition(
+        Vector3 desiredPosition,
+        float searchRadius)
+    {
+        if (IsValidAgentPosition(desiredPosition, minimumAgentClearance))
+        {
+            return desiredPosition;
+        }
+
+        return TryGetNearestWalkablePosition(
+            desiredPosition,
+            searchRadius,
+            minimumAgentClearance,
+            out Vector3 validPosition)
+            ? validPosition
+            : desiredPosition;
+    }
+
     public bool TryGetNearestReachablePosition(
         Vector3 startPosition,
         Vector3 requestedPosition,
         float maximumAdjustment,
         float clearanceRadius,
         out Vector3 reachablePosition,
-        out List<Vector3> path)
+        out List<Vector3> path,
+        GameObject ignoredAgent = null,
+        bool includeAgents = true)
     {
         if (grid == null)
         {
             CreateGrid();
         }
 
-        if (IsValidAgentPosition(requestedPosition, clearanceRadius))
+        if (IsValidAgentPosition(
+                requestedPosition,
+                clearanceRadius,
+                ignoredAgent,
+                includeAgents))
         {
             List<Vector3> directPath = FindPath(startPosition, requestedPosition);
             if (directPath != null)
@@ -244,7 +334,11 @@ public class AStarPathfinder3D : MonoBehaviour
         foreach (PathNode node in grid)
         {
             if (!node.walkable ||
-                !IsValidAgentPosition(node.worldPosition, clearanceRadius))
+                !IsValidAgentPosition(
+                    node.worldPosition,
+                    clearanceRadius,
+                    ignoredAgent,
+                    includeAgents))
             {
                 continue;
             }

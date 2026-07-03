@@ -51,6 +51,7 @@ public class AgentBrain : MonoBehaviour
         if (CurrentTarget != null)
         {
             memory.ObserveEnemy(CurrentTarget);
+            TryShootWithoutInterruptingMovement(CurrentTarget);
         }
 
         if (ObjectiveManager.Instance != null &&
@@ -120,6 +121,20 @@ public class AgentBrain : MonoBehaviour
         }
 
         motor.Stop();
+    }
+
+    private void TryShootWithoutInterruptingMovement(GameObject target)
+    {
+        if (target == null || weapon == null || !weapon.IsReady ||
+            FlatDistance(transform.position, target.transform.position) > stats.attackRange ||
+            !sensors.HasLineOfSight(target))
+        {
+            return;
+        }
+
+        // Projectile aiming is target-based, so firing does not need to stop or
+        // replace the current tactical slot movement.
+        weapon.TryAttack(target);
     }
 
     private void OnDisable()

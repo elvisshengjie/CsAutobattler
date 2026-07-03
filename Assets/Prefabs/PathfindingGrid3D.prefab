@@ -51,5 +51,6 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 64
   obstacleCheckRadius: 0.45
+  minimumAgentClearance: 0.65
   drawGrid: 1
   gizmoHeight: 0.05

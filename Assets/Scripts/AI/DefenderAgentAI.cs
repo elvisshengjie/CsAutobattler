@@ -15,7 +15,8 @@ public enum DefenderCombatState
     SearchingBombSite,
     RetakingBombSite,
     Defusing,
-    CoveringDefuser
+    CoveringDefuser,
+    Flanking
 }
 
 /// <summary>
@@ -152,21 +153,32 @@ public sealed class DefenderAgentAI : MonoBehaviour
         if (roundManager.CurrentState == RoundState.BombPlanted &&
             coordinator.BombPositionKnown)
         {
+            bool allStrikersDead = !roundManager.AreAttackersAlive;
+            bool designatedDefuserShouldCommit =
+                coordinator.ShouldPrioritizeDefuse(gameObject, visibleTarget);
             bool mustRiskDefuse = coordinator.BombTimerIsCritical &&
-                                  coordinator.CanStartDefuse(
-                                      gameObject,
-                                      visibleTarget);
+                                  designatedDefuserShouldCommit;
+            bool mustClearDefuseArea =
+                coordinator.MustClearDefuseArea(gameObject);
             bool directlyBlockingDefuse = visibleTarget != null &&
                 coordinator.ShouldEngagePostPlantThreat(gameObject, visibleTarget);
-            if (mustRiskDefuse || !directlyBlockingDefuse)
+            if (allStrikersDead || mustRiskDefuse ||
+                designatedDefuserShouldCommit || mustClearDefuseArea ||
+                !directlyBlockingDefuse)
             {
                 lastVisibleTarget = null;
                 currentCover = default;
                 forceReposition = false;
                 memory?.Clear();
-                currentReasonDebug = mustRiskDefuse
-                    ? "Bomb timer critical: risk defuse"
-                    : "Post-plant retake overrides local combat";
+                currentReasonDebug = allStrikersDead
+                    ? "All strikers eliminated: forced defuse"
+                    : mustRiskDefuse
+                        ? "Bomb timer critical: risk defuse"
+                        : designatedDefuserShouldCommit
+                            ? "Teammate covering: commit to defuse"
+                        : mustClearDefuseArea
+                            ? "Yielding exclusive defuse area"
+                        : "Post-plant retake overrides local combat";
                 return ExecuteTeamOrder(visibleTarget);
             }
         }
@@ -179,6 +191,13 @@ public sealed class DefenderAgentAI : MonoBehaviour
             lastSeenTime = Time.time;
             memory?.ObserveEnemy(visibleTarget);
             coordinator.ReportVisibleAttacker(gameObject, visibleTarget);
+            if (coordinator.TryGetEncirclementOrder(
+                    gameObject,
+                    visibleTarget,
+                    out DefenderOrder encirclementOrder))
+            {
+                return ExecuteEncirclement(encirclementOrder, visibleTarget);
+            }
             if ((retreating ||
                  currentState == DefenderCombatState.PursuingLastKnownEnemy) &&
                 ShouldPursue(lastKnownTargetPosition))
@@ -234,6 +253,13 @@ public sealed class DefenderAgentAI : MonoBehaviour
                                       memory.TryGetKnownPosition(out Vector3 remembered)
                 ? remembered
                 : lastKnownTargetPosition;
+            if (coordinator.TryGetEncirclementOrder(
+                    gameObject,
+                    lastVisibleTarget,
+                    out DefenderOrder encirclementOrder))
+            {
+                return ExecuteEncirclement(encirclementOrder, null);
+            }
             if (currentState == DefenderCombatState.PursuingLastKnownEnemy &&
                 ShouldPursue(lastKnownTargetPosition))
             {
@@ -892,6 +918,35 @@ public sealed class DefenderAgentAI : MonoBehaviour
         return true;
     }
 
+    private bool ExecuteEncirclement(
+        DefenderOrder order,
+        GameObject visibleTarget)
+    {
+        currentCover = default;
+        forceReposition = false;
+        currentState = DefenderCombatState.Flanking;
+        currentObjectiveDebug = order.engagementRole + " around shared threat";
+        currentReasonDebug = "Squad encirclement instead of frontal crowding";
+        motor.SpeedMultiplier = order.speedMultiplier;
+
+        bool moving = MoveTo(
+            order.destination,
+            Mathf.Max(0.65f, motor.waypointReachDistance));
+        motor.FacePosition(order.watchPosition);
+        if (visibleTarget != null)
+        {
+            TryShootWhileMoving(visibleTarget);
+        }
+
+        if (!moving)
+        {
+            motor.Stop();
+            motor.FacePosition(order.watchPosition);
+        }
+
+        return true;
+    }
+
     private bool ExecuteTeamOrder(GameObject visibleThreat = null)
     {
         if (!coordinator.TryGetOrder(gameObject, out DefenderOrder order))
@@ -904,6 +959,9 @@ public sealed class DefenderAgentAI : MonoBehaviour
         motor.SpeedMultiplier = order.speedMultiplier;
         switch (order.type)
         {
+            case DefenderOrderType.Flank:
+                return ExecuteEncirclement(order, visibleThreat);
+
             case DefenderOrderType.SearchBombSite:
                 currentState = DefenderCombatState.SearchingBombSite;
                 if (!MoveTo(

@@ -13,6 +13,16 @@ public enum RoundState
     RoundEnd
 }
 
+public enum RoundEndReason
+{
+    None,
+    TimeExpired,
+    StrikersEliminated,
+    BombDefused,
+    BombExploded,
+    DefendersEliminated
+}
+
 /// <summary>
 /// Authoritative owner of bomb-round state, timers, teams, and victory.
 /// </summary>
@@ -42,6 +52,7 @@ public class RoundManager : MonoBehaviour
     [SerializeField] private float bombTimeRemaining;
     [SerializeField] private bool hasWinner;
     [SerializeField] private TeamType winner;
+    [SerializeField] private RoundEndReason winnerReason;
 
     public RoundState CurrentState => currentState;
     public float PreparationTimeRemaining => preparationTimeRemaining;
@@ -49,10 +60,14 @@ public class RoundManager : MonoBehaviour
     public float BombTimeRemaining => bombTimeRemaining;
     public bool HasWinner => hasWinner;
     public TeamType Winner => winner;
+    public RoundEndReason WinnerReason => winnerReason;
+    public bool AreAttackersAlive => IsTeamAlive(attackingTeam);
+    public bool AreDefendersAlive => IsTeamAlive(defendingTeam);
     public bool IsRoundInProgress => currentState != RoundState.RoundEnd;
 
     public event Action<RoundState> StateChanged;
     public event Action<TeamType> RoundEnded;
+    public event Action<TeamType, RoundEndReason> RoundResultDeclared;
 
     private float nextEliminationCheckTime;
     private bool firstRoundStart = true;
@@ -74,11 +89,20 @@ public class RoundManager : MonoBehaviour
         ConfigureTeamRoles();
     }
 
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+    }
+
     private void Start()
     {
         // Re-scan after every agent has completed Awake. This avoids script execution
         // order causing an empty team cache in scenes upgraded from the old controller.
         CacheTeamStartingPositions();
+        EnsureRoundResultUI();
         StartRound();
     }
 
@@ -108,7 +132,7 @@ public class RoundManager : MonoBehaviour
                 roundTimeRemaining = Mathf.Max(0f, roundTimeRemaining - Time.deltaTime);
                 if (roundTimeRemaining <= 0f)
                 {
-                    EndRound(defendingTeam, "round timer expired");
+                    EndRound(defendingTeam, RoundEndReason.TimeExpired);
                 }
                 break;
 
@@ -138,11 +162,13 @@ public class RoundManager : MonoBehaviour
         firstRoundStart = false;
         ApplyRoleBasedStartingSides();
         hasWinner = false;
+        winnerReason = RoundEndReason.None;
         preparationTimeRemaining = preparationDuration;
         roundTimeRemaining = roundDuration;
         bombTimeRemaining = bombDuration;
         SetState(RoundState.Preparation);
         SetAgentCombatEnabled(false);
+        RoundResultUI.Instance?.Hide();
     }
 
     private void RandomizeTeamRoles()
@@ -313,7 +339,8 @@ public class RoundManager : MonoBehaviour
         }
 
         SetState(RoundState.Defused);
-        EndRound(defendingTeam, "bomb defused");
+        Debug.Log("Bomb defused, defenders win");
+        EndRound(defendingTeam, RoundEndReason.BombDefused);
     }
 
     public void NotifyBombExploded()
@@ -324,22 +351,26 @@ public class RoundManager : MonoBehaviour
         }
 
         SetState(RoundState.Exploded);
-        EndRound(attackingTeam, "bomb exploded");
+        EndRound(attackingTeam, RoundEndReason.BombExploded);
     }
 
-    public void EndRound(TeamType winningTeam, string reason)
+    public void EndRound(TeamType winningTeam, RoundEndReason reason)
     {
-        if (currentState == RoundState.RoundEnd)
+        if (hasWinner || currentState == RoundState.RoundEnd)
         {
             return;
         }
 
         winner = winningTeam;
+        winnerReason = reason;
         hasWinner = true;
         SetState(RoundState.RoundEnd);
         SetAgentCombatEnabled(false);
-        Debug.Log($"Round over. {winningTeam} wins: {reason}.");
+        Debug.Log(
+            $"Round ended: {GetWinnerDisplayName(winningTeam)} win - " +
+            GetReasonLogName(reason));
         RoundEnded?.Invoke(winningTeam);
+        RoundResultDeclared?.Invoke(winningTeam, reason);
     }
 
     private void CheckEliminationVictory()
@@ -357,18 +388,18 @@ public class RoundManager : MonoBehaviour
 
         if (!defendersAlive)
         {
-            EndRound(attackingTeam, "defending team eliminated");
+            EndRound(attackingTeam, RoundEndReason.DefendersEliminated);
             return;
         }
 
         // After planting, dead attackers do not end the round; defenders must defuse.
         if (!attackersAlive && currentState != RoundState.BombPlanted)
         {
-            EndRound(defendingTeam, "attacking team eliminated before planting");
+            EndRound(defendingTeam, RoundEndReason.StrikersEliminated);
         }
     }
 
-    private static bool IsTeamAlive(TeamType team)
+    public static bool IsTeamAlive(TeamType team)
     {
         AgentStats[] agents = FindObjectsByType<AgentStats>(FindObjectsInactive.Exclude);
         foreach (AgentStats agent in agents)
@@ -381,6 +412,41 @@ public class RoundManager : MonoBehaviour
         }
 
         return false;
+    }
+
+    public static string GetWinnerDisplayName(TeamType team)
+    {
+        return team == TeamType.Blue ? "Defenders" : "Strikers";
+    }
+
+    public static string GetReasonDisplayName(RoundEndReason reason)
+    {
+        return reason switch
+        {
+            RoundEndReason.TimeExpired => "Time Expired",
+            RoundEndReason.StrikersEliminated => "Strikers Eliminated",
+            RoundEndReason.BombDefused => "Bomb Defused",
+            RoundEndReason.BombExploded => "Bomb Exploded",
+            RoundEndReason.DefendersEliminated => "Defenders Eliminated",
+            _ => string.Empty
+        };
+    }
+
+    private static string GetReasonLogName(RoundEndReason reason)
+    {
+        string displayName = GetReasonDisplayName(reason);
+        return string.IsNullOrEmpty(displayName)
+            ? displayName
+            : char.ToUpperInvariant(displayName[0]) +
+              displayName.Substring(1).ToLowerInvariant();
+    }
+
+    private static void EnsureRoundResultUI()
+    {
+        if (FindAnyObjectByType<RoundResultUI>() == null)
+        {
+            new GameObject("Round Result UI").AddComponent<RoundResultUI>();
+        }
     }
 
     private void SetState(RoundState newState)

@@ -45,6 +45,11 @@ public sealed class TeamTacticExecutor : MonoBehaviour
     [SerializeField] private float feintStagingMaximumPlantDistance = 17f;
     [SerializeField] private float feintStagingReselectCooldown = 3f;
     [SerializeField] private bool drawFeintStagingGizmos = true;
+    [SerializeField] private float splitRouteLateralDistance = 8f;
+    [SerializeField] private float splitRouteWaypointTolerance = 1.1f;
+    [SerializeField] private float splitGroupSyncDistance = 5.5f;
+    [SerializeField] private float splitMaximumSyncWait = 2.5f;
+    [SerializeField] private bool drawSplitRouteGizmos = true;
 
     private TeamTacticManager tacticManager;
     private RoundManager roundManager;
@@ -77,6 +82,23 @@ public sealed class TeamTacticExecutor : MonoBehaviour
     private readonly List<Vector3> feintExposedStagingCandidates = new List<Vector3>();
     private readonly List<Vector3> feintSelectedStagingPath = new List<Vector3>();
     private readonly List<Vector3> feintSelectedExposureOrigins = new List<Vector3>();
+
+    private bool hasSplitRoutePlan;
+    private Vector3 splitPlannedSitePosition;
+    private Vector3 splitRoutePointA;
+    private Vector3 splitRoutePointB;
+    private Vector3 splitEntryPointA;
+    private Vector3 splitEntryPointB;
+    private Vector3 splitPlantPosition;
+    private float splitSyncReleaseTime;
+    private readonly Dictionary<GameObject, bool> splitSecondGroup =
+        new Dictionary<GameObject, bool>();
+    private readonly HashSet<GameObject> splitRouteReached =
+        new HashSet<GameObject>();
+    private readonly HashSet<GameObject> splitEntryReached =
+        new HashSet<GameObject>();
+    private readonly List<Vector3> splitDebugPathA = new List<Vector3>();
+    private readonly List<Vector3> splitDebugPathB = new List<Vector3>();
 
     private readonly List<AgentStats> livingAttackers = new List<AgentStats>();
     private readonly List<AgentStats> livingDefenders = new List<AgentStats>();
@@ -475,23 +497,99 @@ public sealed class TeamTacticExecutor : MonoBehaviour
             return true;
         }
 
-        int index = GetAttackerIndex(agent);
-        bool sideGroup = index >= Mathf.CeilToInt(livingAttackers.Count * 0.6f);
-        Vector3 approach = GetApproachDirection(targetSite);
-        Vector3 perpendicular = Vector3.Cross(Vector3.up, approach).normalized;
-        float routeSide = sideGroup ? 7f : -4f;
-        float back = sideGroup ? 3f : 1.5f;
-
-        // The leading route briefly stages if its partner route is still far away.
-        float otherGroupDistance = GetOtherSplitGroupDistance(sideGroup);
-        if (FlatDistance(agent.transform.position, targetSite.PlantPosition) < 7f &&
-            otherGroupDistance > 11f)
+        if (!EnsureSplitRoutePlan() ||
+            !splitSecondGroup.TryGetValue(agent, out bool sideGroup))
         {
-            back = 6f;
+            return ExecuteSplitFallback(agent, motor, carrier);
         }
 
-        Vector3 destination = targetSite.PlantPosition - approach * back +
-                              perpendicular * routeSide;
+        Vector3 routePoint = sideGroup ? splitRoutePointB : splitRoutePointA;
+        Vector3 entryPoint = sideGroup ? splitEntryPointB : splitEntryPointA;
+        if (!splitRouteReached.Contains(agent))
+        {
+            bool reachedRoute =
+                FlatDistance(agent.transform.position, routePoint) <=
+                splitRouteWaypointTolerance ||
+                motor.HasReachedRequestedDestination(
+                    routePoint,
+                    splitRouteWaypointTolerance);
+            if (!reachedRoute)
+            {
+                return MoveOrHold(agent, motor, routePoint, entryPoint);
+            }
+
+            splitRouteReached.Add(agent);
+            Debug.Log(
+                $"Split Push: {agent.name} completed " +
+                $"{(sideGroup ? "Route B" : "Route A")} waypoint.");
+        }
+
+        if (!splitEntryReached.Contains(agent))
+        {
+            bool reachedEntry =
+                FlatDistance(agent.transform.position, entryPoint) <=
+                splitRouteWaypointTolerance ||
+                motor.HasReachedRequestedDestination(
+                    entryPoint,
+                    splitRouteWaypointTolerance);
+            if (!reachedEntry)
+            {
+                return MoveOrHold(
+                    agent,
+                    motor,
+                    entryPoint,
+                    targetSite.PlantPosition);
+            }
+
+            splitEntryReached.Add(agent);
+            if (splitSyncReleaseTime <= 0f)
+            {
+                splitSyncReleaseTime = Time.time + splitMaximumSyncWait;
+            }
+        }
+
+        if (Time.time < splitSyncReleaseTime &&
+            GetOtherSplitGroupEntryDistance(sideGroup) > splitGroupSyncDistance)
+        {
+            return MoveOrHold(
+                agent,
+                motor,
+                entryPoint,
+                targetSite.PlantPosition);
+        }
+
+        Vector3 approach = GetApproachDirection(targetSite);
+        Vector3 perpendicular = Vector3.Cross(Vector3.up, approach).normalized;
+        Vector3 destination;
+        if (carrier != null && carrier.HasBomb)
+        {
+            destination = splitPlantPosition;
+        }
+        else
+        {
+            float groupSide = sideGroup ? 2.4f : -2.4f;
+            float memberOffset = GetSplitGroupMemberOffset(
+                agent,
+                sideGroup,
+                1.1f);
+            destination = targetSite.PlantPosition - approach * 0.5f +
+                          perpendicular * (groupSide + memberOffset);
+        }
+
+        return MoveOrHold(agent, motor, destination, targetSite.PlantPosition);
+    }
+
+    private bool ExecuteSplitFallback(
+        GameObject agent,
+        AgentMotor motor,
+        BombCarrier carrier)
+    {
+        Vector3 destination = carrier != null && carrier.HasBomb
+            ? targetSite.GetNearestPlantPosition(agent.transform.position)
+            : GetApproachPosition(
+                targetSite,
+                1.5f,
+                GetFormationSideOffset(agent, 1.4f));
         return MoveOrHold(agent, motor, destination, targetSite.PlantPosition);
     }
 
@@ -1801,26 +1899,349 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         return Quaternion.Euler(0f, angle, 0f) * Vector3.forward * radius;
     }
 
-    private float GetOtherSplitGroupDistance(bool sideGroup)
+    private bool EnsureSplitRoutePlan()
     {
-        float total = 0f;
-        int count = 0;
-        int split = Mathf.CeilToInt(livingAttackers.Count * 0.6f);
+        if (hasSplitRoutePlan && targetSite != null &&
+            FlatDistance(splitPlannedSitePosition, targetSite.PlantPosition) < 0.5f &&
+            HasAssignmentsForLivingAttackers())
+        {
+            return true;
+        }
+
+        return BuildSplitRoutePlan();
+    }
+
+    private bool BuildSplitRoutePlan()
+    {
+        ClearSplitRoutePlan();
+        if (targetSite == null || livingAttackers.Count < 2)
+        {
+            return false;
+        }
+
         for (int i = 0; i < livingAttackers.Count; i++)
         {
-            bool candidateSideGroup = i >= split;
-            if (candidateSideGroup == sideGroup)
+            splitSecondGroup[livingAttackers[i].gameObject] =
+                IsSecondSplitGroupIndex(i, livingAttackers.Count);
+        }
+
+        Vector3 start = GetAttackerCenter();
+        Vector3 target = targetSite.PlantPosition;
+        Vector3 approach = GetFlatDirection(start, target);
+        Vector3 perpendicular = Vector3.Cross(Vector3.up, approach).normalized;
+        float entryLateral = Mathf.Max(3.5f, splitRouteLateralDistance * 0.55f);
+        Vector3 requestedEntryA = target - approach * 3.5f -
+                                  perpendicular * entryLateral;
+        Vector3 requestedEntryB = target - approach * 3.5f +
+                                  perpendicular * entryLateral;
+
+        float bestScore = Mathf.NegativeInfinity;
+        Vector3 bestRouteA = default;
+        Vector3 bestRouteB = default;
+        Vector3 bestEntryA = default;
+        Vector3 bestEntryB = default;
+        List<Vector3> bestPathA = null;
+        List<Vector3> bestPathB = null;
+        float[] progressCandidates = { 0.38f, 0.52f, 0.66f };
+        float[] lateralScales = { 0.75f, 1f, 1.25f };
+        foreach (float progress in progressCandidates)
+        {
+            foreach (float lateralScale in lateralScales)
+            {
+                float lateral = splitRouteLateralDistance * lateralScale;
+                Vector3 requestedA = GetSplitRouteCandidate(
+                    start,
+                    target,
+                    false,
+                    lateral,
+                    progress);
+                Vector3 requestedB = GetSplitRouteCandidate(
+                    start,
+                    target,
+                    true,
+                    lateral,
+                    progress);
+                if (!TryResolveSplitLeg(
+                        start,
+                        requestedA,
+                        out Vector3 routeA,
+                        out List<Vector3> firstLegA) ||
+                    !TryResolveSplitLeg(
+                        start,
+                        requestedB,
+                        out Vector3 routeB,
+                        out List<Vector3> firstLegB) ||
+                    FlatDistance(routeA, routeB) < 4f ||
+                    !TryResolveSplitLeg(
+                        routeA,
+                        requestedEntryA,
+                        out Vector3 entryA,
+                        out List<Vector3> secondLegA) ||
+                    !TryResolveSplitLeg(
+                        routeB,
+                        requestedEntryB,
+                        out Vector3 entryB,
+                        out List<Vector3> secondLegB) ||
+                    FlatDistance(entryA, entryB) < 3.5f)
+                {
+                    continue;
+                }
+
+                float midPathSeparation = FlatDistance(
+                    GetSplitPathSample(firstLegA, 0.65f, routeA),
+                    GetSplitPathSample(firstLegB, 0.65f, routeB));
+                float score = FlatDistance(routeA, routeB) * 2f +
+                              FlatDistance(entryA, entryB) +
+                              midPathSeparation * 1.5f -
+                              (firstLegA.Count + firstLegB.Count +
+                               secondLegA.Count + secondLegB.Count) * 0.03f;
+                if (score <= bestScore)
+                {
+                    continue;
+                }
+
+                bestScore = score;
+                bestRouteA = routeA;
+                bestRouteB = routeB;
+                bestEntryA = entryA;
+                bestEntryB = entryB;
+                bestPathA = CombineSplitLegs(firstLegA, secondLegA);
+                bestPathB = CombineSplitLegs(firstLegB, secondLegB);
+            }
+        }
+
+        if (bestPathA == null || bestPathB == null)
+        {
+            Debug.LogWarning(
+                "Split Push: could not find two reachable divergent routes; " +
+                "using separated geometric staging points.");
+            bestRouteA = GetSplitRouteCandidate(
+                start,
+                target,
+                false,
+                splitRouteLateralDistance,
+                0.55f);
+            bestRouteB = GetSplitRouteCandidate(
+                start,
+                target,
+                true,
+                splitRouteLateralDistance,
+                0.55f);
+            bestEntryA = requestedEntryA;
+            bestEntryB = requestedEntryB;
+            bestPathA = new List<Vector3> { start, bestRouteA, bestEntryA };
+            bestPathB = new List<Vector3> { start, bestRouteB, bestEntryB };
+        }
+
+        Vector3 firstGroupCenter = GetSplitGroupCenter(false, start);
+        Vector3 secondGroupCenter = GetSplitGroupCenter(true, start);
+        float normalCost = FlatDistance(firstGroupCenter, bestRouteA) +
+                           FlatDistance(secondGroupCenter, bestRouteB);
+        float swappedCost = FlatDistance(firstGroupCenter, bestRouteB) +
+                            FlatDistance(secondGroupCenter, bestRouteA);
+        if (swappedCost < normalCost)
+        {
+            (bestRouteA, bestRouteB) = (bestRouteB, bestRouteA);
+            (bestEntryA, bestEntryB) = (bestEntryB, bestEntryA);
+            (bestPathA, bestPathB) = (bestPathB, bestPathA);
+        }
+
+        splitRoutePointA = bestRouteA;
+        splitRoutePointB = bestRouteB;
+        splitEntryPointA = bestEntryA;
+        splitEntryPointB = bestEntryB;
+        splitPlannedSitePosition = target;
+        splitDebugPathA.AddRange(bestPathA);
+        splitDebugPathB.AddRange(bestPathB);
+
+        AgentStats bombCarrier = livingAttackers.Find(attacker =>
+            attacker.GetComponent<BombCarrier>()?.HasBomb == true);
+        splitPlantPosition = bombCarrier != null
+            ? targetSite.GetNearestPlantPosition(bombCarrier.transform.position)
+            : targetSite.PlantPosition;
+        hasSplitRoutePlan = true;
+        Debug.Log(
+            $"Split Push: two-route plan for Site {targetSite.siteId}. " +
+            $"Route A via {splitRoutePointA}, Route B via {splitRoutePointB}.");
+        return true;
+    }
+
+    private bool TryResolveSplitLeg(
+        Vector3 start,
+        Vector3 requested,
+        out Vector3 resolved,
+        out List<Vector3> path)
+    {
+        AStarPathfinder3D pathfinder = AStarPathfinder3D.Instance;
+        if (pathfinder == null)
+        {
+            resolved = requested;
+            path = new List<Vector3> { requested };
+            return true;
+        }
+
+        return pathfinder.TryGetNearestReachablePosition(
+                   start,
+                   requested,
+                   3f,
+                   0.65f,
+                   out resolved,
+                   out path,
+                   null,
+                   false) &&
+               path != null &&
+               FlatDistance(resolved, requested) <= 3.1f;
+    }
+
+    private static Vector3 GetSplitPathSample(
+        List<Vector3> path,
+        float progress,
+        Vector3 fallback)
+    {
+        if (path == null || path.Count == 0)
+        {
+            return fallback;
+        }
+
+        int index = Mathf.Clamp(
+            Mathf.RoundToInt((path.Count - 1) * Mathf.Clamp01(progress)),
+            0,
+            path.Count - 1);
+        return path[index];
+    }
+
+    private static List<Vector3> CombineSplitLegs(
+        List<Vector3> first,
+        List<Vector3> second)
+    {
+        List<Vector3> combined = new List<Vector3>();
+        if (first != null)
+        {
+            combined.AddRange(first);
+        }
+        if (second != null)
+        {
+            combined.AddRange(second);
+        }
+        return combined;
+    }
+
+    public static bool IsSecondSplitGroupIndex(int index, int attackerCount)
+    {
+        return attackerCount > 1 &&
+               index >= Mathf.CeilToInt(attackerCount * 0.6f);
+    }
+
+    public static Vector3 GetSplitRouteCandidate(
+        Vector3 start,
+        Vector3 target,
+        bool secondGroup,
+        float lateralDistance,
+        float progress)
+    {
+        Vector3 direction = GetFlatDirection(start, target);
+        Vector3 perpendicular = Vector3.Cross(Vector3.up, direction).normalized;
+        float side = secondGroup ? 1f : -1f;
+        Vector3 candidate = Vector3.Lerp(
+            start,
+            target,
+            Mathf.Clamp(progress, 0.15f, 0.85f));
+        candidate += perpendicular * Mathf.Max(2f, lateralDistance) * side;
+        candidate.y = start.y;
+        return candidate;
+    }
+
+    private bool HasAssignmentsForLivingAttackers()
+    {
+        foreach (AgentStats attacker in livingAttackers)
+        {
+            if (!splitSecondGroup.ContainsKey(attacker.gameObject))
+            {
+                return false;
+            }
+        }
+        return livingAttackers.Count >= 2;
+    }
+
+    private Vector3 GetSplitGroupCenter(bool secondGroup, Vector3 fallback)
+    {
+        Vector3 total = Vector3.zero;
+        int count = 0;
+        foreach (AgentStats attacker in livingAttackers)
+        {
+            if (splitSecondGroup.TryGetValue(
+                    attacker.gameObject,
+                    out bool assignedSecond) &&
+                assignedSecond == secondGroup)
+            {
+                total += attacker.transform.position;
+                count++;
+            }
+        }
+        return count > 0 ? total / count : fallback;
+    }
+
+    private float GetOtherSplitGroupEntryDistance(bool secondGroup)
+    {
+        bool otherGroup = !secondGroup;
+        Vector3 otherEntry = otherGroup ? splitEntryPointB : splitEntryPointA;
+        float total = 0f;
+        int count = 0;
+        foreach (AgentStats attacker in livingAttackers)
+        {
+            if (splitSecondGroup.TryGetValue(
+                    attacker.gameObject,
+                    out bool assignedSecond) &&
+                assignedSecond == otherGroup)
+            {
+                total += FlatDistance(attacker.transform.position, otherEntry);
+                count++;
+            }
+        }
+        return count > 0 ? total / count : 0f;
+    }
+
+    private float GetSplitGroupMemberOffset(
+        GameObject agent,
+        bool secondGroup,
+        float spacing)
+    {
+        int memberIndex = 0;
+        int memberCount = 0;
+        foreach (AgentStats attacker in livingAttackers)
+        {
+            if (!splitSecondGroup.TryGetValue(
+                    attacker.gameObject,
+                    out bool assignedSecond) ||
+                assignedSecond != secondGroup)
             {
                 continue;
             }
 
-            total += FlatDistance(
-                livingAttackers[i].transform.position,
-                targetSite.PlantPosition);
-            count++;
+            if (attacker.gameObject == agent)
+            {
+                memberIndex = memberCount;
+            }
+            memberCount++;
         }
+        return (memberIndex - (memberCount - 1) * 0.5f) * spacing;
+    }
 
-        return count > 0 ? total / count : 0f;
+    private void ClearSplitRoutePlan()
+    {
+        hasSplitRoutePlan = false;
+        splitPlannedSitePosition = Vector3.zero;
+        splitRoutePointA = Vector3.zero;
+        splitRoutePointB = Vector3.zero;
+        splitEntryPointA = Vector3.zero;
+        splitEntryPointB = Vector3.zero;
+        splitPlantPosition = Vector3.zero;
+        splitSyncReleaseTime = 0f;
+        splitSecondGroup.Clear();
+        splitRouteReached.Clear();
+        splitEntryReached.Clear();
+        splitDebugPathA.Clear();
+        splitDebugPathB.Clear();
     }
 
     private Transform FindAssignedCover(
@@ -2128,6 +2549,7 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         feintExposedStagingCandidates.Clear();
         feintSelectedStagingPath.Clear();
         feintSelectedExposureOrigins.Clear();
+        ClearSplitRoutePlan();
         focusFireTarget = null;
         observedPlanRevision = -1;
         foreach (AgentMotor motor in FindObjectsByType<AgentMotor>(FindObjectsInactive.Exclude))
@@ -2219,6 +2641,7 @@ public sealed class TeamTacticExecutor : MonoBehaviour
 
     private void OnDrawGizmos()
     {
+        DrawSplitRouteGizmos();
         if (!drawFeintStagingGizmos)
         {
             return;
@@ -2263,6 +2686,34 @@ public sealed class TeamTacticExecutor : MonoBehaviour
             Gizmos.DrawLine(
                 exposureOrigin + Vector3.up * 0.8f,
                 feintBStagingPosition + Vector3.up * 0.8f);
+        }
+    }
+
+    private void DrawSplitRouteGizmos()
+    {
+        if (!drawSplitRouteGizmos || !hasSplitRoutePlan)
+        {
+            return;
+        }
+
+        Gizmos.color = new Color(0.1f, 0.85f, 1f, 0.95f);
+        DrawGizmoPath(splitDebugPathA);
+        Gizmos.DrawWireSphere(splitRoutePointA + Vector3.up * 0.2f, 0.55f);
+        Gizmos.DrawWireSphere(splitEntryPointA + Vector3.up * 0.2f, 0.7f);
+
+        Gizmos.color = new Color(1f, 0.45f, 0.1f, 0.95f);
+        DrawGizmoPath(splitDebugPathB);
+        Gizmos.DrawWireSphere(splitRoutePointB + Vector3.up * 0.2f, 0.55f);
+        Gizmos.DrawWireSphere(splitEntryPointB + Vector3.up * 0.2f, 0.7f);
+    }
+
+    private static void DrawGizmoPath(List<Vector3> path)
+    {
+        for (int i = 1; i < path.Count; i++)
+        {
+            Gizmos.DrawLine(
+                path[i - 1] + Vector3.up * 0.2f,
+                path[i] + Vector3.up * 0.2f);
         }
     }
 }

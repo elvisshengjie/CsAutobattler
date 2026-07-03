@@ -31,15 +31,33 @@ public enum DefenderOrderType
     HoldSite,
     Investigate,
     Rotate,
+    Flank,
     Retake,
     SearchBombSite,
     Defuse,
     CoverDefuser
 }
 
+public enum DefenderEngagementRole
+{
+    Pressure,
+    LeftFlank,
+    RightFlank,
+    RearCutoff
+}
+
+public enum DefenderFormationStyle
+{
+    Concentrated,
+    SingleFlank,
+    Pincer,
+    FullEncirclement
+}
+
 public struct DefenderOrder
 {
     public DefenderOrderType type;
+    public DefenderEngagementRole engagementRole;
     public BombSite site;
     public Vector3 destination;
     public Vector3 watchPosition;
@@ -85,6 +103,21 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
         public float expiresAt;
     }
 
+    private sealed class EncirclementPlan
+    {
+        public GameObject target;
+        public Vector3 lastKnownTargetPosition;
+        public Vector3 frontDirection;
+        public float assignmentValidUntil;
+        public float nextDestinationRefreshTime;
+        public int defenderCount;
+        public DefenderFormationStyle formation;
+        public readonly Dictionary<GameObject, DefenderEngagementRole> roles =
+            new Dictionary<GameObject, DefenderEngagementRole>();
+        public readonly Dictionary<GameObject, Vector3> destinations =
+            new Dictionary<GameObject, Vector3>();
+    }
+
     public static DefenderTeamCoordinator Instance { get; private set; }
 
     [Header("Shared Perception")]
@@ -104,7 +137,9 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
     [SerializeField] private float coverSearchRadius = 14f;
     [SerializeField] private float defuseStartDistance = 1.2f;
     [SerializeField] private float defuseSafetyRadius = 7f;
+    [SerializeField] private float defuseExclusiveRadius = 3.25f;
     [SerializeField] private float bombTimerRiskThreshold = 7f;
+    [SerializeField] private float activeCombatDefuserPenalty = 10f;
     [SerializeField] private bool drawDebugGizmos = true;
 
     [Header("Bomb Search")]
@@ -116,6 +151,15 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
     [SerializeField] private float pursuitMaxDistanceFromSite = 12f;
     [SerializeField] private float pursuitLocalThreatRadius = 9f;
 
+    [Header("Squad Encirclement")]
+    [SerializeField] private bool enableEncirclement = true;
+    [SerializeField] private int minimumEncirclementTeamSize = 2;
+    [SerializeField] private float encirclementRadius = 5f;
+    [SerializeField] private float encirclementAssignmentHoldTime = 6f;
+    [SerializeField] private float encirclementDestinationRefreshTime = 0.9f;
+    [SerializeField] private float encirclementTargetMoveThreshold = 1.25f;
+    [SerializeField] private float encirclementPositionAdjustment = 2.5f;
+
     private RoundManager roundManager;
     private ObjectiveManager objectiveManager;
     private readonly SiteAlert alertA = new SiteAlert();
@@ -125,18 +169,32 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
     private readonly Dictionary<GameObject, BombSite> homeSites =
         new Dictionary<GameObject, BombSite>();
     private readonly HashSet<GameObject> rotationLogged = new HashSet<GameObject>();
+    private readonly HashSet<GameObject> defuseMoveLogged = new HashSet<GameObject>();
+    private readonly HashSet<GameObject> defuseRangeLogged = new HashSet<GameObject>();
     private readonly HashSet<BombSiteId> checkedBombSites = new HashSet<BombSiteId>();
     private readonly Dictionary<GameObject, BombSite> bombSearchAssignments =
         new Dictionary<GameObject, BombSite>();
+    private readonly Dictionary<GameObject, Transform> holdCoverAssignments =
+        new Dictionary<GameObject, Transform>();
     private readonly List<Transform> coverPoints = new List<Transform>();
     private readonly List<VisionDebugLine> visionDebugLines =
         new List<VisionDebugLine>();
+    private readonly EncirclementPlan encirclement = new EncirclementPlan();
+    private readonly HashSet<GameObject> recentEncirclementThreats =
+        new HashSet<GameObject>();
+    private readonly List<AgentStats> cachedEncirclementDefenders =
+        new List<AgentStats>();
+    private readonly List<AgentStats> eligibleEncirclementDefenders =
+        new List<AgentStats>();
+    private float nextEncirclementTeamCacheTime;
     private AgentStats designatedDefuser;
     private GameObject defusePositionOwner;
     private Vector3 designatedDefusePosition;
     private float confirmedAlertTime = Mathf.NegativeInfinity;
     private float nextTeamRefreshTime;
     private bool retakeLogged;
+    private bool forcedDefuseLogged;
+    private bool noLivingDefenderLogged;
     [SerializeField] private BombKnowledgeState bombKnowledgeState =
         BombKnowledgeState.NotPlanted;
     [SerializeField] private BombSite knownPlantedSite;
@@ -233,6 +291,8 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
         {
             return;
         }
+
+        holdCoverAssignments.Remove(reporter);
 
         AgentSensors sensors = reporter.GetComponent<AgentSensors>();
         AgentStats attackerStats = attacker.GetComponent<AgentStats>();
@@ -344,6 +404,661 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
         SetAlertState(alert, DefenderSiteAlertState.UnderAttack);
     }
 
+    /// <summary>
+    /// Gives non-pressure defenders a stable side or rear route around the
+    /// currently shared attacker position. The plan only uses reported
+    /// sightings, so defenders cannot track an unseen attacker through walls.
+    /// </summary>
+    public bool TryGetEncirclementOrder(
+        GameObject defender,
+        GameObject observedAttacker,
+        out DefenderOrder order)
+    {
+        order = default;
+        if (!enableEncirclement || !IsLivingDefender(defender) ||
+            roundManager == null)
+        {
+            return false;
+        }
+
+        bool postPlant = roundManager.CurrentState == RoundState.BombPlanted;
+        if (postPlant && !BombPositionKnown)
+        {
+            return false;
+        }
+
+        bool hasSharedTarget = TryGetRecentSighting(
+            observedAttacker,
+            out GameObject sharedTarget,
+            out Vector3 sharedPosition);
+        if (!hasSharedTarget && observedAttacker != null)
+        {
+            hasSharedTarget = TryGetRecentSighting(
+                null,
+                out sharedTarget,
+                out sharedPosition);
+        }
+        if (!hasSharedTarget)
+        {
+            return false;
+        }
+
+        List<AgentStats> defenders = GetEncirclementDefenders();
+        if (postPlant)
+        {
+            AssignDefuserIfNeeded();
+            if (designatedDefuser == null ||
+                designatedDefuser.gameObject == defender)
+            {
+                return false;
+            }
+
+            eligibleEncirclementDefenders.Clear();
+            foreach (AgentStats candidate in defenders)
+            {
+                if (candidate != designatedDefuser)
+                {
+                    eligibleEncirclementDefenders.Add(candidate);
+                }
+            }
+            defenders = eligibleEncirclementDefenders;
+        }
+
+        if (defenders.Count < Mathf.Max(2, minimumEncirclementTeamSize) ||
+            !EnsureEncirclementPlan(defenders, sharedTarget, sharedPosition) ||
+            !encirclement.roles.TryGetValue(
+                defender,
+                out DefenderEngagementRole engagementRole) ||
+            engagementRole == DefenderEngagementRole.Pressure)
+        {
+            return false;
+        }
+
+        HealthSystem health = defender.GetComponent<HealthSystem>();
+        if (health != null && health.NormalizedHealth <= 0.3f)
+        {
+            return false;
+        }
+
+        Vector3 planTargetPosition = encirclement.lastKnownTargetPosition;
+        if (!encirclement.destinations.TryGetValue(
+                defender,
+                out Vector3 destination))
+        {
+            return false;
+        }
+
+        order.type = DefenderOrderType.Flank;
+        order.engagementRole = engagementRole;
+        order.site = GetNearestSite(planTargetPosition);
+        order.destination = destination;
+        order.watchPosition = planTargetPosition;
+        order.speedMultiplier = engagementRole == DefenderEngagementRole.RearCutoff
+            ? 1.3f
+            : 1.2f;
+        return true;
+    }
+
+    public DefenderEngagementRole GetEngagementRole(GameObject defender)
+    {
+        return defender != null &&
+               encirclement.roles.TryGetValue(
+                   defender,
+                   out DefenderEngagementRole role)
+            ? role
+            : DefenderEngagementRole.Pressure;
+    }
+
+    private bool EnsureEncirclementPlan(
+        List<AgentStats> defenders,
+        GameObject requestedTarget,
+        Vector3 requestedTargetPosition)
+    {
+        Vector3 currentKnownPosition = default;
+        bool currentTargetUsable = IsLivingAttacker(encirclement.target) &&
+                                   TryGetRecentSighting(
+                                       encirclement.target,
+                                       out _,
+                                       out currentKnownPosition);
+        if (currentTargetUsable && encirclement.target != requestedTarget &&
+            Time.time < encirclement.assignmentValidUntil)
+        {
+            requestedTarget = encirclement.target;
+            requestedTargetPosition = currentKnownPosition;
+        }
+
+        DefenderFormationStyle recommendedFormation =
+            EvaluateFormation(defenders, requestedTargetPosition);
+        bool formationCanChange = Time.time >=
+                                  encirclement.assignmentValidUntil;
+        bool needsNewAssignments = !currentTargetUsable ||
+                                   encirclement.target != requestedTarget ||
+                                   encirclement.defenderCount != defenders.Count ||
+                                   encirclement.roles.Count != defenders.Count ||
+                                   (formationCanChange &&
+                                    encirclement.formation != recommendedFormation);
+        if (needsNewAssignments)
+        {
+            BuildEncirclementAssignments(
+                defenders,
+                requestedTarget,
+                requestedTargetPosition,
+                recommendedFormation);
+        }
+
+        RefreshEncirclementDestinationsIfNeeded(
+            defenders,
+            requestedTargetPosition);
+        return encirclement.target != null && encirclement.roles.Count > 0;
+    }
+
+    private void BuildEncirclementAssignments(
+        List<AgentStats> defenders,
+        GameObject target,
+        Vector3 targetPosition,
+        DefenderFormationStyle formation)
+    {
+        ClearEncirclementPlan();
+        encirclement.target = target;
+        encirclement.lastKnownTargetPosition = targetPosition;
+        encirclement.assignmentValidUntil =
+            Time.time + encirclementAssignmentHoldTime;
+        encirclement.defenderCount = defenders.Count;
+        encirclement.formation = formation;
+
+        Vector3 teamCenter = Vector3.zero;
+        foreach (AgentStats defender in defenders)
+        {
+            teamCenter += defender.transform.position;
+        }
+        teamCenter /= Mathf.Max(1, defenders.Count);
+        Vector3 front = teamCenter - targetPosition;
+        front.y = 0f;
+        encirclement.frontDirection = front.sqrMagnitude > 0.01f
+            ? front.normalized
+            : Vector3.forward;
+
+        List<AgentStats> unassigned = new List<AgentStats>(defenders);
+        List<DefenderEngagementRole> flankRoles = GetFlankRolesForFormation(
+            formation,
+            defenders,
+            targetPosition);
+        int pressureCount = Mathf.Max(0, defenders.Count - flankRoles.Count);
+        unassigned.Sort((left, right) =>
+        {
+            float leftDistance = FlatDistance(
+                left.transform.position,
+                targetPosition);
+            float rightDistance = FlatDistance(
+                right.transform.position,
+                targetPosition);
+            return leftDistance.CompareTo(rightDistance);
+        });
+        for (int i = 0; i < pressureCount && unassigned.Count > 0; i++)
+        {
+            AgentStats pressure = unassigned[0];
+            unassigned.RemoveAt(0);
+            encirclement.roles[pressure.gameObject] =
+                DefenderEngagementRole.Pressure;
+        }
+
+        foreach (DefenderEngagementRole flankRole in flankRoles)
+        {
+            AssignClosestDefenderToRole(
+                unassigned,
+                flankRole,
+                targetPosition);
+        }
+
+        foreach (AgentStats remaining in unassigned)
+        {
+            encirclement.roles[remaining.gameObject] =
+                DefenderEngagementRole.Pressure;
+        }
+
+        encirclement.nextDestinationRefreshTime = 0f;
+        Debug.Log(
+            $"Defender squad using {formation} against {target.name}: " +
+            $"{pressureCount} pressure, " +
+            $"{flankRoles.Count} flank/cutoff.");
+    }
+
+    private DefenderFormationStyle EvaluateFormation(
+        List<AgentStats> defenders,
+        Vector3 targetPosition)
+    {
+        float totalHealth = 0f;
+        float closestDistance = Mathf.Infinity;
+        foreach (AgentStats defender in defenders)
+        {
+            HealthSystem health = defender.GetComponent<HealthSystem>();
+            totalHealth += health != null ? health.NormalizedHealth : 1f;
+            closestDistance = Mathf.Min(
+                closestDistance,
+                FlatDistance(defender.transform.position, targetPosition));
+        }
+
+        int knownThreats = CountRecentEncirclementThreats(targetPosition);
+        return SelectFormationForSituation(
+            defenders.Count,
+            Mathf.Max(1, knownThreats),
+            totalHealth / Mathf.Max(1, defenders.Count),
+            closestDistance);
+    }
+
+    public static DefenderFormationStyle SelectFormationForSituation(
+        int defenderCount,
+        int recentThreatCount,
+        float averageHealth,
+        float closestThreatDistance)
+    {
+        if (defenderCount >= 5)
+        {
+            // Five-player behavior intentionally remains the requested fixed
+            // 2 pressure + left + right + rear formation.
+            return DefenderFormationStyle.FullEncirclement;
+        }
+
+        bool criticalRisk = averageHealth < 0.4f ||
+                            (recentThreatCount >= defenderCount &&
+                             closestThreatDistance < 4f);
+        bool highRisk = criticalRisk || averageHealth < 0.58f ||
+                        recentThreatCount >= defenderCount ||
+                        (recentThreatCount >= 2 &&
+                         closestThreatDistance < 3.25f);
+
+        return defenderCount switch
+        {
+            >= 4 when criticalRisk => DefenderFormationStyle.Concentrated,
+            >= 4 when highRisk => DefenderFormationStyle.Pincer,
+            >= 4 => DefenderFormationStyle.FullEncirclement,
+            3 when criticalRisk => DefenderFormationStyle.Concentrated,
+            3 when highRisk => DefenderFormationStyle.SingleFlank,
+            3 => DefenderFormationStyle.Pincer,
+            2 when highRisk => DefenderFormationStyle.Concentrated,
+            2 => DefenderFormationStyle.SingleFlank,
+            _ => DefenderFormationStyle.Concentrated
+        };
+    }
+
+    private List<DefenderEngagementRole> GetFlankRolesForFormation(
+        DefenderFormationStyle formation,
+        List<AgentStats> defenders,
+        Vector3 targetPosition)
+    {
+        List<DefenderEngagementRole> result =
+            new List<DefenderEngagementRole>(3);
+        switch (formation)
+        {
+            case DefenderFormationStyle.FullEncirclement:
+                result.Add(DefenderEngagementRole.LeftFlank);
+                result.Add(DefenderEngagementRole.RightFlank);
+                result.Add(DefenderEngagementRole.RearCutoff);
+                break;
+
+            case DefenderFormationStyle.Pincer:
+                result.Add(DefenderEngagementRole.LeftFlank);
+                result.Add(DefenderEngagementRole.RightFlank);
+                break;
+
+            case DefenderFormationStyle.SingleFlank:
+                result.Add(GetBestSingleFlankRole(defenders, targetPosition));
+                break;
+        }
+
+        while (result.Count >= defenders.Count)
+        {
+            result.RemoveAt(result.Count - 1);
+        }
+        return result;
+    }
+
+    private DefenderEngagementRole GetBestSingleFlankRole(
+        List<AgentStats> defenders,
+        Vector3 targetPosition)
+    {
+        DefenderEngagementRole[] candidates =
+        {
+            DefenderEngagementRole.LeftFlank,
+            DefenderEngagementRole.RightFlank,
+            DefenderEngagementRole.RearCutoff
+        };
+        float averageHealth = 0f;
+        float closestDistance = Mathf.Infinity;
+        foreach (AgentStats defender in defenders)
+        {
+            HealthSystem health = defender.GetComponent<HealthSystem>();
+            averageHealth += health != null ? health.NormalizedHealth : 1f;
+            closestDistance = Mathf.Min(
+                closestDistance,
+                FlatDistance(defender.transform.position, targetPosition));
+        }
+        averageHealth /= Mathf.Max(1, defenders.Count);
+        bool strongRearOpportunity =
+            CountRecentEncirclementThreats(targetPosition) == 1 &&
+            averageHealth >= 0.7f && closestDistance >= 4.5f;
+
+        DefenderEngagementRole bestRole = DefenderEngagementRole.LeftFlank;
+        float bestScore = Mathf.Infinity;
+        foreach (DefenderEngagementRole candidateRole in candidates)
+        {
+            Vector3 desired = targetPosition + GetEncirclementOffset(
+                candidateRole,
+                encirclement.frontDirection,
+                encirclementRadius);
+            float shortestApproach = Mathf.Infinity;
+            foreach (AgentStats defender in defenders)
+            {
+                shortestApproach = Mathf.Min(
+                    shortestApproach,
+                    FlatDistance(defender.transform.position, desired));
+            }
+
+            float score = shortestApproach;
+            if (candidateRole == DefenderEngagementRole.RearCutoff)
+            {
+                score += strongRearOpportunity ? -2.5f : 1.5f;
+            }
+            if (score < bestScore)
+            {
+                bestScore = score;
+                bestRole = candidateRole;
+            }
+        }
+
+        return bestRole;
+    }
+
+    private int CountRecentEncirclementThreats(Vector3 center)
+    {
+        recentEncirclementThreats.Clear();
+        CollectRecentEncirclementThreats(alertA, center);
+        CollectRecentEncirclementThreats(alertB, center);
+        return recentEncirclementThreats.Count;
+    }
+
+    private void CollectRecentEncirclementThreats(
+        SiteAlert alert,
+        Vector3 center)
+    {
+        foreach (KeyValuePair<GameObject, SharedSighting> entry in alert.sightings)
+        {
+            if (IsLivingAttacker(entry.Key) &&
+                Time.time <= entry.Value.spottedTime + sharedMemoryDuration &&
+                FlatDistance(entry.Value.lastKnownPosition, center) <= 10f)
+            {
+                recentEncirclementThreats.Add(entry.Key);
+            }
+        }
+    }
+
+    private void AssignClosestDefenderToRole(
+        List<AgentStats> unassigned,
+        DefenderEngagementRole role,
+        Vector3 targetPosition)
+    {
+        if (unassigned.Count == 0)
+        {
+            return;
+        }
+
+        Vector3 desired = targetPosition + GetEncirclementOffset(
+            role,
+            encirclement.frontDirection,
+            encirclementRadius);
+        int bestIndex = 0;
+        float bestDistance = Mathf.Infinity;
+        for (int i = 0; i < unassigned.Count; i++)
+        {
+            float distance = FlatDistance(
+                unassigned[i].transform.position,
+                desired);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestIndex = i;
+            }
+        }
+
+        AgentStats selected = unassigned[bestIndex];
+        unassigned.RemoveAt(bestIndex);
+        encirclement.roles[selected.gameObject] = role;
+    }
+
+    private void RefreshEncirclementDestinationsIfNeeded(
+        List<AgentStats> defenders,
+        Vector3 latestTargetPosition)
+    {
+        bool targetMoved = FlatDistance(
+            encirclement.lastKnownTargetPosition,
+            latestTargetPosition) >= encirclementTargetMoveThreshold;
+        if (!targetMoved && encirclement.destinations.Count > 0 &&
+            Time.time < encirclement.nextDestinationRefreshTime)
+        {
+            return;
+        }
+
+        encirclement.lastKnownTargetPosition = latestTargetPosition;
+        encirclement.nextDestinationRefreshTime =
+            Time.time + encirclementDestinationRefreshTime;
+        encirclement.destinations.Clear();
+        foreach (AgentStats defender in defenders)
+        {
+            if (!encirclement.roles.TryGetValue(
+                    defender.gameObject,
+                    out DefenderEngagementRole role) ||
+                role == DefenderEngagementRole.Pressure)
+            {
+                continue;
+            }
+
+            if (TryResolveEncirclementDestination(
+                    defender.gameObject,
+                    role,
+                    latestTargetPosition,
+                    out Vector3 destination))
+            {
+                encirclement.destinations[defender.gameObject] = destination;
+            }
+        }
+    }
+
+    private bool TryResolveEncirclementDestination(
+        GameObject defender,
+        DefenderEngagementRole role,
+        Vector3 targetPosition,
+        out Vector3 destination)
+    {
+        Vector3 baseOffset = GetEncirclementOffset(
+            role,
+            encirclement.frontDirection,
+            encirclementRadius);
+        AStarPathfinder3D pathfinder = AStarPathfinder3D.Instance;
+        AgentMotor motor = defender.GetComponent<AgentMotor>();
+        if (pathfinder == null || motor == null)
+        {
+            destination = targetPosition + baseOffset;
+            return true;
+        }
+
+        float clearance = motor.AgentRadius + motor.MinObstacleClearance;
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            float angle = attempt switch
+            {
+                1 => -20f,
+                2 => 20f,
+                3 => -38f,
+                4 => 38f,
+                _ => 0f
+            };
+            Vector3 offset = Quaternion.Euler(0f, angle, 0f) * baseOffset;
+            Vector3 requested = targetPosition + offset;
+            if (!pathfinder.TryGetNearestReachablePosition(
+                    defender.transform.position,
+                    requested,
+                    encirclementPositionAdjustment,
+                    clearance,
+                    out Vector3 resolved,
+                    out _,
+                    defender,
+                    false))
+            {
+                continue;
+            }
+
+            Vector3 actualOffset = resolved - targetPosition;
+            actualOffset.y = 0f;
+            if (actualOffset.sqrMagnitude > 0.01f &&
+                Vector3.Dot(
+                    actualOffset.normalized,
+                    offset.normalized) >= 0.35f)
+            {
+                destination = resolved;
+                return true;
+            }
+        }
+
+        destination = default;
+        return false;
+    }
+
+    public static Vector3 GetEncirclementOffset(
+        DefenderEngagementRole role,
+        Vector3 frontDirection,
+        float radius)
+    {
+        frontDirection.y = 0f;
+        if (frontDirection.sqrMagnitude <= 0.01f)
+        {
+            frontDirection = Vector3.forward;
+        }
+        frontDirection.Normalize();
+        Vector3 left = Vector3.Cross(Vector3.up, frontDirection).normalized;
+        float distance = Mathf.Max(1f, radius);
+        return role switch
+        {
+            DefenderEngagementRole.LeftFlank =>
+                (left + frontDirection * 0.15f).normalized * distance,
+            DefenderEngagementRole.RightFlank =>
+                (-left + frontDirection * 0.15f).normalized * distance,
+            DefenderEngagementRole.RearCutoff => -frontDirection * distance,
+            _ => frontDirection * distance
+        };
+    }
+
+    private bool TryGetRecentSighting(
+        GameObject preferredTarget,
+        out GameObject target,
+        out Vector3 position)
+    {
+        target = null;
+        position = default;
+        SharedSighting newest = null;
+        FindNewestRecentSighting(
+            alertA,
+            preferredTarget,
+            ref target,
+            ref newest);
+        FindNewestRecentSighting(
+            alertB,
+            preferredTarget,
+            ref target,
+            ref newest);
+
+        if (newest == null)
+        {
+            return false;
+        }
+
+        position = newest.lastKnownPosition;
+        return true;
+    }
+
+    private bool TryGetRecentSighting(
+        SiteAlert alert,
+        GameObject preferredTarget,
+        out GameObject target,
+        out Vector3 position)
+    {
+        target = null;
+        position = default;
+        SharedSighting newest = null;
+        FindNewestRecentSighting(
+            alert,
+            preferredTarget,
+            ref target,
+            ref newest);
+        if (newest == null)
+        {
+            return false;
+        }
+
+        position = newest.lastKnownPosition;
+        return true;
+    }
+
+    private void FindNewestRecentSighting(
+        SiteAlert alert,
+        GameObject preferredTarget,
+        ref GameObject target,
+        ref SharedSighting newest)
+    {
+        foreach (KeyValuePair<GameObject, SharedSighting> entry in alert.sightings)
+        {
+            if (!IsLivingAttacker(entry.Key) ||
+                Time.time > entry.Value.spottedTime + sharedMemoryDuration ||
+                (preferredTarget != null && entry.Key != preferredTarget) ||
+                (newest != null && newest.spottedTime >= entry.Value.spottedTime))
+            {
+                continue;
+            }
+
+            target = entry.Key;
+            newest = entry.Value;
+        }
+    }
+
+    private bool IsLivingAttacker(GameObject candidate)
+    {
+        if (candidate == null || roundManager == null)
+        {
+            return false;
+        }
+
+        AgentStats candidateStats = candidate.GetComponent<AgentStats>();
+        HealthSystem candidateHealth = candidate.GetComponent<HealthSystem>();
+        return candidateStats != null &&
+               candidateStats.team == roundManager.attackingTeam &&
+               candidateHealth != null && !candidateHealth.IsDead;
+    }
+
+    private void ClearEncirclementPlan()
+    {
+        encirclement.target = null;
+        encirclement.lastKnownTargetPosition = default;
+        encirclement.frontDirection = Vector3.zero;
+        encirclement.assignmentValidUntil = 0f;
+        encirclement.nextDestinationRefreshTime = 0f;
+        encirclement.defenderCount = 0;
+        encirclement.roles.Clear();
+        encirclement.destinations.Clear();
+    }
+
+    private List<AgentStats> GetEncirclementDefenders()
+    {
+        if (Time.time < nextEncirclementTeamCacheTime &&
+            cachedEncirclementDefenders.Count > 0)
+        {
+            return cachedEncirclementDefenders;
+        }
+
+        nextEncirclementTeamCacheTime = Time.time + 0.35f;
+        cachedEncirclementDefenders.Clear();
+        cachedEncirclementDefenders.AddRange(GetLivingDefenders());
+        return cachedEncirclementDefenders;
+    }
+
     public bool TryGetOrder(GameObject defender, out DefenderOrder order)
     {
         order = default;
@@ -380,19 +1095,12 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
             AssignDefuserIfNeeded();
             BombSite plantedSite = knownPlantedSite;
             Vector3 bombPosition = objectiveManager.ActiveBomb.transform.position;
-            if (FlatDistance(defender.transform.position, bombPosition) > 7f)
-            {
-                order.type = DefenderOrderType.Retake;
-                order.site = plantedSite;
-                order.destination = plantedSite.GetNearestPlantPosition(
-                    defender.transform.position);
-                order.watchPosition = bombPosition;
-                order.speedMultiplier = 1.45f;
-                return true;
-            }
-
             bool isDefuser = designatedDefuser != null &&
                              designatedDefuser.gameObject == defender;
+            bool supporterMustYield = !isDefuser && ShouldYieldDefuseArea(
+                false,
+                FlatDistance(defender.transform.position, bombPosition),
+                defuseExclusiveRadius);
             Vector3 defusePosition = bombPosition;
             if (isDefuser)
             {
@@ -401,12 +1109,67 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
                     defusePositionOwner = defender;
                     designatedDefusePosition = objectiveManager.FindBestDefusePosition(
                         bombPosition,
-                        defender.transform.position);
+                        defender.transform.position,
+                        defender);
                 }
                 defusePosition = designatedDefusePosition;
             }
+
+            bool attackersAlive = roundManager.AreAttackersAlive;
+            if (!attackersAlive)
+            {
+                if (!forcedDefuseLogged && isDefuser)
+                {
+                    forcedDefuseLogged = true;
+                    Debug.Log("All strikers dead, defender forced to defuse");
+                }
+
+                order.type = isDefuser
+                    ? DefenderOrderType.Defuse
+                    : DefenderOrderType.CoverDefuser;
+                order.site = plantedSite;
+                order.destination = isDefuser
+                    ? defusePosition
+                    : GetPostPlantCoverPosition(
+                        defender,
+                        plantedSite,
+                        bombPosition,
+                        4f);
+                order.watchPosition = bombPosition;
+                order.speedMultiplier = isDefuser
+                    ? 1.6f
+                    : supporterMustYield ? 1.45f : 1.2f;
+                if (isDefuser &&
+                    FlatDistance(defender.transform.position, bombPosition) >
+                    defuseStartDistance &&
+                    defuseMoveLogged.Add(defender))
+                {
+                    Debug.Log("Defender moving to defuse");
+                }
+                return true;
+            }
+
+            if (FlatDistance(defender.transform.position, bombPosition) > 7f)
+            {
+                order.type = DefenderOrderType.Retake;
+                order.site = plantedSite;
+                order.destination = isDefuser
+                    ? plantedSite.GetNearestPlantPosition(defender.transform.position)
+                    : GetPostPlantCoverPosition(
+                        defender,
+                        plantedSite,
+                        bombPosition,
+                        4.5f);
+                order.watchPosition = bombPosition;
+                order.speedMultiplier = 1.45f;
+                return true;
+            }
             bool timerCritical = roundManager.BombTimeRemaining <= bombTimerRiskThreshold;
-            bool hasSupport = HasRetakeSupport(defender, bombPosition);
+            bool hasSupport = HasRetakeSupport(defender, bombPosition) ||
+                              HasActiveDefuseCover(
+                                  defender,
+                                  null,
+                                  bombPosition);
             bool hasKnownThreat = TryGetLatestKnownPosition(
                 plantedSite,
                 out Vector3 known);
@@ -423,10 +1186,28 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
             order.destination = isDefuser &&
                                 (hasSupport || timerCritical || !knownThreatNearBomb)
                 ? defusePosition
-                : GetHoldPosition(defender, plantedSite, retakeWatchPosition,
-                    isDefuser ? 6f : 4f);
+                : isDefuser
+                    ? GetHoldPosition(
+                        defender,
+                        plantedSite,
+                        retakeWatchPosition,
+                        6f)
+                    : GetPostPlantCoverPosition(
+                        defender,
+                        plantedSite,
+                        retakeWatchPosition,
+                        4f);
             order.watchPosition = retakeWatchPosition;
-            order.speedMultiplier = isDefuser ? 1.3f : 1.15f;
+            order.speedMultiplier = isDefuser
+                ? 1.3f
+                : supporterMustYield ? 1.45f : 1.15f;
+            if (isDefuser && order.destination == defusePosition &&
+                FlatDistance(defender.transform.position, bombPosition) >
+                defuseStartDistance &&
+                defuseMoveLogged.Add(defender))
+            {
+                Debug.Log("Defender moving to defuse");
+            }
             return true;
         }
 
@@ -447,6 +1228,20 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
              !HasRecentContact(GetAlert(homeSite))) &&
             Time.time >= confirmedAlertTime + rotationDelay)
         {
+            if (TryGetRecentSighting(
+                    activeAlert,
+                    null,
+                    out GameObject sharedThreat,
+                    out _) &&
+                TryGetEncirclementOrder(
+                    defender,
+                    sharedThreat,
+                    out DefenderOrder encirclementOrder))
+            {
+                order = encirclementOrder;
+                return true;
+            }
+
             order.type = homeSite == activeAlert.site
                 ? DefenderOrderType.Investigate
                 : DefenderOrderType.Rotate;
@@ -514,6 +1309,86 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
                Time.time >= confirmedAlertTime + rotationDelay;
     }
 
+    public bool ShouldPrioritizeDefuse(
+        GameObject defender,
+        GameObject visibleAttacker)
+    {
+        if (!BombPositionKnown || defender == null || roundManager == null ||
+            objectiveManager == null || objectiveManager.ActiveBomb == null)
+        {
+            return false;
+        }
+
+        AssignDefuserIfNeeded();
+        bool isDesignated = designatedDefuser != null &&
+                            designatedDefuser.gameObject == defender;
+        bool attackersAlive = roundManager.AreAttackersAlive;
+        bool timerCritical = BombTimerIsCritical;
+        bool immediateThreat = IsImmediateThreatToDefender(
+            defender,
+            visibleAttacker);
+        bool activeCover = HasActiveDefuseCover(
+            defender,
+            visibleAttacker,
+            objectiveManager.ActiveBomb.transform.position);
+        return ShouldCommitToDefuse(
+            isDesignated,
+            attackersAlive,
+            timerCritical,
+            immediateThreat,
+               activeCover);
+    }
+
+    public bool IsDesignatedDefuser(GameObject defender)
+    {
+        if (!BombPositionKnown || defender == null)
+        {
+            return false;
+        }
+
+        AssignDefuserIfNeeded();
+        return designatedDefuser != null &&
+               designatedDefuser.gameObject == defender;
+    }
+
+    public bool MustClearDefuseArea(GameObject defender)
+    {
+        if (!BombPositionKnown || defender == null || objectiveManager == null ||
+            objectiveManager.ActiveBomb == null)
+        {
+            return false;
+        }
+
+        bool designated = IsDesignatedDefuser(defender);
+        float distance = FlatDistance(
+            defender.transform.position,
+            objectiveManager.ActiveBomb.transform.position);
+        return ShouldYieldDefuseArea(
+            designated,
+            distance,
+            defuseExclusiveRadius);
+    }
+
+    public static bool ShouldYieldDefuseArea(
+        bool isDesignatedDefuser,
+        float distanceToBomb,
+        float exclusiveRadius)
+    {
+        return !isDesignatedDefuser &&
+               distanceToBomb < Mathf.Max(1.5f, exclusiveRadius);
+    }
+
+    public static bool ShouldCommitToDefuse(
+        bool isDesignatedDefuser,
+        bool attackersAlive,
+        bool timerCritical,
+        bool immediateThreat,
+        bool activeCover)
+    {
+        return isDesignatedDefuser &&
+               (!attackersAlive || timerCritical || !immediateThreat || activeCover);
+    }
+
     public bool CanStartDefuse(GameObject defender, GameObject visibleAttacker)
     {
         if (defender == null || objectiveManager == null ||
@@ -530,13 +1405,28 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
             return false;
         }
 
+        if (defuseRangeLogged.Add(defender))
+        {
+            Debug.Log("Defender reached defuse range");
+        }
+
+        if (!roundManager.AreAttackersAlive)
+        {
+            return true;
+        }
+
         bool timerCritical = roundManager.BombTimeRemaining <= bombTimerRiskThreshold;
         if (timerCritical)
         {
             return true;
         }
 
-        if (IsImmediateThreatToDefender(defender, visibleAttacker))
+        bool activeCover = HasActiveDefuseCover(
+            defender,
+            visibleAttacker,
+            bombPosition);
+        if (IsImmediateThreatToDefender(defender, visibleAttacker) &&
+            !activeCover)
         {
             return false;
         }
@@ -547,7 +1437,52 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
                                         out Vector3 known) &&
                                     FlatDistance(known, bombPosition) <=
                                     defuseSafetyRadius;
-        return !recentThreatNearBomb || HasRetakeSupport(defender, bombPosition);
+        return !recentThreatNearBomb ||
+               HasRetakeSupport(defender, bombPosition) ||
+               activeCover;
+    }
+
+    private bool HasActiveDefuseCover(
+        GameObject defuser,
+        GameObject visibleAttacker,
+        Vector3 bombPosition)
+    {
+        foreach (AgentStats teammate in GetLivingDefenders())
+        {
+            if (teammate.gameObject == defuser ||
+                (FlatDistance(teammate.transform.position, bombPosition) >
+                 defuseSafetyRadius + 3f &&
+                 FlatDistance(teammate.transform.position, defuser.transform.position) > 10f))
+            {
+                continue;
+            }
+
+            AgentBrain brain = teammate.GetComponent<AgentBrain>();
+            GameObject teammateTarget = brain != null ? brain.CurrentTarget : null;
+            AgentSensors sensors = teammate.GetComponent<AgentSensors>();
+            if (teammateTarget != null &&
+                (visibleAttacker == null || teammateTarget == visibleAttacker) &&
+                sensors != null && sensors.CanDetect(teammateTarget))
+            {
+                return true;
+            }
+
+            if (visibleAttacker != null && sensors != null &&
+                sensors.CanDetect(visibleAttacker))
+            {
+                return true;
+            }
+
+            DefenderAgentAI teammateAI = teammate.GetComponent<DefenderAgentAI>();
+            if (teammateAI != null &&
+                (teammateAI.CurrentState == DefenderCombatState.Shooting ||
+                 teammateAI.CurrentState == DefenderCombatState.CoveringDefuser))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public bool ShouldEngagePostPlantThreat(GameObject defender, GameObject attacker)
@@ -908,6 +1843,8 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
 
         checkedBombSites.Clear();
         bombSearchAssignments.Clear();
+        holdCoverAssignments.Clear();
+        ClearEncirclementPlan();
         designatedDefuser = null;
         defusePositionOwner = null;
         knownBombPosition = bombPosition;
@@ -1295,6 +2232,19 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
 
     private void AssignDefuserIfNeeded()
     {
+        GameObject activeDefuser = objectiveManager != null
+            ? objectiveManager.ActiveDefuser
+            : null;
+        if (activeDefuser != null && IsLivingDefender(activeDefuser))
+        {
+            designatedDefuser = activeDefuser.GetComponent<AgentStats>();
+            if (designatedDefuser != null)
+            {
+                roles[activeDefuser] = DefenderRole.Defuser;
+            }
+            return;
+        }
+
         if (designatedDefuser != null && IsLivingDefender(designatedDefuser.gameObject))
         {
             return;
@@ -1307,23 +2257,66 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
             return;
         }
 
-        float bestDistance = Mathf.Infinity;
+        float bestScore = Mathf.Infinity;
         foreach (AgentStats defender in GetLivingDefenders())
         {
             float distance = FlatDistance(
                 defender.transform.position,
                 objectiveManager.ActiveBomb.transform.position);
-            if (distance < bestDistance)
+            HealthSystem health = defender.GetComponent<HealthSystem>();
+            bool activelyEngaged = IsDefenderActivelyEngaged(defender.gameObject);
+            float score = CalculateDefuserSelectionScore(
+                distance,
+                activelyEngaged,
+                health != null ? health.NormalizedHealth : 1f,
+                activeCombatDefuserPenalty);
+            if (score < bestScore)
             {
-                bestDistance = distance;
+                bestScore = score;
                 designatedDefuser = defender;
             }
         }
 
         if (designatedDefuser != null)
         {
+            noLivingDefenderLogged = false;
             roles[designatedDefuser.gameObject] = DefenderRole.Defuser;
+            Debug.Log(
+                $"Designated defuser: {designatedDefuser.name} " +
+                "(available teammate preferred over active fighter)");
         }
+        else if (!noLivingDefenderLogged)
+        {
+            noLivingDefenderLogged = true;
+            Debug.LogWarning("No living defender available to defuse");
+        }
+    }
+
+    public static float CalculateDefuserSelectionScore(
+        float distanceToBomb,
+        bool activelyEngaged,
+        float normalizedHealth,
+        float combatPenalty = 10f)
+    {
+        return Mathf.Max(0f, distanceToBomb) +
+               (activelyEngaged ? Mathf.Max(0f, combatPenalty) : 0f) +
+               (1f - Mathf.Clamp01(normalizedHealth)) * 2f;
+    }
+
+    private static bool IsDefenderActivelyEngaged(GameObject defender)
+    {
+        if (defender == null)
+        {
+            return false;
+        }
+
+        AgentBrain brain = defender.GetComponent<AgentBrain>();
+        GameObject target = brain != null ? brain.CurrentTarget : null;
+        AgentSensors sensors = defender.GetComponent<AgentSensors>();
+        DefenderAgentAI defenderAI = defender.GetComponent<DefenderAgentAI>();
+        return (target != null && sensors != null && sensors.CanDetect(target)) ||
+               (defenderAI != null &&
+                defenderAI.CurrentState == DefenderCombatState.Shooting);
     }
 
     private bool HasRetakeSupport(GameObject defuser, Vector3 bombPosition)
@@ -1358,12 +2351,176 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
         return bombPosition + outward.normalized * 8f;
     }
 
+    private Vector3 GetPostPlantCoverPosition(
+        GameObject defender,
+        BombSite site,
+        Vector3 watchPosition,
+        float radius)
+    {
+        Vector3 bombPosition = objectiveManager != null &&
+                               objectiveManager.ActiveBomb != null
+            ? objectiveManager.ActiveBomb.transform.position
+            : site != null ? site.PlantPosition : defender.transform.position;
+        List<AgentStats> living = GetEncirclementDefenders();
+        int supporterIndex = 0;
+        int supporterCount = 0;
+        foreach (AgentStats candidate in living)
+        {
+            if (designatedDefuser != null && candidate == designatedDefuser)
+            {
+                continue;
+            }
+
+            if (candidate.gameObject == defender)
+            {
+                supporterIndex = supporterCount;
+            }
+            supporterCount++;
+        }
+
+        Vector3 towardThreat = watchPosition - bombPosition;
+        towardThreat.y = 0f;
+        if (towardThreat.sqrMagnitude <= 0.01f)
+        {
+            towardThreat = bombPosition - defender.transform.position;
+            towardThreat.y = 0f;
+        }
+        if (towardThreat.sqrMagnitude <= 0.01f)
+        {
+            towardThreat = Vector3.forward;
+        }
+
+        float angle = GetPostPlantCoverAngle(supporterIndex, supporterCount);
+        AStarPathfinder3D pathfinder = AStarPathfinder3D.Instance;
+        AgentMotor motor = defender.GetComponent<AgentMotor>();
+        float clearance = motor != null
+            ? motor.AgentRadius + motor.MinObstacleClearance
+            : 0.65f;
+        float coverDistance = Mathf.Max(
+            radius,
+            defuseExclusiveRadius + 0.75f);
+        Vector3 preferredDirection = Quaternion.Euler(0f, angle, 0f) *
+                                     towardThreat.normalized;
+        for (int attempt = 0; attempt < 6; attempt++)
+        {
+            float angleAdjustment = attempt switch
+            {
+                1 => -25f,
+                2 => 25f,
+                3 => -50f,
+                4 => 50f,
+                5 => 180f,
+                _ => 0f
+            };
+            Vector3 desiredDirection = Quaternion.Euler(
+                0f,
+                angleAdjustment,
+                0f) * preferredDirection;
+            Vector3 requested = bombPosition + desiredDirection * coverDistance;
+            requested.y = defender.transform.position.y;
+            if (pathfinder == null)
+            {
+                return requested;
+            }
+
+            if (!pathfinder.TryGetNearestReachablePosition(
+                    defender.transform.position,
+                    requested,
+                    2f,
+                    clearance,
+                    out Vector3 resolved,
+                    out _,
+                    defender,
+                    false))
+            {
+                continue;
+            }
+
+            Vector3 resolvedDirection = resolved - bombPosition;
+            resolvedDirection.y = 0f;
+            if (resolvedDirection.magnitude >= defuseExclusiveRadius + 0.35f &&
+                Vector3.Dot(
+                    resolvedDirection.normalized,
+                    desiredDirection.normalized) >= 0.2f)
+            {
+                return resolved;
+            }
+        }
+
+        Vector3 fallback = GetHoldPosition(
+            defender,
+            site,
+            watchPosition,
+            coverDistance);
+        if (FlatDistance(fallback, bombPosition) >=
+            defuseExclusiveRadius + 0.35f)
+        {
+            return fallback;
+        }
+
+        // Preserve the exclusive interaction area even when the map has no
+        // ideal cover point. AgentMotor will validate this outward request.
+        Vector3 emergencyOutside = bombPosition +
+                                   preferredDirection * coverDistance;
+        emergencyOutside.y = defender.transform.position.y;
+        return emergencyOutside;
+    }
+
+    public static float GetPostPlantCoverAngle(int index, int count)
+    {
+        if (count <= 1)
+        {
+            return 180f;
+        }
+        if (count == 2)
+        {
+            return index == 0 ? -90f : 90f;
+        }
+        if (count == 3)
+        {
+            return index switch
+            {
+                0 => -100f,
+                1 => 100f,
+                _ => 180f
+            };
+        }
+        if (count == 4)
+        {
+            return index switch
+            {
+                0 => -55f,
+                1 => 55f,
+                2 => -135f,
+                _ => 135f
+            };
+        }
+
+        return -150f + index * 300f / Mathf.Max(1, count - 1);
+    }
+
     private Vector3 GetHoldPosition(
         GameObject defender,
         BombSite site,
         Vector3 watchPosition,
         float fallbackRadius)
     {
+        if (holdCoverAssignments.TryGetValue(
+                defender,
+                out Transform assignedCover))
+        {
+            if (IsAssignedHoldCoverUsable(
+                    defender,
+                    assignedCover,
+                    site,
+                    watchPosition))
+            {
+                return GetPositionBehindCover(assignedCover, watchPosition);
+            }
+
+            holdCoverAssignments.Remove(defender);
+        }
+
         if (site != null && TryFindBestCover(
                 defender,
                 watchPosition,
@@ -1371,6 +2528,7 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
                 coverSearchRadius,
                 out DefenderCoverSolution cover))
         {
+            holdCoverAssignments[defender] = cover.cover;
             return cover.hiddenPosition;
         }
 
@@ -1379,6 +2537,30 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
         float angle = 35f + index * 360f / Mathf.Max(1, defenders.Count);
         return site.PlantPosition +
                Quaternion.Euler(0f, angle, 0f) * Vector3.forward * fallbackRadius;
+    }
+
+    private bool IsAssignedHoldCoverUsable(
+        GameObject defender,
+        Transform cover,
+        BombSite site,
+        Vector3 watchPosition)
+    {
+        if (defender == null || cover == null ||
+            (site != null && FlatDistance(
+                cover.position,
+                site.PlantPosition) > coverSearchRadius + 3f))
+        {
+            return false;
+        }
+
+        Vector3 hiddenPosition = GetPositionBehindCover(cover, watchPosition);
+        AStarPathfinder3D pathfinder = AStarPathfinder3D.Instance;
+        return pathfinder == null ||
+               pathfinder.IsValidAgentPosition(
+                   hiddenPosition,
+                   0.5f,
+                   defender,
+                   false);
     }
 
     private Vector3 GetPositionBehindCover(Transform cover, Vector3 threatPosition)
@@ -1420,9 +2602,19 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
         return !IsLineBlocked(first, threatPosition) ? first : second;
     }
 
-    private static int CountCoverOccupants(Transform cover, GameObject requester)
+    private int CountCoverOccupants(Transform cover, GameObject requester)
     {
         int count = 0;
+        foreach (KeyValuePair<GameObject, Transform> assignment in
+                 holdCoverAssignments)
+        {
+            if (assignment.Key != null && assignment.Key != requester &&
+                assignment.Value == cover && IsLivingDefender(assignment.Key))
+            {
+                count++;
+            }
+        }
+
         DefenderAgentAI[] defenders =
             FindObjectsByType<DefenderAgentAI>(FindObjectsInactive.Exclude);
         foreach (DefenderAgentAI defender in defenders)
@@ -1581,15 +2773,21 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
             designatedDefuser = null;
             defusePositionOwner = null;
             retakeLogged = false;
+            forcedDefuseLogged = false;
+            noLivingDefenderLogged = false;
+            defuseMoveLogged.Clear();
+            defuseRangeLogged.Clear();
             bombKnowledgeState = BombKnowledgeState.NotPlanted;
             knownPlantedSite = null;
             bombPositionKnown = false;
             knownBombPosition = default;
             checkedBombSites.Clear();
             bombSearchAssignments.Clear();
+            holdCoverAssignments.Clear();
             alertA.suspicionScore = 0f;
             alertB.suspicionScore = 0f;
             rotationLogged.Clear();
+            ClearEncirclementPlan();
             RefreshDefenderTeam(true);
         }
         else if (state == RoundState.BombPlanted)
@@ -1636,6 +2834,28 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
             Gizmos.DrawLine(
                 line.origin + Vector3.up * 0.8f,
                 line.target + Vector3.up * 0.8f);
+        }
+
+        foreach (KeyValuePair<GameObject, Vector3> flank in
+                 encirclement.destinations)
+        {
+            if (flank.Key == null)
+            {
+                continue;
+            }
+
+            DefenderEngagementRole role = GetEngagementRole(flank.Key);
+            Gizmos.color = role switch
+            {
+                DefenderEngagementRole.LeftFlank => Color.cyan,
+                DefenderEngagementRole.RightFlank => Color.blue,
+                DefenderEngagementRole.RearCutoff => Color.magenta,
+                _ => Color.white
+            };
+            Gizmos.DrawLine(
+                flank.Key.transform.position + Vector3.up * 0.3f,
+                flank.Value + Vector3.up * 0.3f);
+            Gizmos.DrawWireSphere(flank.Value + Vector3.up * 0.2f, 0.4f);
         }
     }
 

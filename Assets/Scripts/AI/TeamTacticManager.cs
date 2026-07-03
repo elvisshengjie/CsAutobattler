@@ -104,7 +104,8 @@ public sealed class TeamTacticManager : MonoBehaviour
 
     public void SelectInitialTactic(InitialTeamTactic tactic)
     {
-        if (hasSelectedInitialTactic)
+        if (hasSelectedInitialTactic ||
+            (roundManager != null && roundManager.CurrentState == RoundState.RoundEnd))
         {
             return;
         }
@@ -119,7 +120,8 @@ public sealed class TeamTacticManager : MonoBehaviour
 
     public void ToggleMidRoundTactic(MidRoundTactic tactic)
     {
-        if (!hasSelectedInitialTactic)
+        if (!hasSelectedInitialTactic ||
+            (roundManager != null && roundManager.CurrentState == RoundState.RoundEnd))
         {
             return;
         }

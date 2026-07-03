@@ -76,7 +76,7 @@ public class ObjectiveTimerUI : MonoBehaviour
 
     private static string TeamName(TeamType team)
     {
-        return team.ToString().ToUpperInvariant();
+        return team == TeamType.Blue ? "DEFENDERS" : "STRIKERS";
     }
 
     private void EnsureStyles()

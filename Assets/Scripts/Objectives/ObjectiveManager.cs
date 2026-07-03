@@ -218,6 +218,21 @@ public class ObjectiveManager : MonoBehaviour
             lastLoggedCarrierPlantZone = null;
             SelectRoundTactics();
         }
+        else if (state == RoundState.RoundEnd)
+        {
+            if (activePlantCarrier != null)
+            {
+                CancelPlant(activePlantCarrier);
+            }
+
+            if (activeDefuser != null)
+            {
+                CancelDefuse(activeDefuser);
+            }
+
+            ReleaseBombRecoveryAgent();
+            ReleaseDefuseApproachAgent();
+        }
     }
 
     private void SelectRoundTactics()
@@ -593,6 +608,12 @@ public class ObjectiveManager : MonoBehaviour
             return false;
         }
 
+        DefenderTeamCoordinator coordinator = DefenderTeamCoordinator.Instance;
+        if (coordinator != null && !coordinator.IsDesignatedDefuser(agent))
+        {
+            return false;
+        }
+
         AgentStats stats = agent.GetComponent<AgentStats>();
         HealthSystem health = agent.GetComponent<HealthSystem>();
         return stats != null && stats.team == roundManager.defendingTeam &&
@@ -603,13 +624,21 @@ public class ObjectiveManager : MonoBehaviour
 
     public Vector3 FindBestDefusePosition(
         Vector3 bombPosition,
-        Vector3 defenderPosition)
+        Vector3 defenderPosition,
+        GameObject defender = null)
     {
         AStarPathfinder3D pathfinder = AStarPathfinder3D.Instance;
         if (pathfinder == null)
         {
             return bombPosition;
         }
+
+        AgentMotor defenderMotor = defender != null
+            ? defender.GetComponent<AgentMotor>()
+            : null;
+        float clearance = defenderMotor != null
+            ? defenderMotor.AgentRadius + defenderMotor.MinObstacleClearance
+            : 0.65f;
 
         Vector3 best = default;
         float bestScore = Mathf.Infinity;
@@ -628,7 +657,11 @@ public class ObjectiveManager : MonoBehaviour
                     0f) * Vector3.forward;
                 Vector3 candidate = bombPosition + direction * radius;
                 candidate.y = defenderPosition.y;
-                if (!pathfinder.IsValidAgentPosition(candidate, 0.5f))
+                if (!pathfinder.IsValidAgentPosition(
+                        candidate,
+                        clearance,
+                        defender,
+                        true))
                 {
                     continue;
                 }
@@ -653,7 +686,7 @@ public class ObjectiveManager : MonoBehaviour
 
         if (found && FlatDistance(best, bombPosition) > 0.1f)
         {
-            Debug.Log("Defuse position invalid, using alternate defuse position");
+            Debug.Log("Adjusted defuse position");
         }
         if (found)
         {
@@ -663,14 +696,17 @@ public class ObjectiveManager : MonoBehaviour
         if (pathfinder.TryGetNearestWalkablePosition(
                 bombPosition,
                 Mathf.Max(0.1f, defuseInteractionRange - 0.05f),
-                0.5f,
-                out Vector3 fallback) &&
+                clearance,
+                out Vector3 fallback,
+                defender) &&
+            FlatDistance(fallback, bombPosition) <= defuseInteractionRange &&
             pathfinder.FindPath(defenderPosition, fallback) != null)
         {
-            Debug.Log("Defuse position invalid, using alternate defuse position");
+            Debug.Log("Adjusted defuse position");
             return fallback;
         }
 
+        Debug.LogWarning("Cannot defuse: invalid defuse position");
         return bombPosition;
     }
 
@@ -747,7 +783,7 @@ public class ObjectiveManager : MonoBehaviour
             out suspendedDefuseBrain,
             out suspendedDefuseMotor);
         SetActionStatus(defender, "DEFUSING", roundManager.defuseDuration);
-        Debug.Log(defender.name + " started defusing.");
+        Debug.Log("Defender started defusing");
     }
 
     public void CancelDefuse(GameObject defender)
@@ -769,7 +805,8 @@ public class ObjectiveManager : MonoBehaviour
     public bool TryPickupBomb(GameObject agent)
     {
         if (agent == null || activeBomb == null ||
-            activeBomb.CurrentState != BombState.Dropped || roundManager == null)
+            activeBomb.CurrentState != BombState.Dropped || roundManager == null ||
+            roundManager.CurrentState == RoundState.RoundEnd)
         {
             return false;
         }
@@ -942,7 +979,7 @@ public class ObjectiveManager : MonoBehaviour
         suspendedDefuseMotor = null;
         defuseProgress = 0f;
         activeBomb.Defuse();
-        Debug.Log(completedDefuser.name + " defused the bomb.");
+        Debug.Log("Defuse complete");
     }
 
     private void UpdateBombRecovery()
@@ -1024,7 +1061,8 @@ public class ObjectiveManager : MonoBehaviour
 
         defuseApproachMotor?.MoveTo(FindBestDefusePosition(
             activeBomb.transform.position,
-            defuseApproachAgent.transform.position));
+            defuseApproachAgent.transform.position,
+            defuseApproachAgent));
     }
 
     private void ResolveReferences()

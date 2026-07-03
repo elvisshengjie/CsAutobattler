@@ -16,9 +16,9 @@ public class AgentController3D : MonoBehaviour
 
     [Header("Agent Avoidance")]
     [HideInInspector]
-    public float separationRadius = 1.2f;
+    public float separationRadius = 0.8f;
     [HideInInspector]
-    public float separationStrength = 1.5f;
+    public float separationStrength = 2f;
 
     [Header("Vision and Memory")]
     [HideInInspector]

@@ -230,7 +230,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 64
   obstacleCheckRadius: 0.45
-  minimumAgentClearance: 0.5
+  minimumAgentClearance: 0.65
   drawGrid: 1
   gizmoHeight: 0.05
 --- !u!4 &77720927
@@ -1143,8 +1143,8 @@ MonoBehaviour:
   wallAvoidanceDistance: 0.2
   maximumTargetAdjustment: 4
   stuckDistanceThreshold: 0.05
-  stuckTimeThreshold: 1.2
-  hardStuckTimeThreshold: 3
+  stuckTimeThreshold: 3
+  hardStuckTimeThreshold: 7
   recoveryWaypointDistance: 1.25
   emergencySnapDistance: 2
   drawMovementGizmos: 1
@@ -1458,8 +1458,8 @@ MonoBehaviour:
   wallAvoidanceDistance: 0.2
   maximumTargetAdjustment: 4
   stuckDistanceThreshold: 0.05
-  stuckTimeThreshold: 1.2
-  hardStuckTimeThreshold: 3
+  stuckTimeThreshold: 3
+  hardStuckTimeThreshold: 7
   recoveryWaypointDistance: 1.25
   emergencySnapDistance: 2
   drawMovementGizmos: 1
@@ -1913,8 +1913,8 @@ MonoBehaviour:
   wallAvoidanceDistance: 0.2
   maximumTargetAdjustment: 4
   stuckDistanceThreshold: 0.05
-  stuckTimeThreshold: 1.2
-  hardStuckTimeThreshold: 3
+  stuckTimeThreshold: 3
+  hardStuckTimeThreshold: 7
   recoveryWaypointDistance: 1.25
   emergencySnapDistance: 2
   drawMovementGizmos: 1
@@ -3154,8 +3154,8 @@ MonoBehaviour:
   wallAvoidanceDistance: 0.2
   maximumTargetAdjustment: 4
   stuckDistanceThreshold: 0.05
-  stuckTimeThreshold: 1.2
-  hardStuckTimeThreshold: 3
+  stuckTimeThreshold: 3
+  hardStuckTimeThreshold: 7
   recoveryWaypointDistance: 1.25
   emergencySnapDistance: 2
   drawMovementGizmos: 1
@@ -4755,8 +4755,8 @@ MonoBehaviour:
   wallAvoidanceDistance: 0.2
   maximumTargetAdjustment: 4
   stuckDistanceThreshold: 0.05
-  stuckTimeThreshold: 1.2
-  hardStuckTimeThreshold: 3
+  stuckTimeThreshold: 3
+  hardStuckTimeThreshold: 7
   recoveryWaypointDistance: 1.25
   emergencySnapDistance: 2
   drawMovementGizmos: 1
@@ -5898,8 +5898,8 @@ MonoBehaviour:
   wallAvoidanceDistance: 0.2
   maximumTargetAdjustment: 4
   stuckDistanceThreshold: 0.05
-  stuckTimeThreshold: 1.2
-  hardStuckTimeThreshold: 3
+  stuckTimeThreshold: 3
+  hardStuckTimeThreshold: 7
   recoveryWaypointDistance: 1.25
   emergencySnapDistance: 2
   drawMovementGizmos: 1
@@ -6516,8 +6516,8 @@ MonoBehaviour:
   wallAvoidanceDistance: 0.2
   maximumTargetAdjustment: 4
   stuckDistanceThreshold: 0.05
-  stuckTimeThreshold: 1.2
-  hardStuckTimeThreshold: 3
+  stuckTimeThreshold: 3
+  hardStuckTimeThreshold: 7
   recoveryWaypointDistance: 1.25
   emergencySnapDistance: 2
   drawMovementGizmos: 1
@@ -7051,8 +7051,8 @@ MonoBehaviour:
   wallAvoidanceDistance: 0.2
   maximumTargetAdjustment: 4
   stuckDistanceThreshold: 0.05
-  stuckTimeThreshold: 1.2
-  hardStuckTimeThreshold: 3
+  stuckTimeThreshold: 3
+  hardStuckTimeThreshold: 7
   recoveryWaypointDistance: 1.25
   emergencySnapDistance: 2
   drawMovementGizmos: 1
@@ -8274,8 +8274,8 @@ MonoBehaviour:
   wallAvoidanceDistance: 0.2
   maximumTargetAdjustment: 4
   stuckDistanceThreshold: 0.05
-  stuckTimeThreshold: 1.2
-  hardStuckTimeThreshold: 3
+  stuckTimeThreshold: 3
+  hardStuckTimeThreshold: 7
   recoveryWaypointDistance: 1.25
   emergencySnapDistance: 2
   drawMovementGizmos: 1
@@ -9152,8 +9152,8 @@ MonoBehaviour:
   wallAvoidanceDistance: 0.2
   maximumTargetAdjustment: 4
   stuckDistanceThreshold: 0.05
-  stuckTimeThreshold: 1.2
-  hardStuckTimeThreshold: 3
+  stuckTimeThreshold: 3
+  hardStuckTimeThreshold: 7
   recoveryWaypointDistance: 1.25
   emergencySnapDistance: 2
   drawMovementGizmos: 1

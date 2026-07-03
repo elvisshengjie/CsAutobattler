@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 /// <summary>
 /// Executes movement only. It does not select enemies or decide what action to take.
@@ -10,22 +11,42 @@ public class AgentMotor : MonoBehaviour
     public float pathRefreshTime = 0.3f;
     public float waypointReachDistance = 0.3f;
     public float rotationSpeed = 720f;
-    public float separationRadius = 1.2f;
-    public float separationStrength = 1.5f;
+    [HideInInspector] public float separationRadius = 0.8f;
+    [HideInInspector] public float separationStrength = 2f;
 
-    [Header("Clearance")]
+    [Header("Agent Size and Clearance")]
     [SerializeField] private float agentRadius = 0.4f;
-    [SerializeField] private float obstacleClearance = 0.1f;
-    [SerializeField] private float wallAvoidanceDistance = 0.2f;
+    [FormerlySerializedAs("obstacleClearance")]
+    [SerializeField] private float minObstacleClearance = 0.15f;
+    [SerializeField] private float minAgentSeparation = 0.8f;
+    [SerializeField] private float targetArrivalDistance = 0.25f;
     [SerializeField] private float maximumTargetAdjustment = 4f;
+    [SerializeField] private float reservationSearchRadius = 4f;
+
+    [Header("Local Avoidance")]
+    [SerializeField] private float separationWeight = 2f;
+    [SerializeField] private float maxSeparationContribution = 0.45f;
+    [SerializeField] private float separationSmoothing = 8f;
+    [SerializeField] private float minimumCrowdSpeedFactor = 0.18f;
+    [SerializeField] private float avoidanceDistance = 0.8f;
+    [SerializeField] private float avoidanceStrength = 1.5f;
+    [SerializeField] private float avoidanceSideHoldTime = 0.45f;
+
+    [Header("Target Stability")]
+    [SerializeField] private float minTargetSwitchInterval = 0.75f;
+    [Tooltip("A target this far from the current request is a new objective and switches immediately.")]
+    [SerializeField] private float targetSwitchScoreMargin = 2f;
 
     [Header("Stuck Recovery")]
     [SerializeField] private float stuckDistanceThreshold = 0.05f;
-    [SerializeField] private float stuckTimeThreshold = 1.2f;
-    [SerializeField] private float hardStuckTimeThreshold = 3f;
+    [Tooltip("Emergency-only delay; tactical slots and steering handle normal congestion.")]
+    [SerializeField] private float stuckTimeThreshold = 3f;
+    [SerializeField] private float hardStuckTimeThreshold = 7f;
     [SerializeField] private float recoveryWaypointDistance = 1.25f;
     [SerializeField] private float emergencySnapDistance = 2f;
     [SerializeField] private bool drawMovementGizmos = true;
+    [SerializeField] private bool showRuntimeDebugLabel = false;
+    [SerializeField] private bool logDiagnosticStateChanges = true;
 
     [Header("Runtime Debug")]
     [SerializeField] private Vector3 requestedDestination;
@@ -35,7 +56,19 @@ public class AgentMotor : MonoBehaviour
     [SerializeField] private bool isStuck;
     [SerializeField] private int recoveryAttempts;
     [SerializeField] private bool targetWasAdjusted;
+    [SerializeField] private bool currentTargetValid;
+    [SerializeField] private bool pathBlocked;
+    [SerializeField] private TacticalSlotKind currentSlotKind;
+    [SerializeField] private string pathStatusDebug;
+    [SerializeField] private string inactivityReasonDebug;
+    [SerializeField] private string objectiveDebug;
+    [SerializeField] private string roleDebug;
+    [SerializeField] private string combatDebug;
+    [SerializeField] private bool enemyVisibleDebug;
+    [SerializeField] private bool bombPlantedDebug;
 
+    private readonly Collider[] nearbyColliders = new Collider[32];
+    private readonly Collider[] nearbyObstacles = new Collider[24];
     private AgentStats stats;
     private Rigidbody body;
     private List<Vector3> currentPath;
@@ -43,18 +76,39 @@ public class AgentMotor : MonoBehaviour
     private float nextPathRefreshTime;
     private float nextRecoveryAttemptTime;
     private float recoveryResumeTime;
+    private float lastTargetSwitchTime;
+    private float avoidanceSideUntil;
+    private float nextReservationWarningTime;
+    private float nextInvalidTargetLogTime;
+    private float nextDiagnosticUpdateTime;
+    private float nextDiagnosticLogTime;
+    private float nextSlotRetryTime;
+    private int avoidanceSide;
     private Vector3 destination;
+    private Vector3 pendingDestination;
+    private Vector3 lastAvoidanceDirection;
+    private Vector3 smoothedSeparation;
     private bool hasDestination;
+    private bool hasPendingDestination;
+    private bool hasReservedSlot;
     private bool recoveringLocally;
     private bool hasResolvedRequest;
+    private string currentTargetDebug;
+    private string lastDiagnosticSignature;
 
     public bool HasDestination => hasDestination;
     public Vector3 Destination => destination;
     public Vector3 RequestedDestination => requestedDestination;
     public bool IsStuck => isStuck;
+    public float AgentRadius => agentRadius;
+    public float MinObstacleClearance => minObstacleClearance;
+    public float MinAgentSeparation => minAgentSeparation;
+    public bool CurrentTargetValid => currentTargetValid;
+    public bool PathBlocked => pathBlocked;
+    public TacticalSlotKind CurrentSlotKind => currentSlotKind;
     public float SpeedMultiplier { get; set; } = 1f;
 
-    private float ClearanceRadius => agentRadius + obstacleClearance;
+    private float ClearanceRadius => agentRadius + minObstacleClearance;
 
     private void Awake()
     {
@@ -69,6 +123,16 @@ public class AgentMotor : MonoBehaviour
             agentRadius = Mathf.Max(agentRadius, colliderRadius);
         }
 
+        minAgentSeparation = Mathf.Max(minAgentSeparation, agentRadius * 2f);
+        minObstacleClearance = Mathf.Max(minObstacleClearance, 0.15f);
+        targetArrivalDistance = Mathf.Max(0.05f, targetArrivalDistance);
+        // Older scene instances serialized the previous 1.2/3 second values.
+        // Keep emergency recovery genuinely secondary to slot steering.
+        stuckTimeThreshold = Mathf.Max(stuckTimeThreshold, 3f);
+        hardStuckTimeThreshold = Mathf.Max(
+            hardStuckTimeThreshold,
+            stuckTimeThreshold + 4f);
+        PositionReservationManager.EnsureInstance();
         lastPosition = transform.position;
         lastMoveProgressTime = Time.time;
     }
@@ -78,23 +142,77 @@ public class AgentMotor : MonoBehaviour
         if (!hasDestination)
         {
             ResetStuckTracking();
+            UpdateDiagnostics();
             return;
         }
 
         if (recoveringLocally &&
-            (HasReachedDestination(waypointReachDistance + 0.1f) ||
+            (HasReachedDestination(targetArrivalDistance + 0.1f) ||
              Time.time >= recoveryResumeTime))
         {
             recoveringLocally = false;
             ApplyValidatedDestination(requestedDestination, true);
         }
 
+        if (!recoveringLocally && hasPendingDestination &&
+            Time.time >= lastTargetSwitchTime + minTargetSwitchInterval)
+        {
+            Vector3 next = pendingDestination;
+            hasPendingDestination = false;
+            ApplyValidatedDestination(next, false);
+        }
+
+        if (!recoveringLocally && !hasReservedSlot && hasDestination &&
+            Time.time >= nextSlotRetryTime)
+        {
+            ApplyValidatedDestination(requestedDestination, true);
+            if (!hasDestination)
+            {
+                UpdateDiagnostics();
+                return;
+            }
+        }
+
         UpdateStuckDetection();
+        if (!hasDestination)
+        {
+            UpdateDiagnostics();
+            return;
+        }
+
         if (Time.time >= nextPathRefreshTime)
         {
-            RefreshPath();
+            AStarPathfinder3D pathfinder = AStarPathfinder3D.Instance;
+            PositionReservationManager reservationManager =
+                PositionReservationManager.Instance;
+            bool reservationValid = !hasReservedSlot ||
+                                    (reservationManager != null &&
+                                     reservationManager.IsReservationValid(this));
+            currentTargetValid = pathfinder == null ||
+                                 pathfinder.IsValidAgentPosition(
+                                     destination,
+                                     ClearanceRadius,
+                                     gameObject,
+                                     false);
+            currentTargetValid &= reservationValid;
+            if (currentTargetValid)
+            {
+                RefreshPath();
+                if (currentPath == null &&
+                    !HasReachedDestination(targetArrivalDistance + 0.1f))
+                {
+                    currentTargetValid = false;
+                    ApplyValidatedDestination(requestedDestination, true, true);
+                }
+            }
+            else
+            {
+                ApplyValidatedDestination(requestedDestination, true, true);
+            }
             nextPathRefreshTime = Time.time + pathRefreshTime;
         }
+
+        UpdateDiagnostics();
     }
 
     private void FixedUpdate()
@@ -104,31 +222,67 @@ public class AgentMotor : MonoBehaviour
 
     public void MoveTo(Vector3 newDestination)
     {
-        bool destinationChanged = !hasDestination ||
-                                  FlatDistance(requestedDestination, newDestination) >
-                                  waypointReachDistance;
-        requestedDestination = newDestination;
-        if (recoveringLocally)
+        if (!hasDestination)
+        {
+            ApplyValidatedDestination(newDestination, false);
+            return;
+        }
+
+        float change = FlatDistance(requestedDestination, newDestination);
+        if (change <= Mathf.Max(0.1f, waypointReachDistance * 0.65f))
         {
             return;
         }
 
-        if (destinationChanged)
+        if (recoveringLocally)
+        {
+            pendingDestination = newDestination;
+            hasPendingDestination = true;
+            return;
+        }
+
+        bool significantChange = change >= targetSwitchScoreMargin;
+        bool intervalElapsed = Time.time >=
+                               lastTargetSwitchTime + minTargetSwitchInterval;
+        if (significantChange || intervalElapsed || !currentTargetValid || isStuck)
         {
             ApplyValidatedDestination(newDestination, false);
+            return;
         }
+
+        // Keep following the stable path and remember only the newest request.
+        // This avoids switching between nearly identical targets every frame.
+        pendingDestination = newDestination;
+        hasPendingDestination = true;
+    }
+
+    public void ForceMoveTo(Vector3 newDestination)
+    {
+        recoveringLocally = false;
+        hasPendingDestination = false;
+        ApplyValidatedDestination(newDestination, true);
     }
 
     public bool HasReachedDestination(float tolerance)
     {
-        return hasDestination && FlatDistance(transform.position, destination) <= tolerance;
+        return hasDestination && FlatDistance(transform.position, destination) <=
+               GetEffectiveArrivalTolerance(tolerance);
     }
 
     public bool HasReachedRequestedDestination(Vector3 request, float tolerance)
     {
         return hasResolvedRequest &&
                FlatDistance(requestedDestination, request) <= waypointReachDistance &&
-               FlatDistance(transform.position, destination) <= tolerance;
+               FlatDistance(transform.position, destination) <=
+               GetEffectiveArrivalTolerance(tolerance);
+    }
+
+    private float GetEffectiveArrivalTolerance(float requestedTolerance)
+    {
+        float tolerance = Mathf.Max(targetArrivalDistance, requestedTolerance);
+        return hasReservedSlot
+            ? Mathf.Min(tolerance, targetArrivalDistance)
+            : tolerance;
     }
 
     public void ForceRepath()
@@ -141,15 +295,19 @@ public class AgentMotor : MonoBehaviour
         currentPath = null;
         currentWaypointIndex = 0;
         nextPathRefreshTime = 0f;
-        Debug.Log("Repathing because stuck");
+        Debug.Log("Repathing after stuck");
     }
 
     public void Stop()
     {
         hasDestination = false;
+        hasPendingDestination = false;
         recoveringLocally = false;
         currentPath = null;
         currentWaypointIndex = 0;
+        smoothedSeparation = Vector3.zero;
+        pathBlocked = false;
+        SpeedMultiplier = 1f;
         ResetStuckTracking();
     }
 
@@ -169,7 +327,10 @@ public class AgentMotor : MonoBehaviour
             rotationSpeed * Time.deltaTime);
     }
 
-    private void ApplyValidatedDestination(Vector3 requested, bool forced)
+    private void ApplyValidatedDestination(
+        Vector3 requested,
+        bool forced,
+        bool forceSlotReassignment = false)
     {
         AStarPathfinder3D pathfinder = AStarPathfinder3D.Instance;
         Vector3 resolved = requested;
@@ -181,16 +342,19 @@ public class AgentMotor : MonoBehaviour
                          maximumTargetAdjustment,
                          ClearanceRadius,
                          out resolved,
-                         out resolvedPath);
+                         out resolvedPath,
+                         gameObject,
+                         false);
 
         if (!valid && pathfinder != null)
         {
-            Debug.Log("Target invalid, finding nearest valid point");
             valid = pathfinder.TryGetNearestWalkablePosition(
                 transform.position,
                 emergencySnapDistance,
                 ClearanceRadius,
-                out resolved);
+                out resolved,
+                gameObject,
+                false);
             if (valid)
             {
                 resolvedPath = pathfinder.FindPath(transform.position, resolved);
@@ -204,23 +368,72 @@ public class AgentMotor : MonoBehaviour
             currentWaypointIndex = 0;
             hasDestination = false;
             hasResolvedRequest = false;
+            currentTargetValid = false;
             return;
         }
 
-        targetWasAdjusted = FlatDistance(requested, resolved) > 0.15f;
-        if (targetWasAdjusted && !forced)
+        Vector3 validatedTarget = resolved;
+
+        PositionReservationManager reservationManager =
+            PositionReservationManager.EnsureInstance();
+        Vector3 reserved = resolved;
+        TacticalSlotKind reservedKind = TacticalSlotKind.Center;
+        bool slotReserved = reservationManager != null &&
+                            reservationManager.TryReserveTacticalSlot(
+                                this,
+                                resolved,
+                                resolved - transform.position,
+                                minAgentSeparation,
+                                reservationSearchRadius,
+                                forceSlotReassignment,
+                                out reserved,
+                                out reservedKind);
+        if (slotReserved)
         {
-            Debug.Log("Target invalid, finding nearest valid point");
+            resolved = reserved;
+            currentSlotKind = reservedKind;
+            resolvedPath = pathfinder != null
+                ? pathfinder.FindPath(transform.position, resolved)
+                : new List<Vector3> { resolved };
+            nextSlotRetryTime = Mathf.Infinity;
+        }
+        else if (reservationManager != null)
+        {
+            // A saturated formation must degrade to a reachable unreserved
+            // endpoint, not erase the objective and leave the agent idle.
+            currentSlotKind = TacticalSlotKind.Extended;
+            nextSlotRetryTime = Time.time + minTargetSwitchInterval;
+            if (Time.time >= nextReservationWarningTime)
+            {
+                nextReservationWarningTime = Time.time + 2f;
+                Debug.LogWarning(
+                    name + " found no free tactical slot; using reachable fallback.");
+            }
         }
 
+        targetWasAdjusted = FlatDistance(requested, resolved) > 0.1f;
+        bool validationAdjusted = FlatDistance(requested, validatedTarget) > 0.1f;
+        if (validationAdjusted && !forced && Time.time >= nextInvalidTargetLogTime)
+        {
+            nextInvalidTargetLogTime = Time.time + 2f;
+            Debug.Log(
+                $"Adjusted invalid target for {name}: {requested} -> {validatedTarget}");
+        }
+
+        requestedDestination = requested;
         destination = resolved;
         hasDestination = true;
         hasResolvedRequest = true;
+        hasReservedSlot = slotReserved;
+        currentTargetValid = true;
         currentPath = resolvedPath;
         currentWaypointIndex = 0;
+        lastTargetSwitchTime = Time.time;
+        hasPendingDestination = false;
+        pathBlocked = false;
         nextPathRefreshTime = Time.time + pathRefreshTime;
         if (currentPath != null && currentPath.Count == 0 &&
-            FlatDistance(transform.position, destination) > waypointReachDistance)
+            FlatDistance(transform.position, destination) > targetArrivalDistance)
         {
             currentPath.Add(destination);
         }
@@ -243,7 +456,7 @@ public class AgentMotor : MonoBehaviour
         currentPath = AStarPathfinder3D.Instance.FindPath(transform.position, destination);
         currentWaypointIndex = 0;
         if (currentPath != null && currentPath.Count == 0 &&
-            FlatDistance(transform.position, destination) > waypointReachDistance)
+            FlatDistance(transform.position, destination) > targetArrivalDistance)
         {
             currentPath.Add(destination);
         }
@@ -251,7 +464,7 @@ public class AgentMotor : MonoBehaviour
 
     private void UpdateStuckDetection()
     {
-        if (HasReachedDestination(waypointReachDistance + 0.1f))
+        if (HasReachedDestination(targetArrivalDistance + 0.1f))
         {
             ResetStuckTracking();
             return;
@@ -291,9 +504,21 @@ public class AgentMotor : MonoBehaviour
             $"Agent stuck detected: {name}, team {stats?.team}, state {state}, " +
             $"target {requestedDestination}, tactic {tactic}, moved {distanceMoved:0.000}, " +
             $"stuck {stuckTimer:0.00}s");
-        Debug.Log("Repathing because stuck");
+        Debug.Log("Trying unstuck movement");
+
+        if (recoveryAttempts == 1)
+        {
+            Vector3 previousSlot = destination;
+            ApplyValidatedDestination(requestedDestination, true, true);
+            if (hasDestination && FlatDistance(previousSlot, destination) > 0.1f)
+            {
+                Debug.Log("Reassigned tactical slot after prolonged blockage");
+            }
+            return;
+        }
 
         RefreshPath();
+        Debug.Log("Repathing after stuck");
         if (stuckTimer >= hardStuckTimeThreshold)
         {
             EmergencyUnstuck();
@@ -335,7 +560,8 @@ public class AgentMotor : MonoBehaviour
                     0.65f,
                     ClearanceRadius,
                     out Vector3 candidate,
-                    out List<Vector3> candidatePath) ||
+                    out List<Vector3> candidatePath,
+                    gameObject) ||
                 FlatDistance(transform.position, candidate) < 0.45f)
             {
                 continue;
@@ -371,7 +597,8 @@ public class AgentMotor : MonoBehaviour
                 transform.position,
                 emergencySnapDistance,
                 ClearanceRadius,
-                out Vector3 safePosition))
+                out Vector3 safePosition,
+                gameObject))
         {
             return;
         }
@@ -385,7 +612,7 @@ public class AgentMotor : MonoBehaviour
         isStuck = false;
         recoveryAttempts = 0;
         recoveringLocally = false;
-        Debug.Log("Emergency unstuck to nearest valid position");
+        Debug.Log("Emergency nearest valid position used");
         ApplyValidatedDestination(requestedDestination, true);
     }
 
@@ -420,8 +647,16 @@ public class AgentMotor : MonoBehaviour
             return;
         }
 
-        Vector3 desiredDirection = moveDirection.normalized +
-                                   GetSeparationDirection() * separationStrength;
+        Vector3 targetSeparation = Vector3.ClampMagnitude(
+            GetSeparationDirection() * separationWeight,
+            maxSeparationContribution);
+        float separationBlend = 1f - Mathf.Exp(
+            -Mathf.Max(0.01f, separationSmoothing) * Time.fixedDeltaTime);
+        smoothedSeparation = Vector3.Lerp(
+            smoothedSeparation,
+            targetSeparation,
+            separationBlend);
+        Vector3 desiredDirection = moveDirection.normalized + smoothedSeparation;
         desiredDirection.y = 0f;
         if (desiredDirection.sqrMagnitude <= 0.001f)
         {
@@ -429,16 +664,28 @@ public class AgentMotor : MonoBehaviour
         }
 
         desiredDirection.Normalize();
-        float stepDistance = stats.moveSpeed * SpeedMultiplier * Time.fixedDeltaTime;
+        float baseStepDistance = stats.moveSpeed * SpeedMultiplier * Time.fixedDeltaTime;
         Vector3 safeDirection = GetCollisionSafeDirection(
             currentPosition,
             desiredDirection,
-            stepDistance);
+            baseStepDistance);
         if (safeDirection.sqrMagnitude <= 0.001f)
         {
+            pathBlocked = true;
             return;
         }
 
+        float stepDistance = baseStepDistance * GetCrowdSpeedScale(
+            currentPosition,
+            safeDirection,
+            baseStepDistance);
+        if (stepDistance <= 0.001f)
+        {
+            pathBlocked = true;
+            return;
+        }
+
+        pathBlocked = false;
         Quaternion movementRotation = Quaternion.LookRotation(safeDirection, Vector3.up);
         body.MoveRotation(Quaternion.RotateTowards(
             body.rotation,
@@ -462,50 +709,389 @@ public class AgentMotor : MonoBehaviour
         }
 
         Vector3 origin = currentPosition + Vector3.up * 0.55f;
+        // A sphere cast does not reliably report a collider that already
+        // overlaps its starting sphere. Resolve that state first so an agent
+        // that drifted inside the clearance band can move away from the wall
+        // instead of having every candidate rejected.
+        if (TryGetClearanceEscapeDirection(
+                pathfinder,
+                currentPosition,
+                desiredDirection,
+                stepDistance,
+                out Vector3 clearanceEscape))
+        {
+            lastAvoidanceDirection = clearanceEscape;
+            return clearanceEscape;
+        }
+
+        float castDistance = Mathf.Max(
+            avoidanceDistance,
+            stepDistance + minObstacleClearance);
         if (!Physics.SphereCast(
                 origin,
-                agentRadius,
+                ClearanceRadius,
                 desiredDirection,
-                out RaycastHit hit,
-                stepDistance + wallAvoidanceDistance,
+                out RaycastHit forwardHit,
+                castDistance,
                 pathfinder.obstacleMask,
                 QueryTriggerInteraction.Ignore))
         {
             Vector3 candidate = currentPosition + desiredDirection * stepDistance;
-            return pathfinder.IsValidAgentPosition(candidate, ClearanceRadius)
+            lastAvoidanceDirection = desiredDirection;
+            return IsLocalPositionClear(
+                    pathfinder,
+                    candidate,
+                    ClearanceRadius)
                 ? desiredDirection
-                : Vector3.zero;
+                : TryGetClearanceEscapeDirection(
+                    pathfinder,
+                    currentPosition,
+                    desiredDirection,
+                    stepDistance,
+                    out clearanceEscape)
+                    ? clearanceEscape
+                    : Vector3.zero;
         }
 
-        Vector3 tangentA = Vector3.Cross(Vector3.up, hit.normal).normalized;
-        Vector3 tangentB = -tangentA;
-        Vector3 preferred = Vector3.Dot(tangentA, desiredDirection) >=
-                            Vector3.Dot(tangentB, desiredDirection)
-            ? tangentA
-            : tangentB;
-        Vector3 alternate = preferred == tangentA ? tangentB : tangentA;
-        if (pathfinder.IsValidAgentPosition(
-                currentPosition + preferred * stepDistance,
-                ClearanceRadius))
+        // The two wall tangents are true slide directions. Blending the chosen
+        // tangent and contact normal with the goal avoids repeatedly pushing
+        // into the same collider at corners.
+        Vector3 left = Vector3.Cross(Vector3.up, forwardHit.normal).normalized;
+        Vector3 right = -left;
+        if (left.sqrMagnitude < 0.01f)
         {
-            return preferred;
+            left = Quaternion.Euler(0f, -45f, 0f) * desiredDirection;
+            right = Quaternion.Euler(0f, 45f, 0f) * desiredDirection;
+        }
+        float leftClearance = GetObstacleClearance(
+            origin,
+            left,
+            pathfinder.obstacleMask) +
+            Mathf.Max(0f, Vector3.Dot(left, desiredDirection)) * avoidanceDistance;
+        float rightClearance = GetObstacleClearance(
+            origin,
+            right,
+            pathfinder.obstacleMask) +
+            Mathf.Max(0f, Vector3.Dot(right, desiredDirection)) * avoidanceDistance;
+
+        int selectedSide;
+        if (Time.time < avoidanceSideUntil && avoidanceSide != 0)
+        {
+            selectedSide = avoidanceSide;
+        }
+        else
+        {
+            selectedSide = leftClearance >= rightClearance ? -1 : 1;
+            avoidanceSide = selectedSide;
+            avoidanceSideUntil = Time.time + avoidanceSideHoldTime;
         }
 
-        return pathfinder.IsValidAgentPosition(
-                currentPosition + alternate * stepDistance,
-                ClearanceRadius)
-            ? alternate
+        Vector3 steering = selectedSide < 0 ? left : right;
+        float selectedClearance = selectedSide < 0 ? leftClearance : rightClearance;
+        float alternateClearance = selectedSide < 0 ? rightClearance : leftClearance;
+        if (alternateClearance > selectedClearance + minObstacleClearance)
+        {
+            steering = selectedSide < 0 ? right : left;
+            avoidanceSide = -selectedSide;
+            avoidanceSideUntil = Time.time + avoidanceSideHoldTime;
+        }
+
+        Vector3 obstacleAvoidance = steering + forwardHit.normal * 0.75f;
+        obstacleAvoidance.y = 0f;
+        Vector3 steered = (desiredDirection +
+                           obstacleAvoidance.normalized * avoidanceStrength).normalized;
+        lastAvoidanceDirection = steered;
+        if (IsMovementDirectionValid(pathfinder, currentPosition, steered, stepDistance))
+        {
+            return steered;
+        }
+
+        if (IsMovementDirectionValid(pathfinder, currentPosition, steering, stepDistance))
+        {
+            return steering;
+        }
+
+        Vector3 alternate = selectedSide < 0 ? right : left;
+        if (IsMovementDirectionValid(pathfinder, currentPosition, alternate, stepDistance))
+        {
+            return alternate;
+        }
+
+        return TryGetClearanceEscapeDirection(
+            pathfinder,
+            currentPosition,
+            desiredDirection,
+            stepDistance,
+            out clearanceEscape)
+            ? clearanceEscape
             : Vector3.zero;
+    }
+
+    /// <summary>
+    /// Finds an outward wall-slide when the agent is already closer to an
+    /// obstacle than the configured clearance. These steps may begin inside
+    /// the clearance band, but they must remain physically collision-free and
+    /// may never reduce the current wall distance.
+    /// </summary>
+    private bool TryGetClearanceEscapeDirection(
+        AStarPathfinder3D pathfinder,
+        Vector3 currentPosition,
+        Vector3 desiredDirection,
+        float stepDistance,
+        out Vector3 escapeDirection)
+    {
+        escapeDirection = Vector3.zero;
+        if (!TryGetNearestObstacle(
+                currentPosition,
+                pathfinder.obstacleMask,
+                out Vector3 awayFromObstacle,
+                out float currentClearance) ||
+            currentClearance >= ClearanceRadius + 0.01f)
+        {
+            return false;
+        }
+
+        Vector3 leftTangent = Vector3.Cross(Vector3.up, awayFromObstacle).normalized;
+        Vector3 rightTangent = -leftTangent;
+        Vector3 preferredTangent =
+            Vector3.Dot(leftTangent, desiredDirection) >=
+            Vector3.Dot(rightTangent, desiredDirection)
+                ? leftTangent
+                : rightTangent;
+        Vector3 alternateTangent = -preferredTangent;
+
+        if (Time.time < avoidanceSideUntil && avoidanceSide != 0)
+        {
+            preferredTangent = avoidanceSide < 0 ? leftTangent : rightTangent;
+            alternateTangent = -preferredTangent;
+        }
+        else
+        {
+            avoidanceSide = preferredTangent == leftTangent ? -1 : 1;
+            avoidanceSideUntil = Time.time + avoidanceSideHoldTime;
+        }
+
+        if (TryAcceptEscapeCandidate(
+                pathfinder,
+                currentPosition,
+                awayFromObstacle * 1.4f + preferredTangent * 0.75f +
+                    desiredDirection * 0.15f,
+                stepDistance,
+                currentClearance,
+                out escapeDirection) ||
+            TryAcceptEscapeCandidate(
+                pathfinder,
+                currentPosition,
+                awayFromObstacle + preferredTangent * 0.45f,
+                stepDistance,
+                currentClearance,
+                out escapeDirection) ||
+            TryAcceptEscapeCandidate(
+                pathfinder,
+                currentPosition,
+                awayFromObstacle,
+                stepDistance,
+                currentClearance,
+                out escapeDirection) ||
+            TryAcceptEscapeCandidate(
+                pathfinder,
+                currentPosition,
+                preferredTangent,
+                stepDistance,
+                currentClearance,
+                out escapeDirection) ||
+            TryAcceptEscapeCandidate(
+                pathfinder,
+                currentPosition,
+                awayFromObstacle + alternateTangent * 0.45f,
+                stepDistance,
+                currentClearance,
+                out escapeDirection))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool TryAcceptEscapeCandidate(
+        AStarPathfinder3D pathfinder,
+        Vector3 currentPosition,
+        Vector3 candidateDirection,
+        float stepDistance,
+        float currentClearance,
+        out Vector3 acceptedDirection)
+    {
+        acceptedDirection = candidateDirection;
+        acceptedDirection.y = 0f;
+        if (acceptedDirection.sqrMagnitude <= 0.001f)
+        {
+            acceptedDirection = Vector3.zero;
+            return false;
+        }
+
+        acceptedDirection.Normalize();
+        if (IsClearanceImprovingDirection(
+                pathfinder,
+                currentPosition,
+                acceptedDirection,
+                stepDistance,
+                currentClearance))
+        {
+            return true;
+        }
+
+        acceptedDirection = Vector3.zero;
+        return false;
+    }
+
+    private bool IsClearanceImprovingDirection(
+        AStarPathfinder3D pathfinder,
+        Vector3 currentPosition,
+        Vector3 direction,
+        float stepDistance,
+        float currentClearance)
+    {
+        Vector3 candidate = currentPosition + direction * stepDistance;
+        if (IsLocalPositionClear(pathfinder, candidate, ClearanceRadius))
+        {
+            return true;
+        }
+
+        // While escaping the safety margin, the smaller physical sphere is
+        // the hard boundary. The full clearance sphere becomes mandatory
+        // again as soon as the agent has room for it.
+        if (!pathfinder.IsInsideGrid(candidate, agentRadius) ||
+            Physics.CheckSphere(
+                candidate + Vector3.up * 0.55f,
+                Mathf.Max(0.05f, agentRadius),
+                pathfinder.obstacleMask,
+                QueryTriggerInteraction.Ignore))
+        {
+            return false;
+        }
+
+        return TryGetNearestObstacle(
+                   candidate,
+                   pathfinder.obstacleMask,
+                   out _,
+                   out float candidateClearance) &&
+               candidateClearance >= currentClearance - 0.002f;
+    }
+
+    private bool TryGetNearestObstacle(
+        Vector3 position,
+        LayerMask obstacleMask,
+        out Vector3 awayFromObstacle,
+        out float clearance)
+    {
+        Vector3 origin = position + Vector3.up * 0.55f;
+        int count = Physics.OverlapSphereNonAlloc(
+            origin,
+            ClearanceRadius + avoidanceDistance,
+            nearbyObstacles,
+            obstacleMask,
+            QueryTriggerInteraction.Ignore);
+        awayFromObstacle = Vector3.zero;
+        clearance = float.PositiveInfinity;
+
+        for (int i = 0; i < count; i++)
+        {
+            Collider obstacle = nearbyObstacles[i];
+            if (obstacle == null)
+            {
+                continue;
+            }
+
+            Vector3 difference = origin - obstacle.ClosestPoint(origin);
+            difference.y = 0f;
+            float distance = difference.magnitude;
+            if (distance >= clearance)
+            {
+                continue;
+            }
+
+            if (distance <= 0.001f)
+            {
+                difference = origin - obstacle.bounds.center;
+                difference.y = 0f;
+                distance = difference.magnitude;
+            }
+
+            if (distance <= 0.001f)
+            {
+                continue;
+            }
+
+            clearance = distance;
+            awayFromObstacle = difference / distance;
+        }
+
+        return awayFromObstacle.sqrMagnitude > 0.001f;
+    }
+
+    private bool IsMovementDirectionValid(
+        AStarPathfinder3D pathfinder,
+        Vector3 currentPosition,
+        Vector3 direction,
+        float stepDistance)
+    {
+        return direction.sqrMagnitude > 0.001f &&
+               IsLocalPositionClear(
+                   pathfinder,
+                   currentPosition + direction.normalized * stepDistance,
+                   ClearanceRadius);
+    }
+
+    private static bool IsLocalPositionClear(
+        AStarPathfinder3D pathfinder,
+        Vector3 position,
+        float radius)
+    {
+        return pathfinder.IsInsideGrid(position, radius) &&
+               !Physics.CheckSphere(
+                   position + Vector3.up * 0.55f,
+                   Mathf.Max(0.05f, radius),
+                   pathfinder.obstacleMask,
+                   QueryTriggerInteraction.Ignore);
+    }
+
+    private float GetObstacleClearance(
+        Vector3 origin,
+        Vector3 direction,
+        LayerMask obstacleMask)
+    {
+        if (Physics.SphereCast(
+                origin,
+                ClearanceRadius,
+                direction,
+                out RaycastHit hit,
+                avoidanceDistance * 1.5f,
+                obstacleMask,
+                QueryTriggerInteraction.Ignore))
+        {
+            return hit.distance;
+        }
+
+        return avoidanceDistance * 1.5f;
     }
 
     private Vector3 GetSeparationDirection()
     {
-        AgentStats[] allAgents = FindObjectsByType<AgentStats>(FindObjectsInactive.Exclude);
+        int count = Physics.OverlapSphereNonAlloc(
+            transform.position + Vector3.up * 0.55f,
+            minAgentSeparation,
+            nearbyColliders,
+            ~0,
+            QueryTriggerInteraction.Ignore);
         Vector3 separation = Vector3.zero;
 
-        foreach (AgentStats candidate in allAgents)
+        for (int i = 0; i < count; i++)
         {
-            if (candidate == stats)
+            AgentStats candidate = nearbyColliders[i] != null
+                ? nearbyColliders[i].GetComponentInParent<AgentStats>()
+                : null;
+            if (candidate == null || candidate == stats)
             {
                 continue;
             }
@@ -519,15 +1105,103 @@ public class AgentMotor : MonoBehaviour
             Vector3 difference = transform.position - candidate.transform.position;
             difference.y = 0f;
             float distance = difference.magnitude;
-            if (distance <= 0.001f || distance > separationRadius)
+            if (distance >= minAgentSeparation)
             {
                 continue;
             }
 
-            separation += difference.normalized / distance;
+            if (distance <= 0.001f)
+            {
+                difference = GetEntityId().GetHashCode() <
+                             candidate.GetEntityId().GetHashCode()
+                    ? Vector3.right
+                    : Vector3.left;
+                distance = 0f;
+            }
+
+            float strength = 1f - distance / minAgentSeparation;
+            separation += difference.normalized * strength;
         }
 
-        return separation;
+        return Vector3.ClampMagnitude(separation, 1f);
+    }
+
+    /// <summary>
+    /// Trailing agents slow behind a nearby agent instead of collider-pushing.
+    /// A deterministic right-of-way rule keeps head-on traffic from deadlocking.
+    /// </summary>
+    private float GetCrowdSpeedScale(
+        Vector3 currentPosition,
+        Vector3 direction,
+        float stepDistance)
+    {
+        int count = Physics.OverlapSphereNonAlloc(
+            currentPosition + Vector3.up * 0.55f,
+            minAgentSeparation * 1.8f,
+            nearbyColliders,
+            ~0,
+            QueryTriggerInteraction.Ignore);
+        float scale = 1f;
+        for (int i = 0; i < count; i++)
+        {
+            AgentStats other = nearbyColliders[i] != null
+                ? nearbyColliders[i].GetComponentInParent<AgentStats>()
+                : null;
+            if (other == null || other == stats)
+            {
+                continue;
+            }
+
+            HealthSystem health = other.GetComponent<HealthSystem>();
+            if (health != null && health.IsDead)
+            {
+                continue;
+            }
+
+            Vector3 toOther = other.transform.position - currentPosition;
+            toOther.y = 0f;
+            float distance = toOther.magnitude;
+            if (distance <= 0.001f)
+            {
+                scale = Mathf.Min(scale, 0.2f);
+                continue;
+            }
+
+            float forward = Vector3.Dot(direction, toOther);
+            Vector3 lateral = toOther - direction * forward;
+            if (forward <= 0f || lateral.magnitude > minAgentSeparation * 0.8f)
+            {
+                continue;
+            }
+
+            Vector3 nextPosition = currentPosition + direction * stepDistance;
+            if (FlatDistance(nextPosition, other.transform.position) > distance)
+            {
+                continue;
+            }
+
+            AgentMotor otherMotor = other.GetComponent<AgentMotor>();
+            bool headOn = otherMotor != null && otherMotor.HasDestination &&
+                          Vector3.Dot(direction, other.transform.forward) < -0.35f;
+            if (headOn && GetEntityId().GetHashCode() <
+                otherMotor.GetEntityId().GetHashCode())
+            {
+                scale = Mathf.Min(scale, 0.55f);
+                continue;
+            }
+
+            scale = Mathf.Min(
+                scale,
+                Mathf.InverseLerp(
+                    minAgentSeparation * 0.65f,
+                    minAgentSeparation * 1.8f,
+                    distance));
+        }
+
+        return Mathf.Clamp(
+            scale,
+            Mathf.Clamp01(minimumCrowdSpeedFactor),
+            1f);
     }
 
     private string GetCurrentAIState()
@@ -542,6 +1216,150 @@ public class AgentMotor : MonoBehaviour
         return attacker != null ? attacker.CurrentState.ToString() : "ObjectiveMovement";
     }
 
+    private void UpdateDiagnostics()
+    {
+        if (Time.time < nextDiagnosticUpdateTime)
+        {
+            return;
+        }
+
+        nextDiagnosticUpdateTime = Time.time + 0.35f;
+        RoundManager round = RoundManager.Instance;
+        ObjectiveManager objective = ObjectiveManager.Instance;
+        bombPlantedDebug = round != null &&
+                           round.CurrentState == RoundState.BombPlanted;
+        if (bombPlantedDebug && stats != null && round != null)
+        {
+            objectiveDebug = stats.team == round.defendingTeam
+                ? "RetakeAndDefuse"
+                : "PostPlantLockdown";
+        }
+        else
+        {
+            objectiveDebug = hasResolvedRequest
+                ? requestedDestination.ToString("F1")
+                : "None";
+        }
+
+        DefenderTeamCoordinator coordinator = DefenderTeamCoordinator.Instance;
+        roleDebug = stats != null && round != null &&
+                    stats.team == round.defendingTeam && coordinator != null
+            ? coordinator.GetRole(gameObject).ToString()
+            : stats != null && round != null && stats.team == round.attackingTeam
+                ? "Striker"
+                : "Unassigned";
+
+        AgentBrain brain = GetComponent<AgentBrain>();
+        AgentSensors sensors = GetComponent<AgentSensors>();
+        WeaponSystem weapon = GetComponent<WeaponSystem>();
+        GameObject target = brain != null ? brain.CurrentTarget : null;
+        currentTargetDebug = target != null ? target.name : "None";
+        enemyVisibleDebug = target != null && sensors != null &&
+                            sensors.HasLineOfSight(target);
+        if (target == null)
+        {
+            combatDebug = "No detected enemy";
+        }
+        else if (!enemyVisibleDebug)
+        {
+            combatDebug = "Enemy not visible";
+        }
+        else if (stats != null &&
+                 FlatDistance(transform.position, target.transform.position) >
+                 stats.attackRange)
+        {
+            combatDebug = "Enemy out of range";
+        }
+        else if (weapon == null || !weapon.enabled)
+        {
+            combatDebug = "Weapon unavailable";
+        }
+        else
+        {
+            combatDebug = weapon.IsReady ? "Firing enabled" : "Weapon cooldown";
+        }
+
+        bool holdingCompletedObjective = !hasDestination && hasResolvedRequest &&
+                                         FlatDistance(transform.position, destination) <=
+                                         waypointReachDistance + 0.35f;
+        if (holdingCompletedObjective)
+        {
+            pathStatusDebug = "Holding completed slot";
+        }
+        else if (!hasDestination)
+        {
+            pathStatusDebug = "No destination";
+        }
+        else if (currentPath == null)
+        {
+            pathStatusDebug = "No path";
+        }
+        else if (pathBlocked)
+        {
+            pathStatusDebug = "Locally blocked";
+        }
+        else if (HasReachedDestination(targetArrivalDistance + 0.1f))
+        {
+            pathStatusDebug = "At reserved slot";
+        }
+        else
+        {
+            pathStatusDebug = "Following path";
+        }
+
+        if (round != null && round.CurrentState == RoundState.RoundEnd)
+        {
+            inactivityReasonDebug = "Round ended";
+        }
+        else if (objective != null && objective.ActiveDefuser == gameObject)
+        {
+            inactivityReasonDebug = "Defusing";
+        }
+        else if (enemyVisibleDebug && weapon != null && weapon.IsReady)
+        {
+            inactivityReasonDebug = "Shooting visible enemy";
+        }
+        else if (holdingCompletedObjective)
+        {
+            inactivityReasonDebug = "Holding slot and watching";
+        }
+        else if (!hasDestination)
+        {
+            inactivityReasonDebug = "Awaiting valid objective target";
+        }
+        else if (currentPath == null)
+        {
+            inactivityReasonDebug = "Repath or slot reassignment pending";
+        }
+        else if (pathBlocked)
+        {
+            inactivityReasonDebug = "Yielding/steering around blockage";
+        }
+        else if (HasReachedDestination(targetArrivalDistance + 0.1f))
+        {
+            inactivityReasonDebug = "Holding slot and watching";
+        }
+        else
+        {
+            inactivityReasonDebug = "Moving to tactical slot";
+        }
+
+        string signature = GetCurrentAIState() + "|" + roleDebug + "|" +
+                           objectiveDebug + "|" + pathStatusDebug + "|" +
+                           combatDebug + "|" + inactivityReasonDebug;
+        if (logDiagnosticStateChanges && signature != lastDiagnosticSignature &&
+            Time.time >= nextDiagnosticLogTime)
+        {
+            lastDiagnosticSignature = signature;
+            nextDiagnosticLogTime = Time.time + 1f;
+            Debug.Log(
+                $"AI status [{name}] state={GetCurrentAIState()}, role={roleDebug}, " +
+                $"objective={objectiveDebug}, target={currentTargetDebug}, " +
+                $"path={pathStatusDebug}, enemyVisible={enemyVisibleDebug}, " +
+                $"bombPlanted={bombPlantedDebug}, reason={inactivityReasonDebug}");
+        }
+    }
+
     private void ResetStuckTracking()
     {
         lastPosition = transform.position;
@@ -551,14 +1369,60 @@ public class AgentMotor : MonoBehaviour
         recoveryAttempts = 0;
     }
 
-    private void OnDrawGizmos()
+    private void OnDisable()
     {
-        if (!drawMovementGizmos || !hasDestination)
+        PositionReservationManager.Instance?.Release(this);
+    }
+
+    private void OnDestroy()
+    {
+        PositionReservationManager.Instance?.Release(this);
+    }
+
+    private void OnGUI()
+    {
+        if (!showRuntimeDebugLabel || Camera.main == null)
         {
             return;
         }
 
-        Gizmos.color = targetWasAdjusted ? Color.green : Color.cyan;
+        Vector3 screen = Camera.main.WorldToScreenPoint(
+            transform.position + Vector3.up * 2.2f);
+        if (screen.z <= 0f)
+        {
+            return;
+        }
+
+        GUI.color = isStuck ? Color.magenta : currentTargetValid ? Color.green : Color.red;
+        GUI.Label(
+            new Rect(screen.x - 120f, Screen.height - screen.y, 240f, 112f),
+            $"{GetCurrentAIState()} | {roleDebug}\n" +
+            $"Objective: {objectiveDebug}\nTarget: {currentTargetDebug}\n" +
+            $"Path: {pathStatusDebug} ({currentSlotKind})\n" +
+            $"Visible: {enemyVisibleDebug} | Bomb: {bombPlantedDebug}\n" +
+            inactivityReasonDebug);
+        GUI.color = Color.white;
+    }
+
+    private void OnDrawGizmos()
+    {
+        if (!drawMovementGizmos)
+        {
+            return;
+        }
+
+        Gizmos.color = Color.white;
+        Gizmos.DrawWireSphere(transform.position + Vector3.up * 0.1f, agentRadius);
+        Gizmos.color = new Color(1f, 0.65f, 0f, 0.8f);
+        Gizmos.DrawWireSphere(
+            transform.position + Vector3.up * 0.1f,
+            minAgentSeparation);
+        if (!hasDestination)
+        {
+            return;
+        }
+
+        Gizmos.color = currentTargetValid ? Color.green : Color.red;
         Gizmos.DrawWireSphere(destination + Vector3.up * 0.1f, agentRadius);
         Gizmos.DrawLine(
             transform.position + Vector3.up * 0.1f,
@@ -570,6 +1434,11 @@ public class AgentMotor : MonoBehaviour
                 requestedDestination + Vector3.up * 0.1f,
                 agentRadius);
         }
+
+        Gizmos.color = pathBlocked ? Color.red : Color.cyan;
+        Gizmos.DrawRay(
+            transform.position + Vector3.up * 0.55f,
+            lastAvoidanceDirection * avoidanceDistance);
         if (isStuck)
         {
             Gizmos.color = Color.magenta;
