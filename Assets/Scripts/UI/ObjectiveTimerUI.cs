@@ -6,17 +6,22 @@ using UnityEngine;
 public class ObjectiveTimerUI : MonoBehaviour
 {
     [Header("Layout")]
-    public float width = 270f;
-    public float height = 48f;
-    public float rightMargin = 24f;
-    [Tooltip("Keeps the timer just above the 75-pixel-tall agent cards.")]
-    public float bottomMargin = 110f;
-    public int fontSize = 17;
+    public float width = 300f;
+    public float height = 40f;
+    public float rightMargin = 16f;
+    public float bottomMargin = 82f;
+    public int fontSize = 14;
 
     private GUIStyle panelStyle;
     private GUIStyle backgroundStyle;
     private GUIStyle textStyle;
+    private GUIStyle defuseTitleStyle;
+    private GUIStyle defuseDetailStyle;
+    private GUIStyle roundTimerStyle;
     private Texture2D panelTexture;
+    private Texture2D defuseFillTexture;
+    private Texture2D tooLateFillTexture;
+    private Texture2D progressBackgroundTexture;
 
     private void OnGUI()
     {
@@ -27,23 +32,109 @@ public class ObjectiveTimerUI : MonoBehaviour
             return;
         }
 
-        string message = GetMessage(round, objective);
-        if (string.IsNullOrEmpty(message))
-        {
-            return;
-        }
-
         EnsureStyles();
+        DrawRoundTimer(round);
+
+        string message = GetMessage(round, objective);
+        if (!string.IsNullOrEmpty(message))
+        {
+        float contentWidth = textStyle.CalcSize(new GUIContent(message)).x + 30f;
+        float fittedWidth = Mathf.Clamp(
+            contentWidth,
+            170f,
+            Mathf.Min(width, Screen.width - rightMargin * 2f));
         Rect panel = new Rect(
-            Screen.width - width - rightMargin,
+            Screen.width - fittedWidth - rightMargin,
             Screen.height - height - bottomMargin,
-            width,
+            fittedWidth,
             height);
         GUI.Box(panel, GUIContent.none, panelStyle);
         GUI.Box(new Rect(panel.x + 3f, panel.y + 3f, panel.width - 6f, panel.height - 6f),
             GUIContent.none,
             backgroundStyle);
         GUI.Label(panel, message, textStyle);
+        }
+
+        if (ShouldShowEnemyDefuse(round, objective))
+        {
+            DrawEnemyDefuseAlert(round, objective);
+        }
+    }
+
+    private void DrawRoundTimer(RoundManager round)
+    {
+        string label;
+        float seconds;
+        if (round.CurrentState == RoundState.Preparation)
+        {
+            label = "ROUND STARTS IN";
+            seconds = round.PreparationTimeRemaining;
+        }
+        else if (round.CurrentState == RoundState.Active ||
+                 round.CurrentState == RoundState.Planting)
+        {
+            label = "ROUND";
+            seconds = round.RoundTimeRemaining;
+        }
+        else
+        {
+            return;
+        }
+
+        int totalSeconds = Mathf.Max(0, Mathf.CeilToInt(seconds));
+        string time = $"{totalSeconds / 60:00}:{totalSeconds % 60:00}";
+        const float timerWidth = 240f;
+        const float timerHeight = 54f;
+        Rect panel = new Rect((Screen.width - timerWidth) * 0.5f, 16f,
+            timerWidth, timerHeight);
+        GUI.Box(panel, GUIContent.none, panelStyle);
+        GUI.Box(new Rect(panel.x + 3f, panel.y + 3f, panel.width - 6f,
+            panel.height - 6f), GUIContent.none, backgroundStyle);
+        GUI.Label(panel, $"{label}   {time}", roundTimerStyle);
+    }
+
+    private bool ShouldShowEnemyDefuse(RoundManager round, ObjectiveManager objective)
+    {
+        if (!objective.IsDefusing)
+        {
+            return false;
+        }
+
+        TeamType playerTeam = TeamTacticManager.Instance != null
+            ? TeamTacticManager.Instance.ControlledTeam
+            : round.attackingTeam;
+        return round.defendingTeam != playerTeam;
+    }
+
+    private void DrawEnemyDefuseAlert(RoundManager round, ObjectiveManager objective)
+    {
+        float alertWidth = Mathf.Min(520f, Screen.width - 40f);
+        const float alertHeight = 112f;
+        Rect alert = new Rect((Screen.width - alertWidth) * 0.5f, 82f,
+            alertWidth, alertHeight);
+        GUI.Box(alert, GUIContent.none, panelStyle);
+        GUI.Box(new Rect(alert.x + 3f, alert.y + 3f, alert.width - 6f,
+            alert.height - 6f), GUIContent.none, backgroundStyle);
+
+        float remaining = Mathf.Max(0f, round.defuseDuration - objective.DefuseProgress);
+        bool tooLate = remaining > round.BombTimeRemaining + 0.01f;
+        string defuserName = objective.ActiveDefuser != null
+            ? objective.ActiveDefuser.name
+            : "Defender";
+        GUI.Label(new Rect(alert.x + 12f, alert.y + 9f, alert.width - 24f, 32f),
+            tooLate ? "ENEMY DEFUSING - TOO LATE" : "ENEMY IS DEFUSING!",
+            defuseTitleStyle);
+        GUI.Label(new Rect(alert.x + 12f, alert.y + 39f, alert.width - 24f, 24f),
+            $"{defuserName}  |  {remaining:0.0}s remaining  |  Bomb {round.BombTimeRemaining:0.0}s",
+            defuseDetailStyle);
+
+        Rect bar = new Rect(alert.x + 22f, alert.y + 75f, alert.width - 44f, 20f);
+        GUI.DrawTexture(bar, progressBackgroundTexture);
+        float progress = round.defuseDuration <= 0f ? 1f :
+            Mathf.Clamp01(objective.DefuseProgress / round.defuseDuration);
+        Rect fill = new Rect(bar.x + 2f, bar.y + 2f,
+            (bar.width - 4f) * progress, bar.height - 4f);
+        GUI.DrawTexture(fill, tooLate ? tooLateFillTexture : defuseFillTexture);
     }
 
     private static string GetMessage(RoundManager round, ObjectiveManager objective)
@@ -62,8 +153,7 @@ public class ObjectiveTimerUI : MonoBehaviour
 
         if (round.CurrentState == RoundState.BombPlanted)
         {
-            return $"{TeamName(round.attackingTeam)} BOMB EXPLODES  |  " +
-                   $"{DisplaySeconds(round.BombTimeRemaining)}s";
+            return $"BOMB EXPLODES  |  {DisplaySeconds(round.BombTimeRemaining)}s";
         }
 
         return string.Empty;
@@ -106,6 +196,38 @@ public class ObjectiveTimerUI : MonoBehaviour
             wordWrap = false,
             normal = { textColor = Color.white }
         };
+
+        defuseTitleStyle = new GUIStyle(textStyle)
+        {
+            alignment = TextAnchor.MiddleCenter,
+            fontSize = 22,
+            normal = { textColor = new Color(1f, 0.32f, 0.22f) }
+        };
+        defuseDetailStyle = new GUIStyle(textStyle)
+        {
+            alignment = TextAnchor.MiddleCenter,
+            fontSize = 15
+        };
+        roundTimerStyle = new GUIStyle(textStyle)
+        {
+            alignment = TextAnchor.MiddleCenter,
+            fontSize = 18,
+            normal = { textColor = new Color(0.2f, 0.86f, 0.96f, 1f) }
+        };
+        progressBackgroundTexture = CreateTexture("DefuseProgressBackground",
+            new Color(0.12f, 0.13f, 0.15f, 1f));
+        defuseFillTexture = CreateTexture("DefuseProgressFill",
+            new Color(0.12f, 0.78f, 0.92f, 1f));
+        tooLateFillTexture = CreateTexture("DefuseTooLateFill",
+            new Color(0.95f, 0.18f, 0.12f, 1f));
+    }
+
+    private static Texture2D CreateTexture(string textureName, Color color)
+    {
+        Texture2D texture = new Texture2D(1, 1) { name = textureName };
+        texture.SetPixel(0, 0, color);
+        texture.Apply();
+        return texture;
     }
 
     private void OnDestroy()
@@ -114,5 +236,8 @@ public class ObjectiveTimerUI : MonoBehaviour
         {
             Destroy(panelTexture);
         }
+        if (defuseFillTexture != null) Destroy(defuseFillTexture);
+        if (tooLateFillTexture != null) Destroy(tooLateFillTexture);
+        if (progressBackgroundTexture != null) Destroy(progressBackgroundTexture);
     }
 }

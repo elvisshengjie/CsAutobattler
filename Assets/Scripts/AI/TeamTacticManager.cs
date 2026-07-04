@@ -16,6 +16,7 @@ public sealed class TeamTacticManager : MonoBehaviour
     [Header("Runtime (Read Only)")]
     [SerializeField] private bool hasSelectedInitialTactic;
     [SerializeField] private InitialTeamTactic selectedInitialTactic;
+    [SerializeField] private bool rolesConfirmed;
     [SerializeField] private List<MidRoundTactic> activeTactics = new List<MidRoundTactic>();
 
     private readonly HashSet<MidRoundTactic> activeTacticSet =
@@ -23,15 +24,18 @@ public sealed class TeamTacticManager : MonoBehaviour
     private RoundManager roundManager;
 
     public bool HasSelectedInitialTactic => hasSelectedInitialTactic;
+    public bool RolesConfirmed => rolesConfirmed;
     public TeamType ControlledTeam => controlledTeam;
     public int PlanRevision { get; private set; }
     public bool IsInitialSelectionBlockingInput =>
         roundManager != null && roundManager.CurrentState == RoundState.Preparation &&
-        roundManager.attackingTeam == controlledTeam && !hasSelectedInitialTactic;
+        roundManager.attackingTeam == controlledTeam &&
+        (!hasSelectedInitialTactic || !rolesConfirmed);
 
     public event Action<InitialTeamTactic> InitialTacticSelected;
     public event Action TacticsChanged;
     public event Action RoundTacticsReset;
+    public event Action RolesChanged;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void EnsureInstanceForBombRound()
@@ -112,6 +116,7 @@ public sealed class TeamTacticManager : MonoBehaviour
 
         selectedInitialTactic = tactic;
         hasSelectedInitialTactic = true;
+        AssignBalancedRoles();
         PlanRevision++;
         InitialTacticSelected?.Invoke(tactic);
         TacticsChanged?.Invoke();
@@ -159,7 +164,7 @@ public sealed class TeamTacticManager : MonoBehaviour
         return candidateRoundManager != null &&
                candidateRoundManager.CurrentState == RoundState.Preparation &&
                candidateRoundManager.attackingTeam == controlledTeam &&
-               !hasSelectedInitialTactic;
+               (!hasSelectedInitialTactic || !rolesConfirmed);
     }
 
     public bool ControlsAttackingTeam(RoundManager candidateRoundManager)
@@ -179,10 +184,60 @@ public sealed class TeamTacticManager : MonoBehaviour
     private void ResetForNewRound()
     {
         hasSelectedInitialTactic = false;
+        rolesConfirmed = false;
         activeTacticSet.Clear();
         activeTactics.Clear();
         PlanRevision++;
         RoundTacticsReset?.Invoke();
+        TacticsChanged?.Invoke();
+        RolesChanged?.Invoke();
+    }
+
+    public List<AgentRole> GetControlledRoles()
+    {
+        List<AgentRole> result = new List<AgentRole>();
+        foreach (AgentStats agent in FindObjectsByType<AgentStats>(FindObjectsInactive.Include))
+        {
+            if (agent.team != controlledTeam) continue;
+            AgentRole role = agent.GetComponent<AgentRole>();
+            if (role == null) role = agent.gameObject.AddComponent<AgentRole>();
+            result.Add(role);
+        }
+        result.Sort((left, right) => string.CompareOrdinal(left.name, right.name));
+        return result;
+    }
+
+    public void AssignBalancedRoles()
+    {
+        List<AgentRole> agents = GetControlledRoles();
+        AgentRoleType[] four = { AgentRoleType.Support, AgentRoleType.Flanker,
+            AgentRoleType.Assaulter, AgentRoleType.Defender };
+        AgentRoleType[] five = { AgentRoleType.Support, AgentRoleType.Flanker,
+            AgentRoleType.Assaulter, AgentRoleType.Assaulter, AgentRoleType.Defender };
+        for (int i = 0; i < agents.Count; i++)
+        {
+            AgentRoleType role = agents.Count == 5 ? five[i] :
+                agents.Count == 4 ? four[i] : four[i % four.Length];
+            agents[i].SetRole(role);
+        }
+        rolesConfirmed = false;
+        RolesChanged?.Invoke();
+    }
+
+    public void SetAgentRole(AgentRole agent, AgentRoleType role)
+    {
+        if (agent == null || !GetControlledRoles().Contains(agent)) return;
+        agent.SetRole(role);
+        rolesConfirmed = false;
+        RolesChanged?.Invoke();
+    }
+
+    public void ConfirmRoles()
+    {
+        if (!hasSelectedInitialTactic || GetControlledRoles().Count == 0) return;
+        rolesConfirmed = true;
+        PlanRevision++;
+        RolesChanged?.Invoke();
         TacticsChanged?.Invoke();
     }
 

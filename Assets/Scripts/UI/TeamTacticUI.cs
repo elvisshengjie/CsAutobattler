@@ -19,9 +19,17 @@ public sealed class TeamTacticUI : MonoBehaviour
     private RoundManager roundManager;
     private Font font;
     private GameObject initialOverlay;
+    private GameObject initialTacticWindow;
+    private GameObject roleSelectionWindow;
     private GameObject currentTacticPanel;
     private GameObject midRoundPanel;
     private Text currentTacticText;
+    private Text duplicateRoleWarning;
+    private readonly Dictionary<AgentRole, Text> roleLabels =
+        new Dictionary<AgentRole, Text>();
+    private readonly Dictionary<AgentRole, Text> roleAgentNames =
+        new Dictionary<AgentRole, Text>();
+    private AgentRole displayedPlanter;
     private readonly Dictionary<MidRoundTactic, Button> midRoundButtons =
         new Dictionary<MidRoundTactic, Button>();
     private readonly Dictionary<MidRoundTactic, Text> midRoundLabels =
@@ -43,6 +51,7 @@ public sealed class TeamTacticUI : MonoBehaviour
         tacticManager.InitialTacticSelected += OnInitialTacticSelected;
         tacticManager.TacticsChanged += Refresh;
         tacticManager.RoundTacticsReset += Refresh;
+        tacticManager.RolesChanged += Refresh;
         if (roundManager != null)
         {
             roundManager.StateChanged += OnRoundStateChanged;
@@ -58,6 +67,7 @@ public sealed class TeamTacticUI : MonoBehaviour
             tacticManager.InitialTacticSelected -= OnInitialTacticSelected;
             tacticManager.TacticsChanged -= Refresh;
             tacticManager.RoundTacticsReset -= Refresh;
+            tacticManager.RolesChanged -= Refresh;
         }
 
         if (roundManager != null)
@@ -100,6 +110,7 @@ public sealed class TeamTacticUI : MonoBehaviour
 
         GameObject window = CreatePanel("SelectionWindow", initialOverlay.transform,
             new Color(0.055f, 0.07f, 0.095f, 0.99f));
+        initialTacticWindow = window;
         SetRect(window.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f),
             new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1080f, 590f),
             new Vector2(0.5f, 0.5f));
@@ -143,6 +154,166 @@ public sealed class TeamTacticUI : MonoBehaviour
                 positions[i], new Vector2(470f, 195f), new Vector2(0.5f, 0.5f));
             button.onClick.AddListener(() => tacticManager.SelectInitialTactic(captured));
         }
+
+        BuildRoleSelection(initialOverlay.transform);
+    }
+
+    private void Update()
+    {
+        if (roleSelectionWindow == null || !roleSelectionWindow.activeInHierarchy)
+        {
+            return;
+        }
+
+        AgentRole currentPlanter = FindPlanter();
+        if (currentPlanter != displayedPlanter)
+        {
+            displayedPlanter = currentPlanter;
+            RefreshAgentNames();
+        }
+    }
+
+    private void BuildRoleSelection(Transform parent)
+    {
+        roleSelectionWindow = CreatePanel("RoleSelectionWindow", parent,
+            new Color(0.055f, 0.07f, 0.095f, 0.99f));
+        SetRect(roleSelectionWindow.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f),
+            new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(920f, 680f), new Vector2(0.5f, 0.5f));
+        AddOutline(roleSelectionWindow, AccentColor, new Vector2(2f, -2f));
+
+        Text title = CreateText("RoleTitle", roleSelectionWindow.transform,
+            "ASSIGN TACTICAL ROLES", 30, FontStyle.Bold, TextAnchor.MiddleCenter);
+        SetRect(title.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+            new Vector2(0f, -42f), new Vector2(800f, 48f), new Vector2(0.5f, 0.5f));
+        title.color = AccentColor;
+        Text hint = CreateText("RoleHint", roleSelectionWindow.transform,
+            "Click an agent's role to cycle it. Duplicate roles are allowed.", 16,
+            FontStyle.Normal, TextAnchor.MiddleCenter);
+        SetRect(hint.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+            new Vector2(0f, -82f), new Vector2(800f, 35f), new Vector2(0.5f, 0.5f));
+
+        List<AgentRole> agents = tacticManager.GetControlledRoles();
+        roleLabels.Clear();
+        roleAgentNames.Clear();
+        for (int i = 0; i < agents.Count; i++)
+        {
+            AgentRole captured = agents[i];
+            CreateAgentMaterialSwatch(captured, i);
+            Text name = CreateText("AgentName", roleSelectionWindow.transform,
+                captured.name, 18, FontStyle.Bold, TextAnchor.MiddleLeft);
+            SetRect(name.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                new Vector2(-155f, -145f - i * 78f), new Vector2(370f, 58f), new Vector2(0.5f, 0.5f));
+            roleAgentNames[captured] = name;
+            Button roleButton = CreateTacticButton("Role_" + captured.name,
+                roleSelectionWindow.transform, string.Empty, 17);
+            SetRect(roleButton.GetComponent<RectTransform>(), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                new Vector2(210f, -145f - i * 78f), new Vector2(330f, 58f), new Vector2(0.5f, 0.5f));
+            Text label = roleButton.GetComponentInChildren<Text>();
+            roleLabels[captured] = label;
+            roleButton.onClick.AddListener(() => CycleRole(captured));
+        }
+        displayedPlanter = FindPlanter();
+        RefreshAgentNames();
+
+        duplicateRoleWarning = CreateText("DuplicateWarning", roleSelectionWindow.transform,
+            string.Empty, 15, FontStyle.Normal, TextAnchor.MiddleCenter);
+        SetRect(duplicateRoleWarning.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+            new Vector2(0f, 103f), new Vector2(800f, 35f), new Vector2(0.5f, 0.5f));
+        duplicateRoleWarning.color = new Color(1f, 0.82f, 0.35f, 1f);
+
+        Button auto = CreateTacticButton("AutoAssign", roleSelectionWindow.transform,
+            "<b>AUTO BALANCE</b>", 17);
+        SetRect(auto.GetComponent<RectTransform>(), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+            new Vector2(-195f, 48f), new Vector2(330f, 65f), new Vector2(0.5f, 0.5f));
+        auto.onClick.AddListener(tacticManager.AssignBalancedRoles);
+        Button start = CreateTacticButton("StartMatch", roleSelectionWindow.transform,
+            "<b>START MATCH</b>", 18);
+        SetRect(start.GetComponent<RectTransform>(), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+            new Vector2(195f, 48f), new Vector2(330f, 65f), new Vector2(0.5f, 0.5f));
+        start.onClick.AddListener(tacticManager.ConfirmRoles);
+    }
+
+    private void CreateAgentMaterialSwatch(AgentRole agent, int row)
+    {
+        GameObject swatchObject = new GameObject(
+            "MaterialSwatch_" + agent.name,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(RawImage),
+            typeof(Outline));
+        swatchObject.transform.SetParent(roleSelectionWindow.transform, false);
+        SetRect(swatchObject.GetComponent<RectTransform>(),
+            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+            new Vector2(-385f, -145f - row * 78f), new Vector2(54f, 54f),
+            new Vector2(0.5f, 0.5f));
+
+        RawImage preview = swatchObject.GetComponent<RawImage>();
+        Renderer renderer = agent.GetComponentInChildren<Renderer>();
+        Material material = renderer != null ? renderer.sharedMaterial : null;
+        preview.texture = material != null && material.mainTexture != null
+            ? material.mainTexture
+            : Texture2D.whiteTexture;
+        preview.color = GetMaterialPreviewColor(material);
+        preview.raycastTarget = false;
+
+        Outline outline = swatchObject.GetComponent<Outline>();
+        outline.effectColor = AccentColor;
+        outline.effectDistance = new Vector2(2f, -2f);
+    }
+
+    private static Color GetMaterialPreviewColor(Material material)
+    {
+        if (material == null)
+        {
+            return new Color(0.45f, 0.48f, 0.52f, 1f);
+        }
+        if (material.HasProperty("_BaseColor"))
+        {
+            return material.GetColor("_BaseColor");
+        }
+        if (material.HasProperty("_Color"))
+        {
+            return material.GetColor("_Color");
+        }
+        return Color.white;
+    }
+
+    private AgentRole FindPlanter()
+    {
+        foreach (AgentRole role in roleAgentNames.Keys)
+        {
+            if (role != null && role.GetComponent<BombCarrier>()?.HasBomb == true)
+            {
+                return role;
+            }
+        }
+        return null;
+    }
+
+    private void RefreshAgentNames()
+    {
+        foreach (KeyValuePair<AgentRole, Text> pair in roleAgentNames)
+        {
+            if (pair.Key == null || pair.Value == null)
+            {
+                continue;
+            }
+
+            bool isPlanter = pair.Key.GetComponent<BombCarrier>()?.HasBomb == true;
+            pair.Value.text = isPlanter
+                ? pair.Key.name + "\n<color=#FFD166><b>PLANTER / BOMB CARRIER</b></color>"
+                : pair.Key.name;
+            pair.Value.color = isPlanter
+                ? new Color(1f, 0.88f, 0.48f, 1f)
+                : TextColor;
+        }
+    }
+
+    private void CycleRole(AgentRole agent)
+    {
+        AgentRoleType next = (AgentRoleType)(((int)agent.SelectedRole + 1) %
+            Enum.GetValues(typeof(AgentRoleType)).Length);
+        tacticManager.SetAgentRole(agent, next);
     }
 
     private void BuildCurrentTacticPanel(Transform parent)
@@ -250,9 +421,12 @@ public sealed class TeamTacticUI : MonoBehaviour
         bool selected = tacticManager.HasSelectedInitialTactic;
         bool roundEnded = roundManager.CurrentState == RoundState.RoundEnd;
 
+        bool rolesConfirmed = tacticManager.RolesConfirmed;
         initialOverlay.SetActive(controlledRound &&
                                  roundManager.CurrentState == RoundState.Preparation &&
-                                 !selected);
+                                 (!selected || !rolesConfirmed));
+        initialTacticWindow.SetActive(!selected);
+        roleSelectionWindow.SetActive(selected && !rolesConfirmed);
         currentTacticPanel.SetActive(controlledRound && selected && !roundEnded);
         midRoundPanel.SetActive(controlledRound && selected &&
                                 roundManager.CurrentState != RoundState.Preparation &&
@@ -263,6 +437,18 @@ public sealed class TeamTacticUI : MonoBehaviour
             currentTacticText.text = "<b>INITIAL TACTIC:</b>\n" +
                                      $"<color=#33DBF5>{TeamTacticDefinitions.GetName(tacticManager.GetSelectedInitialTactic())}</color>";
         }
+
+        int duplicateCount = 0;
+        HashSet<AgentRoleType> seenRoles = new HashSet<AgentRoleType>();
+        foreach (KeyValuePair<AgentRole, Text> pair in roleLabels)
+        {
+            if (pair.Key == null) continue;
+            pair.Value.text = $"<b>{pair.Key.SelectedRole}</b>\n<color=#AAB5C2>click to change</color>";
+            if (!seenRoles.Add(pair.Key.SelectedRole)) duplicateCount++;
+        }
+        if (duplicateRoleWarning != null)
+            duplicateRoleWarning.text = duplicateCount > 0
+                ? $"Warning: {duplicateCount} duplicate role assignment(s)" : "Balanced role coverage";
 
         foreach (KeyValuePair<MidRoundTactic, Button> pair in midRoundButtons)
         {

@@ -45,6 +45,7 @@ public sealed class AttackerCombatAI : MonoBehaviour
     private WeaponSystem weapon;
     private HealthSystem health;
     private AgentMemory memory;
+    private AgentRole role;
 
     [SerializeField] private AttackerCombatState currentState =
         AttackerCombatState.SearchingTarget;
@@ -101,6 +102,7 @@ public sealed class AttackerCombatAI : MonoBehaviour
         weapon = GetComponent<WeaponSystem>();
         health = GetComponent<HealthSystem>();
         memory = GetComponent<AgentMemory>();
+        role = GetComponent<AgentRole>();
         lastMovementSample = transform.position;
         lastMovementTime = Time.time;
         lastObjectiveProgressTime = Time.time;
@@ -619,6 +621,10 @@ public sealed class AttackerCombatAI : MonoBehaviour
 
     private bool IsAggressiveTactic()
     {
+        if (role != null && role.SelectedRole == AgentRoleType.Assaulter)
+        {
+            return true;
+        }
         if (tacticManager == null || !tacticManager.HasSelectedInitialTactic)
         {
             return false;
@@ -632,7 +638,9 @@ public sealed class AttackerCombatAI : MonoBehaviour
 
     private bool IsCoverOrientedTactic()
     {
-        return tacticManager != null &&
+        return (role != null && (role.SelectedRole == AgentRoleType.Support ||
+                                 role.SelectedRole == AgentRoleType.Defender)) ||
+               tacticManager != null &&
                (tacticManager.IsMidRoundTacticActive(MidRoundTactic.GuerrillaAmbush) ||
                 tacticManager.IsMidRoundTacticActive(MidRoundTactic.PostPlantLockdown) ||
                 tacticManager.IsMidRoundTacticActive(MidRoundTactic.ProbeAndPlant));

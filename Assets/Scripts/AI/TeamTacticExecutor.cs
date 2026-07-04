@@ -2300,6 +2300,11 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         Vector3 destination,
         Vector3 watchPosition)
     {
+        AgentRole role = agent != null ? agent.GetComponent<AgentRole>() : null;
+        if (role != null)
+        {
+            destination = role.RefineDestination(destination, watchPosition);
+        }
         float tolerance = Mathf.Max(0.65f, motor.waypointReachDistance);
         if (!motor.HasReachedRequestedDestination(destination, tolerance))
         {

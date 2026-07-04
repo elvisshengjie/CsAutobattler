@@ -16,6 +16,7 @@ public class AgentBrain : MonoBehaviour
     private WeaponSystem weapon;
     private DefenderAgentAI defenderAI;
     private AttackerCombatAI attackerCombatAI;
+    private AgentRole role;
 
     public GameObject CurrentTarget { get; private set; }
 
@@ -28,6 +29,7 @@ public class AgentBrain : MonoBehaviour
         weapon = GetComponent<WeaponSystem>();
         defenderAI = GetComponent<DefenderAgentAI>();
         attackerCombatAI = GetComponent<AttackerCombatAI>();
+        role = GetComponent<AgentRole>();
     }
 
     private void Update()
@@ -47,6 +49,10 @@ public class AgentBrain : MonoBehaviour
                 sensors,
                 normallyDetectedTarget)
             : normallyDetectedTarget;
+        if (role != null)
+        {
+            CurrentTarget = role.SelectPreferredTarget(CurrentTarget, sensors);
+        }
 
         if (CurrentTarget != null)
         {
@@ -117,6 +123,11 @@ public class AgentBrain : MonoBehaviour
             }
 
             motor.MoveTo(knownPosition);
+            return;
+        }
+
+        if (role != null && role.TryExecuteRoleMovement())
+        {
             return;
         }
 

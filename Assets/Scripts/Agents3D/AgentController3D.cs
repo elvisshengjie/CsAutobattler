@@ -43,6 +43,7 @@ public class AgentController3D : MonoBehaviour
     private AgentMemory memory;
     private AgentMotor motor;
     private AgentBrain brain;
+    private AgentRole role;
 
     public Vector3 LastKnownEnemyPosition =>
         memory != null ? memory.LastKnownEnemyPosition : Vector3.zero;
@@ -102,6 +103,12 @@ public class AgentController3D : MonoBehaviour
 
     private void EnsureBehaviorComponents()
     {
+        role = GetComponent<AgentRole>();
+        if (role == null)
+        {
+            role = gameObject.AddComponent<AgentRole>();
+        }
+
         sensors = GetComponent<AgentSensors>();
         if (sensors == null)
         {

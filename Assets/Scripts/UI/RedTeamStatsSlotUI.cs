@@ -49,7 +49,9 @@ public sealed class RedTeamStatsSlotUI : MonoBehaviour
     {
         if (tacticText != null)
         {
-            tacticText.text = "Tactic:";
+            tacticText.text = "Role: --";
+            tacticText.fontSize = 13;
+            tacticText.color = Color.white;
         }
 
         if (agent == null)
@@ -67,6 +69,20 @@ public sealed class RedTeamStatsSlotUI : MonoBehaviour
         if (healthSystem == null)
         {
             healthSystem = agent.GetComponent<HealthSystem>();
+        }
+
+        if (tacticText != null)
+        {
+            AgentRole role = agent.GetComponent<AgentRole>();
+            bool hasBomb = agent.GetComponent<BombCarrier>()?.HasBomb == true;
+            string roleName = role != null ? role.SelectedRole.ToString() : "Unassigned";
+            tacticText.text = hasBomb
+                ? $"Role: {roleName} | PLANTER"
+                : $"Role: {roleName}";
+            tacticText.fontSize = hasBomb ? 11 : 13;
+            tacticText.color = hasBomb
+                ? new Color(1f, 0.82f, 0.35f, 1f)
+                : Color.white;
         }
 
         if (hpText != null)

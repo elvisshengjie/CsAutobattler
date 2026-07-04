@@ -284,7 +284,7 @@ public static class RedTeamStatsPanelBuilder
             "TacticText",
             slotRect,
             defaultFont,
-            "Tactic:",
+            "Role: --",
             new Vector2(0f, 0f),
             new Vector2(1f, 0.5f),
             new Vector2(63f, 5f),
