@@ -4330,7 +4330,7 @@ MonoBehaviour:
   preparationDuration: 5
   roundDuration: 90
   plantDuration: 4
-  defuseDuration: 4
+  defuseDuration: 7
   bombDuration: 30
   currentState: 0
   preparationTimeRemaining: 0

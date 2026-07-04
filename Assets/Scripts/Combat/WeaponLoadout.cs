@@ -38,6 +38,9 @@ public sealed class WeaponLoadout : MonoBehaviour
             if (roundManager != null && agent.team != roundManager.attackingTeam)
             {
                 loadout.SelectWeapon((WeaponType)Random.Range(0, 4));
+                AgentRole role = agent.GetComponent<AgentRole>();
+                if (role == null) role = agent.gameObject.AddComponent<AgentRole>();
+                role.SetRole((AgentRoleType)Random.Range(0, 4));
             }
         }
     }

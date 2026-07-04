@@ -107,6 +107,7 @@ public class AgentMotor : MonoBehaviour
     public bool PathBlocked => pathBlocked;
     public TacticalSlotKind CurrentSlotKind => currentSlotKind;
     public float SpeedMultiplier { get; set; } = 1f;
+    private float movementPlaneY;
 
     private float ClearanceRadius => agentRadius + minObstacleClearance;
 
@@ -114,6 +115,7 @@ public class AgentMotor : MonoBehaviour
     {
         stats = GetComponent<AgentStats>();
         body = GetComponent<Rigidbody>();
+        movementPlaneY = body != null ? body.position.y : transform.position.y;
         Collider agentCollider = GetComponent<Collider>();
         if (agentCollider != null)
         {
@@ -217,6 +219,14 @@ public class AgentMotor : MonoBehaviour
 
     private void FixedUpdate()
     {
+        // Navigation is planar. Correct any vertical drift before it can leave an
+        // agent underneath the floor and make the floor render over the agent.
+        if (body != null && !Mathf.Approximately(body.position.y, movementPlaneY))
+        {
+            Vector3 correctedPosition = body.position;
+            correctedPosition.y = movementPlaneY;
+            body.position = correctedPosition;
+        }
         FollowPath();
     }
 
@@ -697,7 +707,7 @@ public class AgentMotor : MonoBehaviour
             rotationSpeed * Time.fixedDeltaTime));
 
         Vector3 newPosition = currentPosition + safeDirection * stepDistance;
-        newPosition.y = currentPosition.y;
+        newPosition.y = movementPlaneY;
         body.MovePosition(newPosition);
     }
 

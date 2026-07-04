@@ -324,7 +324,12 @@ public sealed class TeamTacticUI : MonoBehaviour
             new Vector2(0.5f, 0.5f));
 
         RawImage preview = swatchObject.GetComponent<RawImage>();
-        Renderer renderer = agent.GetComponentInChildren<Renderer>();
+        AgentPortraitData portraitData = agent.GetComponent<AgentPortraitData>();
+        Renderer renderer = portraitData != null ? portraitData.sourceRenderer : null;
+        if (renderer == null)
+        {
+            renderer = FindAgentVisualRenderer(agent.gameObject);
+        }
         Material material = renderer != null ? renderer.sharedMaterial : null;
         preview.texture = material != null && material.mainTexture != null
             ? material.mainTexture
@@ -335,6 +340,20 @@ public sealed class TeamTacticUI : MonoBehaviour
         Outline outline = swatchObject.GetComponent<Outline>();
         outline.effectColor = AccentColor;
         outline.effectDistance = new Vector2(2f, -2f);
+    }
+
+    private static Renderer FindAgentVisualRenderer(GameObject agent)
+    {
+        Renderer[] renderers = agent.GetComponentsInChildren<Renderer>(true);
+        foreach (Renderer candidate in renderers)
+        {
+            if (candidate == null) continue;
+            string objectName = candidate.gameObject.name.ToLowerInvariant();
+            if (objectName.Contains("health") || objectName.Contains("bar") ||
+                objectName.Contains("debug")) continue;
+            return candidate;
+        }
+        return null;
     }
 
     private static Color GetMaterialPreviewColor(Material material)

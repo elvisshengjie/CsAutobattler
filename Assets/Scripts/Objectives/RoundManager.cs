@@ -42,7 +42,7 @@ public class RoundManager : MonoBehaviour
     public float preparationDuration = 5f;
     public float roundDuration = 90f;
     public float plantDuration = 4f;
-    public float defuseDuration = 4f;
+    public float defuseDuration = 7f;
     public float bombDuration = 30f;
 
     [Header("Runtime (Read Only)")]
