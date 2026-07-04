@@ -187,8 +187,64 @@ public sealed class AgentRole : MonoBehaviour
                       dangerPenalty - occupancy * 3f - movementPenalty -
                       FlatDistance(p, objective) * 0.025f;
         if (selectedRole == AgentRoleType.Flanker) score -= enemy * 1.5f;
-        reason = $"{selectedRole}: obj {objectiveValue:F1}, cover {cover:F1}, danger {danger:F1}, flank {sideRear:F1}";
+        float weaponScore = ScoreWeaponPosition(p, cover, occupancy, danger,
+            front, sideRear);
+        score += weaponScore;
+        WeaponLoadout loadout = WeaponLoadout.Get(gameObject);
+        reason = $"{selectedRole}+{loadout.SelectedWeapon}: obj {objectiveValue:F1}, " +
+                 $"cover {cover:F1}, danger {danger:F1}, weapon {weaponScore:F1}";
         return score;
+    }
+
+    private float ScoreWeaponPosition(Vector3 position, float cover,
+        float occupancy, float danger, float front, float sideRear)
+    {
+        WeaponLoadout loadout = WeaponLoadout.Get(gameObject);
+        float nearestEnemyDistance = GetNearestEnemyDistance(position);
+        float rangeFit = GetRangeFit(nearestEnemyDistance,
+            loadout.MinimumRange, loadout.MaximumRange);
+        switch (loadout.SelectedWeapon)
+        {
+            case WeaponType.SMG:
+                return rangeFit * 2.2f + sideRear * 1.5f +
+                       loadout.MovementSpeedMultiplier * 0.5f - danger * 0.25f;
+            case WeaponType.Sniper:
+                return rangeFit * 3f + cover * 1.6f - occupancy * 2f -
+                       front * 0.7f - danger * 0.45f;
+            case WeaponType.Shotgun:
+                return rangeFit * 3f + cover * 1.4f + sideRear * 0.8f -
+                       danger * 0.2f;
+            case WeaponType.Rifle:
+            default:
+                return rangeFit * 1.8f + cover * 0.65f - danger * 0.25f;
+        }
+    }
+
+    private float GetNearestEnemyDistance(Vector3 position)
+    {
+        float nearest = float.PositiveInfinity;
+        foreach (AgentStats candidate in
+                 FindObjectsByType<AgentStats>(FindObjectsInactive.Exclude))
+        {
+            HealthSystem health = candidate.GetComponent<HealthSystem>();
+            if (candidate == stats || candidate.team == stats.team ||
+                health == null || health.IsDead) continue;
+            nearest = Mathf.Min(nearest,
+                FlatDistance(position, candidate.transform.position));
+        }
+        return float.IsInfinity(nearest) ? 20f : nearest;
+    }
+
+    private static float GetRangeFit(float distance, float minimum, float maximum)
+    {
+        maximum = Mathf.Max(minimum + 0.1f, maximum);
+        if (distance < minimum)
+            return Mathf.Clamp01(distance / Mathf.Max(0.1f, minimum));
+        if (distance > maximum)
+            return Mathf.Clamp01(1f - (distance - maximum) / maximum);
+        float preferred = Mathf.Lerp(minimum, maximum, 0.7f);
+        return 1f - Mathf.Abs(distance - preferred) /
+               Mathf.Max(0.1f, maximum - minimum);
     }
 
     private float ScoreTarget(GameObject target)

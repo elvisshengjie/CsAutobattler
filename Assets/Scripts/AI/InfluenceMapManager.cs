@@ -75,7 +75,9 @@ public sealed class InfluenceMapManager : MonoBehaviour
             if (health == null || health.IsDead) continue;
             bool friendly = agent.team == friendlyTeam;
             AddRadial(friendly ? InfluenceLayerType.Friendly : InfluenceLayerType.Enemy,
-                agent.transform.position, Mathf.Max(1f, agent.damage * 0.1f), influenceRadius);
+                agent.transform.position,
+                Mathf.Max(1f, WeaponLoadout.Get(agent.gameObject).Damage * 0.1f),
+                influenceRadius);
             if (friendly)
                 AddRadial(InfluenceLayerType.FriendlyOccupancy, agent.transform.position, 1f, cellSize * 2f);
             else

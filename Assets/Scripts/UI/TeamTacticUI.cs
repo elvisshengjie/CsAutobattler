@@ -21,6 +21,7 @@ public sealed class TeamTacticUI : MonoBehaviour
     private GameObject initialOverlay;
     private GameObject initialTacticWindow;
     private GameObject roleSelectionWindow;
+    private GameObject loadoutSelectionWindow;
     private GameObject currentTacticPanel;
     private GameObject midRoundPanel;
     private Text currentTacticText;
@@ -28,6 +29,10 @@ public sealed class TeamTacticUI : MonoBehaviour
     private readonly Dictionary<AgentRole, Text> roleLabels =
         new Dictionary<AgentRole, Text>();
     private readonly Dictionary<AgentRole, Text> roleAgentNames =
+        new Dictionary<AgentRole, Text>();
+    private readonly Dictionary<WeaponLoadout, Text> loadoutLabels =
+        new Dictionary<WeaponLoadout, Text>();
+    private readonly Dictionary<AgentRole, Text> loadoutAgentLabels =
         new Dictionary<AgentRole, Text>();
     private AgentRole displayedPlanter;
     private readonly Dictionary<MidRoundTactic, Button> midRoundButtons =
@@ -52,6 +57,7 @@ public sealed class TeamTacticUI : MonoBehaviour
         tacticManager.TacticsChanged += Refresh;
         tacticManager.RoundTacticsReset += Refresh;
         tacticManager.RolesChanged += Refresh;
+        tacticManager.LoadoutsChanged += Refresh;
         if (roundManager != null)
         {
             roundManager.StateChanged += OnRoundStateChanged;
@@ -68,6 +74,7 @@ public sealed class TeamTacticUI : MonoBehaviour
             tacticManager.TacticsChanged -= Refresh;
             tacticManager.RoundTacticsReset -= Refresh;
             tacticManager.RolesChanged -= Refresh;
+            tacticManager.LoadoutsChanged -= Refresh;
         }
 
         if (roundManager != null)
@@ -156,6 +163,7 @@ public sealed class TeamTacticUI : MonoBehaviour
         }
 
         BuildRoleSelection(initialOverlay.transform);
+        BuildLoadoutSelection(initialOverlay.transform);
     }
 
     private void Update()
@@ -226,11 +234,79 @@ public sealed class TeamTacticUI : MonoBehaviour
         SetRect(auto.GetComponent<RectTransform>(), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
             new Vector2(-195f, 48f), new Vector2(330f, 65f), new Vector2(0.5f, 0.5f));
         auto.onClick.AddListener(tacticManager.AssignBalancedRoles);
-        Button start = CreateTacticButton("StartMatch", roleSelectionWindow.transform,
-            "<b>START MATCH</b>", 18);
+        Button start = CreateTacticButton("NextLoadouts", roleSelectionWindow.transform,
+            "<b>NEXT: CHOOSE WEAPONS</b>", 18);
         SetRect(start.GetComponent<RectTransform>(), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
             new Vector2(195f, 48f), new Vector2(330f, 65f), new Vector2(0.5f, 0.5f));
         start.onClick.AddListener(tacticManager.ConfirmRoles);
+    }
+
+    private void BuildLoadoutSelection(Transform parent)
+    {
+        loadoutSelectionWindow = CreatePanel("LoadoutSelectionWindow", parent,
+            new Color(0.055f, 0.07f, 0.095f, 0.99f));
+        SetRect(loadoutSelectionWindow.GetComponent<RectTransform>(),
+            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero,
+            new Vector2(1120f, 720f), new Vector2(0.5f, 0.5f));
+        AddOutline(loadoutSelectionWindow, AccentColor, new Vector2(2f, -2f));
+
+        Text title = CreateText("LoadoutTitle", loadoutSelectionWindow.transform,
+            "CHOOSE AGENT LOADOUTS", 30, FontStyle.Bold, TextAnchor.MiddleCenter);
+        SetRect(title.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+            new Vector2(0f, -42f), new Vector2(980f, 48f), new Vector2(0.5f, 0.5f));
+        title.color = AccentColor;
+        Text hint = CreateText("LoadoutHint", loadoutSelectionWindow.transform,
+            "Click a weapon card to cycle Rifle, SMG, Sniper, and Shotgun.", 16,
+            FontStyle.Normal, TextAnchor.MiddleCenter);
+        SetRect(hint.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+            new Vector2(0f, -82f), new Vector2(980f, 35f), new Vector2(0.5f, 0.5f));
+
+        loadoutLabels.Clear();
+        loadoutAgentLabels.Clear();
+        List<AgentRole> roles = tacticManager.GetControlledRoles();
+        for (int i = 0; i < roles.Count; i++)
+        {
+            AgentRole role = roles[i];
+            WeaponLoadout loadout = WeaponLoadout.Get(role.gameObject);
+            Text agentLabel = CreateText("LoadoutAgentName", loadoutSelectionWindow.transform,
+                $"<b>{role.name}</b>\n<color=#33DBF5>{role.SelectedRole}</color>",
+                17, FontStyle.Normal, TextAnchor.MiddleLeft);
+            SetRect(agentLabel.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                new Vector2(-390f, -145f - i * 88f), new Vector2(260f, 70f),
+                new Vector2(0.5f, 0.5f));
+            loadoutAgentLabels[role] = agentLabel;
+
+            Button weaponButton = CreateTacticButton("Weapon_" + role.name,
+                loadoutSelectionWindow.transform, string.Empty, 15);
+            SetRect(weaponButton.GetComponent<RectTransform>(),
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                new Vector2(145f, -145f - i * 88f), new Vector2(760f, 76f),
+                new Vector2(0.5f, 0.5f));
+            Text weaponLabel = weaponButton.GetComponentInChildren<Text>();
+            loadoutLabels[loadout] = weaponLabel;
+            weaponButton.onClick.AddListener(() => CycleWeapon(loadout));
+        }
+
+        Button recommended = CreateTacticButton("RecommendedLoadouts",
+            loadoutSelectionWindow.transform, "<b>ROLE RECOMMENDED</b>", 17);
+        SetRect(recommended.GetComponent<RectTransform>(),
+            new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+            new Vector2(-215f, 48f), new Vector2(380f, 65f), new Vector2(0.5f, 0.5f));
+        recommended.onClick.AddListener(tacticManager.AssignRecommendedLoadouts);
+
+        Button start = CreateTacticButton("ConfirmLoadouts",
+            loadoutSelectionWindow.transform, "<b>START MATCH</b>", 18);
+        SetRect(start.GetComponent<RectTransform>(),
+            new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+            new Vector2(215f, 48f), new Vector2(380f, 65f), new Vector2(0.5f, 0.5f));
+        start.onClick.AddListener(tacticManager.ConfirmLoadouts);
+    }
+
+    private void CycleWeapon(WeaponLoadout loadout)
+    {
+        WeaponType next = (WeaponType)(((int)loadout.SelectedWeapon + 1) %
+            Enum.GetValues(typeof(WeaponType)).Length);
+        tacticManager.SetAgentWeapon(loadout, next);
     }
 
     private void CreateAgentMaterialSwatch(AgentRole agent, int row)
@@ -422,11 +498,13 @@ public sealed class TeamTacticUI : MonoBehaviour
         bool roundEnded = roundManager.CurrentState == RoundState.RoundEnd;
 
         bool rolesConfirmed = tacticManager.RolesConfirmed;
+        bool loadoutsConfirmed = tacticManager.LoadoutsConfirmed;
         initialOverlay.SetActive(controlledRound &&
                                  roundManager.CurrentState == RoundState.Preparation &&
-                                 (!selected || !rolesConfirmed));
+                                 (!selected || !rolesConfirmed || !loadoutsConfirmed));
         initialTacticWindow.SetActive(!selected);
         roleSelectionWindow.SetActive(selected && !rolesConfirmed);
+        loadoutSelectionWindow.SetActive(selected && rolesConfirmed && !loadoutsConfirmed);
         currentTacticPanel.SetActive(controlledRound && selected && !roundEnded);
         midRoundPanel.SetActive(controlledRound && selected &&
                                 roundManager.CurrentState != RoundState.Preparation &&
@@ -449,6 +527,24 @@ public sealed class TeamTacticUI : MonoBehaviour
         if (duplicateRoleWarning != null)
             duplicateRoleWarning.text = duplicateCount > 0
                 ? $"Warning: {duplicateCount} duplicate role assignment(s)" : "Balanced role coverage";
+
+        foreach (KeyValuePair<WeaponLoadout, Text> pair in loadoutLabels)
+        {
+            if (pair.Key == null || pair.Value == null) continue;
+            WeaponDefinition weapon = pair.Key.Definition;
+            float baseSpeed = pair.Key.GetComponent<AgentStats>() != null
+                ? pair.Key.GetComponent<AgentStats>().moveSpeed : 0f;
+            pair.Value.text = $"<b>{weapon.weaponType}</b>  |  " +
+                $"Range {weapon.effectiveMinimumRange:0.#}-{weapon.effectiveMaximumRange:0.#}  |  " +
+                $"Move {baseSpeed * weapon.movementSpeedMultiplier:0.##}\n" +
+                $"<color=#AAB5C2>{weapon.behaviorDescription}</color>";
+        }
+        foreach (KeyValuePair<AgentRole, Text> pair in loadoutAgentLabels)
+        {
+            if (pair.Key != null && pair.Value != null)
+                pair.Value.text = $"<b>{pair.Key.name}</b>\n" +
+                    $"<color=#33DBF5>{pair.Key.SelectedRole}</color>";
+        }
 
         foreach (KeyValuePair<MidRoundTactic, Button> pair in midRoundButtons)
         {

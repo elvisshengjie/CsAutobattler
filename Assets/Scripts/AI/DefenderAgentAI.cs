@@ -58,6 +58,7 @@ public sealed class DefenderAgentAI : MonoBehaviour
     private AgentStats stats;
     private AgentSensors sensors;
     private AgentMemory memory;
+    private WeaponLoadout loadout;
     private AgentMotor motor;
     private WeaponSystem weapon;
     private HealthSystem health;
@@ -107,6 +108,7 @@ public sealed class DefenderAgentAI : MonoBehaviour
         stats = GetComponent<AgentStats>();
         sensors = GetComponent<AgentSensors>();
         memory = GetComponent<AgentMemory>();
+        loadout = WeaponLoadout.Get(gameObject);
         motor = GetComponent<AgentMotor>();
         weapon = GetComponent<WeaponSystem>();
         health = GetComponent<HealthSystem>();
@@ -434,7 +436,7 @@ public sealed class DefenderAgentAI : MonoBehaviour
         float targetDistance = FlatDistance(transform.position, targetPosition);
 
         if (hasCurrentVision && target != null && weapon != null && weapon.IsReady &&
-            targetDistance <= stats.attackRange && sensors.HasLineOfSight(target))
+            targetDistance <= loadout.MaximumRange && sensors.HasLineOfSight(target))
         {
             return false;
         }
@@ -529,7 +531,7 @@ public sealed class DefenderAgentAI : MonoBehaviour
 
         if (hasCurrentVision && target != null && !lowHealth && !forceReposition &&
             currentCover.cover == null &&
-            FlatDistance(transform.position, targetPosition) <= stats.attackRange &&
+            FlatDistance(transform.position, targetPosition) <= loadout.MaximumRange &&
             sensors.HasLineOfSight(target))
         {
             if (openFireTarget != target)
@@ -895,11 +897,11 @@ public sealed class DefenderAgentAI : MonoBehaviour
         Vector3 objective = GetCurrentObjectivePosition();
         Vector3 destination = transform.position + side * strafeDistance;
         float enemyDistance = FlatDistance(transform.position, targetPosition);
-        if (enemyDistance > stats.attackRange * 0.9f)
+        if (enemyDistance > loadout.MaximumRange * 0.9f)
         {
             destination += toEnemy.normalized * Mathf.Min(
                 strafeDistance,
-                enemyDistance - stats.attackRange * 0.8f);
+                enemyDistance - loadout.MaximumRange * 0.8f);
         }
 
         if (FlatDistance(destination, objective) > 14f)
@@ -1029,7 +1031,7 @@ public sealed class DefenderAgentAI : MonoBehaviour
     private bool TryShootWhileMoving(GameObject target)
     {
         if (target == null || weapon == null || stats == null ||
-            FlatDistance(transform.position, target.transform.position) > stats.attackRange ||
+            FlatDistance(transform.position, target.transform.position) > loadout.MaximumRange ||
             !sensors.HasLineOfSight(target))
         {
             return false;

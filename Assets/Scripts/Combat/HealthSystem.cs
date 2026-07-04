@@ -26,6 +26,8 @@ public class HealthSystem : MonoBehaviour
     private void Awake()
     {
         stats = GetComponent<AgentStats>();
+        // Give every spawned agent a different starting health pool for this match.
+        stats.maxHealth = UnityEngine.Random.Range(50, 71);
         animator = GetComponentInChildren<Animator>();
         controller = GetComponent<AgentController>();
         controller3D = GetComponent<AgentController3D>();

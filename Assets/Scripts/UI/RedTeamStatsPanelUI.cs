@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 public sealed class RedTeamStatsPanelUI : MonoBehaviour
 {
@@ -15,9 +16,29 @@ public sealed class RedTeamStatsPanelUI : MonoBehaviour
 
     private void Start()
     {
+        ApplyExpandedLayout();
         AssignRedTeamAgents();
         RefreshSlots();
         nextRefreshTime = Time.unscaledTime + refreshInterval;
+    }
+
+    private void ApplyExpandedLayout()
+    {
+        const float spacing = 10f;
+        RectTransform panelRect = transform as RectTransform;
+        if (panelRect != null)
+        {
+            panelRect.sizeDelta = new Vector2(
+                (RequiredSlotCount * RedTeamStatsSlotUI.DisplayWidth) +
+                ((RequiredSlotCount - 1) * spacing),
+                RedTeamStatsSlotUI.DisplayHeight);
+        }
+
+        HorizontalLayoutGroup layout = GetComponent<HorizontalLayoutGroup>();
+        if (layout != null)
+        {
+            layout.spacing = spacing;
+        }
     }
 
     private void Update()

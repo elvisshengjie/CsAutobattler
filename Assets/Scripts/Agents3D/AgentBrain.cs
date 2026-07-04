@@ -17,6 +17,7 @@ public class AgentBrain : MonoBehaviour
     private DefenderAgentAI defenderAI;
     private AttackerCombatAI attackerCombatAI;
     private AgentRole role;
+    private WeaponLoadout loadout;
 
     public GameObject CurrentTarget { get; private set; }
 
@@ -30,6 +31,7 @@ public class AgentBrain : MonoBehaviour
         defenderAI = GetComponent<DefenderAgentAI>();
         attackerCombatAI = GetComponent<AttackerCombatAI>();
         role = GetComponent<AgentRole>();
+        loadout = WeaponLoadout.Get(gameObject);
     }
 
     private void Update()
@@ -90,7 +92,7 @@ public class AgentBrain : MonoBehaviour
         {
             float distance = FlatDistance(transform.position, CurrentTarget.transform.position);
 
-            if (distance <= stats.attackRange &&
+            if (distance <= loadout.MaximumRange &&
                 sensors.HasLineOfSight(CurrentTarget))
             {
                 motor.Stop();
@@ -137,7 +139,7 @@ public class AgentBrain : MonoBehaviour
     private void TryShootWithoutInterruptingMovement(GameObject target)
     {
         if (target == null || weapon == null || !weapon.IsReady ||
-            FlatDistance(transform.position, target.transform.position) > stats.attackRange ||
+            FlatDistance(transform.position, target.transform.position) > loadout.MaximumRange ||
             !sensors.HasLineOfSight(target))
         {
             return;

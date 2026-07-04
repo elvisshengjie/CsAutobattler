@@ -1531,7 +1531,8 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
         AgentStats attackerStats = attacker.GetComponent<AgentStats>();
         AgentSensors defenderSensors = defender.GetComponent<AgentSensors>();
         float dangerRange = attackerStats != null
-            ? Mathf.Max(4f, attackerStats.attackRange * 1.25f)
+            ? Mathf.Max(4f,
+                WeaponLoadout.Get(attackerStats.gameObject).MaximumRange * 1.25f)
             : 4f;
         return defenderSensors != null &&
                FlatDistance(defender.transform.position, attacker.transform.position) <=

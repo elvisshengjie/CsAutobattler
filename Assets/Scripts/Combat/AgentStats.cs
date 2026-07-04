@@ -17,12 +17,16 @@ public class AgentStats : MonoBehaviour
     [Header("Movement")]
     public float moveSpeed = 2f;
 
-    [Header("Weapon")]
+    [Header("Legacy Weapon Fallback (runtime uses WeaponLoadout)")]
+    [HideInInspector]
     public float attackRange = 3f;
+    [HideInInspector]
     public float damage = 10f;
+    [HideInInspector]
     public float attackCooldown = 1f;
 
     [Tooltip("Aim accuracy from 0 to 100. Lower values produce a wider random shot spread.")]
     [Range(0f, 100f)]
+    [HideInInspector]
     public float accuracy = 75f;
 }

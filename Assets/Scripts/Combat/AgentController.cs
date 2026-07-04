@@ -39,7 +39,8 @@ public class AgentController : MonoBehaviour
 
         float distanceToTarget = Vector2.Distance(transform.position, currentTarget.transform.position);
 
-        if (distanceToTarget <= stats.attackRange)
+        WeaponLoadout loadout = WeaponLoadout.Get(gameObject);
+        if (distanceToTarget <= loadout.MaximumRange)
         {
             currentPath = null;
             weapon.TryAttack(currentTarget);
@@ -99,7 +100,9 @@ public class AgentController : MonoBehaviour
         }
 
         Vector2 moveDirection = (targetWaypoint - currentPosition).normalized;
-        Vector2 newPosition = currentPosition + moveDirection * stats.moveSpeed * Time.fixedDeltaTime;
+        WeaponLoadout loadout = WeaponLoadout.Get(gameObject);
+        Vector2 newPosition = currentPosition + moveDirection * stats.moveSpeed *
+                              loadout.MovementSpeedMultiplier * Time.fixedDeltaTime;
 
         rb.MovePosition(newPosition);
     }

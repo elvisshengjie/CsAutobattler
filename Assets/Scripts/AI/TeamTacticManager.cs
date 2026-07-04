@@ -17,6 +17,7 @@ public sealed class TeamTacticManager : MonoBehaviour
     [SerializeField] private bool hasSelectedInitialTactic;
     [SerializeField] private InitialTeamTactic selectedInitialTactic;
     [SerializeField] private bool rolesConfirmed;
+    [SerializeField] private bool loadoutsConfirmed;
     [SerializeField] private List<MidRoundTactic> activeTactics = new List<MidRoundTactic>();
 
     private readonly HashSet<MidRoundTactic> activeTacticSet =
@@ -25,17 +26,19 @@ public sealed class TeamTacticManager : MonoBehaviour
 
     public bool HasSelectedInitialTactic => hasSelectedInitialTactic;
     public bool RolesConfirmed => rolesConfirmed;
+    public bool LoadoutsConfirmed => loadoutsConfirmed;
     public TeamType ControlledTeam => controlledTeam;
     public int PlanRevision { get; private set; }
     public bool IsInitialSelectionBlockingInput =>
         roundManager != null && roundManager.CurrentState == RoundState.Preparation &&
         roundManager.attackingTeam == controlledTeam &&
-        (!hasSelectedInitialTactic || !rolesConfirmed);
+        (!hasSelectedInitialTactic || !rolesConfirmed || !loadoutsConfirmed);
 
     public event Action<InitialTeamTactic> InitialTacticSelected;
     public event Action TacticsChanged;
     public event Action RoundTacticsReset;
     public event Action RolesChanged;
+    public event Action LoadoutsChanged;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void EnsureInstanceForBombRound()
@@ -164,7 +167,7 @@ public sealed class TeamTacticManager : MonoBehaviour
         return candidateRoundManager != null &&
                candidateRoundManager.CurrentState == RoundState.Preparation &&
                candidateRoundManager.attackingTeam == controlledTeam &&
-               (!hasSelectedInitialTactic || !rolesConfirmed);
+               (!hasSelectedInitialTactic || !rolesConfirmed || !loadoutsConfirmed);
     }
 
     public bool ControlsAttackingTeam(RoundManager candidateRoundManager)
@@ -185,12 +188,14 @@ public sealed class TeamTacticManager : MonoBehaviour
     {
         hasSelectedInitialTactic = false;
         rolesConfirmed = false;
+        loadoutsConfirmed = false;
         activeTacticSet.Clear();
         activeTactics.Clear();
         PlanRevision++;
         RoundTacticsReset?.Invoke();
         TacticsChanged?.Invoke();
         RolesChanged?.Invoke();
+        LoadoutsChanged?.Invoke();
     }
 
     public List<AgentRole> GetControlledRoles()
@@ -221,6 +226,7 @@ public sealed class TeamTacticManager : MonoBehaviour
             agents[i].SetRole(role);
         }
         rolesConfirmed = false;
+        loadoutsConfirmed = false;
         RolesChanged?.Invoke();
     }
 
@@ -236,8 +242,52 @@ public sealed class TeamTacticManager : MonoBehaviour
     {
         if (!hasSelectedInitialTactic || GetControlledRoles().Count == 0) return;
         rolesConfirmed = true;
+        AssignRecommendedLoadouts();
         PlanRevision++;
         RolesChanged?.Invoke();
+        TacticsChanged?.Invoke();
+    }
+
+    public List<WeaponLoadout> GetControlledLoadouts()
+    {
+        List<WeaponLoadout> result = new List<WeaponLoadout>();
+        foreach (AgentRole role in GetControlledRoles())
+            result.Add(WeaponLoadout.Get(role.gameObject));
+        return result;
+    }
+
+    public void AssignRecommendedLoadouts()
+    {
+        foreach (AgentRole role in GetControlledRoles())
+        {
+            WeaponType type = role.SelectedRole switch
+            {
+                AgentRoleType.Support => WeaponType.Rifle,
+                AgentRoleType.Flanker => WeaponType.SMG,
+                AgentRoleType.Assaulter => WeaponType.Shotgun,
+                AgentRoleType.Defender => WeaponType.Sniper,
+                _ => WeaponType.Rifle
+            };
+            WeaponLoadout.Get(role.gameObject).SelectWeapon(type);
+        }
+        loadoutsConfirmed = false;
+        LoadoutsChanged?.Invoke();
+    }
+
+    public void SetAgentWeapon(WeaponLoadout loadout, WeaponType type)
+    {
+        if (loadout == null || !GetControlledLoadouts().Contains(loadout)) return;
+        loadout.SelectWeapon(type);
+        loadoutsConfirmed = false;
+        LoadoutsChanged?.Invoke();
+    }
+
+    public void ConfirmLoadouts()
+    {
+        if (!rolesConfirmed || GetControlledLoadouts().Count == 0) return;
+        loadoutsConfirmed = true;
+        PlanRevision++;
+        LoadoutsChanged?.Invoke();
         TacticsChanged?.Invoke();
     }
 

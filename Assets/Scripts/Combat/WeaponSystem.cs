@@ -14,6 +14,7 @@ public class WeaponSystem : MonoBehaviour
 
     private AgentStats stats;
     private Animator animator;
+    private WeaponLoadout loadout;
     private float nextAttackTime = 0f;
 
     public bool IsReady => Time.time >= nextAttackTime;
@@ -24,6 +25,7 @@ public class WeaponSystem : MonoBehaviour
     {
         stats = GetComponent<AgentStats>();
         animator = GetComponentInChildren<Animator>();
+        loadout = WeaponLoadout.Get(gameObject);
     }
 
     public void TryAttack(GameObject target)
@@ -45,16 +47,8 @@ public class WeaponSystem : MonoBehaviour
 
         LastShotTime = Time.time;
 
-        if (projectilePrefab != null)
-        {
-            StartCoroutine(FireProjectileAfterDelay(target));
-            nextAttackTime = Time.time + stats.attackCooldown;
-            return;
-        }
-
-        // A missing prefab is valid in the prototype: create a simple ball at runtime.
         StartCoroutine(FireProjectileAfterDelay(target));
-        nextAttackTime = Time.time + stats.attackCooldown;
+        nextAttackTime = Time.time + loadout.FireCooldown;
     }
 
     private IEnumerator FireProjectileAfterDelay(GameObject target)
@@ -76,10 +70,38 @@ public class WeaponSystem : MonoBehaviour
             yield break;
         }
 
-        FireProjectile(target);
+        int burstCount = Mathf.Max(1, loadout.BurstCount);
+        for (int burstIndex = 0; burstIndex < burstCount; burstIndex++)
+        {
+            if (target == null)
+            {
+                yield break;
+            }
+
+            HealthSystem currentHealth = target.GetComponent<HealthSystem>();
+            if (currentHealth == null || currentHealth.IsDead)
+            {
+                yield break;
+            }
+
+            FireVolley(target);
+            if (burstIndex + 1 < burstCount)
+            {
+                yield return new WaitForSeconds(loadout.BurstInterval);
+            }
+        }
     }
 
-    private void FireProjectile(GameObject target)
+    private void FireVolley(GameObject target)
+    {
+        int projectileCount = Mathf.Max(1, loadout.ProjectilesPerShot);
+        for (int projectileIndex = 0; projectileIndex < projectileCount; projectileIndex++)
+        {
+            FireProjectile(target, projectileCount > 1);
+        }
+    }
+
+    private void FireProjectile(GameObject target, bool useFullSpread)
     {
         Vector3 targetPoint = GetAimPoint(target);
         Vector3 flatDirection = targetPoint - transform.position;
@@ -92,8 +114,13 @@ public class WeaponSystem : MonoBehaviour
 
         flatDirection.Normalize();
 
-        float normalizedAccuracy = Mathf.Clamp01(stats.accuracy / 100f);
-        float spread = maximumSpreadDegrees * (1f - normalizedAccuracy);
+        float normalizedAccuracy = Mathf.Clamp01(loadout.Accuracy / 100f);
+        float distanceRatio = Mathf.Clamp01(Vector3.Distance(transform.position, targetPoint) /
+                                             Mathf.Max(0.1f, loadout.MaximumRange));
+        float rangeAccuracyPenalty = Mathf.Lerp(0.65f, 1.5f, distanceRatio);
+        float spread = useFullSpread
+            ? loadout.SpreadDegrees
+            : loadout.SpreadDegrees * (1f - normalizedAccuracy) * rangeAccuracyPenalty;
         float randomYaw = Random.Range(-spread, spread);
         Vector3 shotDirection = Quaternion.AngleAxis(randomYaw, Vector3.up) * flatDirection;
 
@@ -125,7 +152,8 @@ public class WeaponSystem : MonoBehaviour
             projectile = projectileObject.AddComponent<BulletProjectile>();
         }
 
-        projectile.Initialize(shotDirection, stats.damage, stats.team, gameObject);
+        projectile.Initialize(shotDirection, loadout.Damage, stats.team, gameObject,
+            loadout.ProjectileSpeed, loadout.MaximumRange, loadout.MinimumDamageMultiplier);
     }
 
     private Vector3 GetAimPoint(GameObject target)

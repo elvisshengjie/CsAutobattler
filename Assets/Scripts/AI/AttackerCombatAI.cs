@@ -46,6 +46,7 @@ public sealed class AttackerCombatAI : MonoBehaviour
     private HealthSystem health;
     private AgentMemory memory;
     private AgentRole role;
+    private WeaponLoadout loadout;
 
     [SerializeField] private AttackerCombatState currentState =
         AttackerCombatState.SearchingTarget;
@@ -103,6 +104,7 @@ public sealed class AttackerCombatAI : MonoBehaviour
         health = GetComponent<HealthSystem>();
         memory = GetComponent<AgentMemory>();
         role = GetComponent<AgentRole>();
+        loadout = WeaponLoadout.Get(gameObject);
         lastMovementSample = transform.position;
         lastMovementTime = Time.time;
         lastObjectiveProgressTime = Time.time;
@@ -215,7 +217,7 @@ public sealed class AttackerCombatAI : MonoBehaviour
         actionResult = false;
         float targetDistance = FlatDistance(transform.position, targetPosition);
         if (visible && target != null && weapon != null && weapon.IsReady &&
-            targetDistance <= stats.attackRange && sensors.HasLineOfSight(target))
+            targetDistance <= loadout.MaximumRange && sensors.HasLineOfSight(target))
         {
             return false;
         }
@@ -311,7 +313,7 @@ public sealed class AttackerCombatAI : MonoBehaviour
         bool priorityTarget = target != null && objectiveManager != null &&
                               objectiveManager.ActiveDefuser == target;
         bool aggressiveTactic = IsAggressiveTactic();
-        bool hasShot = visible && target != null && targetDistance <= stats.attackRange &&
+        bool hasShot = visible && target != null && targetDistance <= loadout.MaximumRange &&
                        sensors.HasLineOfSight(target);
 
         if (visible && target != null && targetDistance <= closeCombatDistance)
@@ -479,7 +481,7 @@ public sealed class AttackerCombatAI : MonoBehaviour
     private bool Shoot(GameObject target)
     {
         if (target == null || weapon == null ||
-            FlatDistance(transform.position, target.transform.position) > stats.attackRange ||
+            FlatDistance(transform.position, target.transform.position) > loadout.MaximumRange ||
             !sensors.HasLineOfSight(target))
         {
             return false;

@@ -14,8 +14,8 @@ public static class RedTeamStatsPanelBuilder
     private const string PanelName = "RedTeamStatsPanel";
     private const string TemporaryPanelName = "RedTeamStatsPanel__Building";
     private const int SlotCount = 5;
-    private const float SlotWidth = 150f;
-    private const float SlotHeight = 75f;
+    private const float SlotWidth = RedTeamStatsSlotUI.DisplayWidth;
+    private const float SlotHeight = RedTeamStatsSlotUI.DisplayHeight;
     private const float SlotSpacing = 10f;
 
     private static readonly Color[] DefaultFallbackPortraitColors =

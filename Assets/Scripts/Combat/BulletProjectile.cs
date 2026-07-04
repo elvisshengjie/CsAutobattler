@@ -13,6 +13,9 @@ public class BulletProjectile : MonoBehaviour
     private Rigidbody rb;
     private bool initialized;
     private Vector3 previousPosition;
+    private Vector3 originPosition;
+    private float damageFalloffRange;
+    private float minimumDamageMultiplier = 1f;
     private static Material sharedBallMaterial;
 
     private void Awake()
@@ -55,13 +58,20 @@ public class BulletProjectile : MonoBehaviour
         Vector3 direction,
         float newDamage,
         TeamType newOwnerTeam,
-        GameObject newOwner)
+        GameObject newOwner,
+        float newSpeed = 18f,
+        float newDamageFalloffRange = 0f,
+        float newMinimumDamageMultiplier = 1f)
     {
         damage = newDamage;
         ownerTeam = newOwnerTeam;
         owner = newOwner;
+        speed = Mathf.Max(0.1f, newSpeed);
         initialized = true;
         previousPosition = transform.position;
+        originPosition = transform.position;
+        damageFalloffRange = Mathf.Max(0f, newDamageFalloffRange);
+        minimumDamageMultiplier = Mathf.Clamp01(newMinimumDamageMultiplier);
 
         Vector3 normalizedDirection = direction.sqrMagnitude > 0.001f
             ? direction.normalized
@@ -143,7 +153,14 @@ public class BulletProjectile : MonoBehaviour
 
         if (targetHealth != null && !targetHealth.IsDead)
         {
-            targetHealth.TakeDamage(damage, owner);
+            float appliedDamage = damage;
+            if (damageFalloffRange > 0f && minimumDamageMultiplier < 1f)
+            {
+                float travelled = Vector3.Distance(originPosition, transform.position);
+                float falloff = Mathf.Clamp01(travelled / damageFalloffRange);
+                appliedDamage *= Mathf.Lerp(1f, minimumDamageMultiplier, falloff);
+            }
+            targetHealth.TakeDamage(appliedDamage, owner);
         }
 
         // Any solid wall or enemy collision consumes the projectile.

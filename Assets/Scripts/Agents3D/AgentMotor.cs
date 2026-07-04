@@ -664,7 +664,11 @@ public class AgentMotor : MonoBehaviour
         }
 
         desiredDirection.Normalize();
-        float baseStepDistance = stats.moveSpeed * SpeedMultiplier * Time.fixedDeltaTime;
+        WeaponLoadout loadout = GetComponent<WeaponLoadout>();
+        float weaponMovementMultiplier = loadout != null
+            ? loadout.MovementSpeedMultiplier : 1f;
+        float baseStepDistance = stats.moveSpeed * weaponMovementMultiplier *
+                                 SpeedMultiplier * Time.fixedDeltaTime;
         Vector3 safeDirection = GetCollisionSafeDirection(
             currentPosition,
             desiredDirection,
@@ -1266,7 +1270,9 @@ public class AgentMotor : MonoBehaviour
         }
         else if (stats != null &&
                  FlatDistance(transform.position, target.transform.position) >
-                 stats.attackRange)
+                 (GetComponent<WeaponLoadout>() != null
+                     ? GetComponent<WeaponLoadout>().MaximumRange
+                     : stats.attackRange))
         {
             combatDebug = "Enemy out of range";
         }

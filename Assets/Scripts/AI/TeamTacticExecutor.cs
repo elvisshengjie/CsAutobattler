@@ -1043,7 +1043,9 @@ public sealed class TeamTacticExecutor : MonoBehaviour
             }
 
             AgentStats stats = attacker.GetComponent<AgentStats>();
-            float fightingRange = stats != null ? stats.attackRange + 0.75f : 3.75f;
+            WeaponLoadout loadout = stats != null
+                ? WeaponLoadout.Get(stats.gameObject) : null;
+            float fightingRange = loadout != null ? loadout.MaximumRange + 0.75f : 3.75f;
             bool attackerNearA = FlatDistance(
                                      attacker.transform.position,
                                      fakeSite.PlantPosition) <= siteThreatRadius * 1.5f;
