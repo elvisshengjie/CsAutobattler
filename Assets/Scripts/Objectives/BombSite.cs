@@ -38,7 +38,49 @@ public class BombSite : MonoBehaviour
         }
 
         AgentStats stats = agent.GetComponentInParent<AgentStats>();
-        return stats != null && agentsInside.Contains(stats);
+        if (stats == null)
+        {
+            return false;
+        }
+
+        // Trigger callbacks remain the inexpensive normal path. The geometric
+        // fallback covers missed trigger events and agents visibly overlapping
+        // the edge of the site even when their transform centre is outside.
+        if (agentsInside.Contains(stats))
+        {
+            return true;
+        }
+
+        BoxCollider siteCollider = GetComponent<BoxCollider>();
+        if (siteCollider == null)
+        {
+            return false;
+        }
+
+        Collider[] agentColliders = stats.GetComponentsInChildren<Collider>(true);
+        foreach (Collider agentCollider in agentColliders)
+        {
+            if (agentCollider == null || !agentCollider.enabled || agentCollider.isTrigger ||
+                !siteCollider.bounds.Intersects(agentCollider.bounds))
+            {
+                continue;
+            }
+
+            if (Physics.ComputePenetration(
+                    siteCollider,
+                    siteCollider.transform.position,
+                    siteCollider.transform.rotation,
+                    agentCollider,
+                    agentCollider.transform.position,
+                    agentCollider.transform.rotation,
+                    out _,
+                    out _))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public BombCarrier GetCarrierInside()

@@ -1139,15 +1139,28 @@ MonoBehaviour:
   separationRadius: 1.5
   separationStrength: 2
   agentRadius: 0.4
-  obstacleClearance: 0.1
-  wallAvoidanceDistance: 0.2
+  minObstacleClearance: 0.1
+  minAgentSeparation: 0.8
+  targetArrivalDistance: 0.25
   maximumTargetAdjustment: 4
+  reservationSearchRadius: 4
+  separationWeight: 2
+  maxSeparationContribution: 0.45
+  separationSmoothing: 8
+  minimumCrowdSpeedFactor: 0.18
+  avoidanceDistance: 0.8
+  avoidanceStrength: 1.5
+  avoidanceSideHoldTime: 0.45
+  minTargetSwitchInterval: 0.75
+  targetSwitchScoreMargin: 2
   stuckDistanceThreshold: 0.05
   stuckTimeThreshold: 3
   hardStuckTimeThreshold: 7
   recoveryWaypointDistance: 1.25
   emergencySnapDistance: 2
   drawMovementGizmos: 1
+  showRuntimeDebugLabel: 0
+  logDiagnosticStateChanges: 1
   requestedDestination: {x: 0, y: 0, z: 0}
   lastPosition: {x: 0, y: 0, z: 0}
   lastMoveProgressTime: 0
@@ -1155,6 +1168,16 @@ MonoBehaviour:
   isStuck: 0
   recoveryAttempts: 0
   targetWasAdjusted: 0
+  currentTargetValid: 0
+  pathBlocked: 0
+  currentSlotKind: 0
+  pathStatusDebug: 
+  inactivityReasonDebug: 
+  objectiveDebug: 
+  roleDebug: 
+  combatDebug: 
+  enemyVisibleDebug: 0
+  bombPlantedDebug: 0
 --- !u!114 &384940715
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1454,15 +1477,28 @@ MonoBehaviour:
   separationRadius: 1.5
   separationStrength: 2
   agentRadius: 0.4
-  obstacleClearance: 0.1
-  wallAvoidanceDistance: 0.2
+  minObstacleClearance: 0.1
+  minAgentSeparation: 0.8
+  targetArrivalDistance: 0.25
   maximumTargetAdjustment: 4
+  reservationSearchRadius: 4
+  separationWeight: 2
+  maxSeparationContribution: 0.45
+  separationSmoothing: 8
+  minimumCrowdSpeedFactor: 0.18
+  avoidanceDistance: 0.8
+  avoidanceStrength: 1.5
+  avoidanceSideHoldTime: 0.45
+  minTargetSwitchInterval: 0.75
+  targetSwitchScoreMargin: 2
   stuckDistanceThreshold: 0.05
   stuckTimeThreshold: 3
   hardStuckTimeThreshold: 7
   recoveryWaypointDistance: 1.25
   emergencySnapDistance: 2
   drawMovementGizmos: 1
+  showRuntimeDebugLabel: 0
+  logDiagnosticStateChanges: 1
   requestedDestination: {x: 0, y: 0, z: 0}
   lastPosition: {x: 0, y: 0, z: 0}
   lastMoveProgressTime: 0
@@ -1470,6 +1506,16 @@ MonoBehaviour:
   isStuck: 0
   recoveryAttempts: 0
   targetWasAdjusted: 0
+  currentTargetValid: 0
+  pathBlocked: 0
+  currentSlotKind: 0
+  pathStatusDebug: 
+  inactivityReasonDebug: 
+  objectiveDebug: 
+  roleDebug: 
+  combatDebug: 
+  enemyVisibleDebug: 0
+  bombPlantedDebug: 0
 --- !u!114 &389118799
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1832,7 +1878,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 9f9da8948b5d06e43be74b2b11c71d38, type: 2}
+  - {fileID: 2100000, guid: f170691ea73e5fa49a008dd91c882e71, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -1909,15 +1955,28 @@ MonoBehaviour:
   separationRadius: 1.5
   separationStrength: 2
   agentRadius: 0.4
-  obstacleClearance: 0.1
-  wallAvoidanceDistance: 0.2
+  minObstacleClearance: 0.1
+  minAgentSeparation: 0.8
+  targetArrivalDistance: 0.25
   maximumTargetAdjustment: 4
+  reservationSearchRadius: 4
+  separationWeight: 2
+  maxSeparationContribution: 0.45
+  separationSmoothing: 8
+  minimumCrowdSpeedFactor: 0.18
+  avoidanceDistance: 0.8
+  avoidanceStrength: 1.5
+  avoidanceSideHoldTime: 0.45
+  minTargetSwitchInterval: 0.75
+  targetSwitchScoreMargin: 2
   stuckDistanceThreshold: 0.05
   stuckTimeThreshold: 3
   hardStuckTimeThreshold: 7
   recoveryWaypointDistance: 1.25
   emergencySnapDistance: 2
   drawMovementGizmos: 1
+  showRuntimeDebugLabel: 0
+  logDiagnosticStateChanges: 1
   requestedDestination: {x: 0, y: 0, z: 0}
   lastPosition: {x: 0, y: 0, z: 0}
   lastMoveProgressTime: 0
@@ -1925,6 +1984,16 @@ MonoBehaviour:
   isStuck: 0
   recoveryAttempts: 0
   targetWasAdjusted: 0
+  currentTargetValid: 0
+  pathBlocked: 0
+  currentSlotKind: 0
+  pathStatusDebug: 
+  inactivityReasonDebug: 
+  objectiveDebug: 
+  roleDebug: 
+  combatDebug: 
+  enemyVisibleDebug: 0
+  bombPlantedDebug: 0
 --- !u!114 &409528794
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3073,7 +3142,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 15303, guid: 0000000000000000f000000000000000, type: 0}
+  - {fileID: 2100000, guid: c63eb4f482966344afb4c328f09eb333, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -3150,15 +3219,28 @@ MonoBehaviour:
   separationRadius: 1.5
   separationStrength: 2
   agentRadius: 0.4
-  obstacleClearance: 0.1
-  wallAvoidanceDistance: 0.2
+  minObstacleClearance: 0.1
+  minAgentSeparation: 0.8
+  targetArrivalDistance: 0.25
   maximumTargetAdjustment: 4
+  reservationSearchRadius: 4
+  separationWeight: 2
+  maxSeparationContribution: 0.45
+  separationSmoothing: 8
+  minimumCrowdSpeedFactor: 0.18
+  avoidanceDistance: 0.8
+  avoidanceStrength: 1.5
+  avoidanceSideHoldTime: 0.45
+  minTargetSwitchInterval: 0.75
+  targetSwitchScoreMargin: 2
   stuckDistanceThreshold: 0.05
   stuckTimeThreshold: 3
   hardStuckTimeThreshold: 7
   recoveryWaypointDistance: 1.25
   emergencySnapDistance: 2
   drawMovementGizmos: 1
+  showRuntimeDebugLabel: 0
+  logDiagnosticStateChanges: 1
   requestedDestination: {x: 0, y: 0, z: 0}
   lastPosition: {x: 0, y: 0, z: 0}
   lastMoveProgressTime: 0
@@ -3166,6 +3248,16 @@ MonoBehaviour:
   isStuck: 0
   recoveryAttempts: 0
   targetWasAdjusted: 0
+  currentTargetValid: 0
+  pathBlocked: 0
+  currentSlotKind: 0
+  pathStatusDebug: 
+  inactivityReasonDebug: 
+  objectiveDebug: 
+  roleDebug: 
+  combatDebug: 
+  enemyVisibleDebug: 0
+  bombPlantedDebug: 0
 --- !u!114 &842311404
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3211,7 +3303,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentPortraitData
   portraitSprite: {fileID: 0}
-  fallbackPortraitColor: {r: 0.48, g: 0.08, b: 0.22, a: 1}
+  fallbackPortraitColor: {r: 0, g: 0, b: 0, a: 1}
   sourceRenderer: {fileID: 842311399}
 --- !u!1 &917261360
 GameObject:
@@ -4330,7 +4422,7 @@ MonoBehaviour:
   preparationDuration: 5
   roundDuration: 90
   plantDuration: 4
-  defuseDuration: 7
+  defuseDuration: 5
   bombDuration: 30
   currentState: 0
   preparationTimeRemaining: 0
@@ -4338,6 +4430,7 @@ MonoBehaviour:
   bombTimeRemaining: 0
   hasWinner: 0
   winner: 0
+  winnerReason: 0
 --- !u!4 &1300154084
 Transform:
   m_ObjectHideFlags: 0
@@ -4751,15 +4844,28 @@ MonoBehaviour:
   separationRadius: 1.5
   separationStrength: 2
   agentRadius: 0.4
-  obstacleClearance: 0.1
-  wallAvoidanceDistance: 0.2
+  minObstacleClearance: 0.1
+  minAgentSeparation: 0.8
+  targetArrivalDistance: 0.25
   maximumTargetAdjustment: 4
+  reservationSearchRadius: 4
+  separationWeight: 2
+  maxSeparationContribution: 0.45
+  separationSmoothing: 8
+  minimumCrowdSpeedFactor: 0.18
+  avoidanceDistance: 0.8
+  avoidanceStrength: 1.5
+  avoidanceSideHoldTime: 0.45
+  minTargetSwitchInterval: 0.75
+  targetSwitchScoreMargin: 2
   stuckDistanceThreshold: 0.05
   stuckTimeThreshold: 3
   hardStuckTimeThreshold: 7
   recoveryWaypointDistance: 1.25
   emergencySnapDistance: 2
   drawMovementGizmos: 1
+  showRuntimeDebugLabel: 0
+  logDiagnosticStateChanges: 1
   requestedDestination: {x: 0, y: 0, z: 0}
   lastPosition: {x: 0, y: 0, z: 0}
   lastMoveProgressTime: 0
@@ -4767,6 +4873,16 @@ MonoBehaviour:
   isStuck: 0
   recoveryAttempts: 0
   targetWasAdjusted: 0
+  currentTargetValid: 0
+  pathBlocked: 0
+  currentSlotKind: 0
+  pathStatusDebug: 
+  inactivityReasonDebug: 
+  objectiveDebug: 
+  roleDebug: 
+  combatDebug: 
+  enemyVisibleDebug: 0
+  bombPlantedDebug: 0
 --- !u!114 &1335506317
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5894,15 +6010,28 @@ MonoBehaviour:
   separationRadius: 1.5
   separationStrength: 2
   agentRadius: 0.4
-  obstacleClearance: 0.1
-  wallAvoidanceDistance: 0.2
+  minObstacleClearance: 0.1
+  minAgentSeparation: 0.8
+  targetArrivalDistance: 0.25
   maximumTargetAdjustment: 4
+  reservationSearchRadius: 4
+  separationWeight: 2
+  maxSeparationContribution: 0.45
+  separationSmoothing: 8
+  minimumCrowdSpeedFactor: 0.18
+  avoidanceDistance: 0.8
+  avoidanceStrength: 1.5
+  avoidanceSideHoldTime: 0.45
+  minTargetSwitchInterval: 0.75
+  targetSwitchScoreMargin: 2
   stuckDistanceThreshold: 0.05
   stuckTimeThreshold: 3
   hardStuckTimeThreshold: 7
   recoveryWaypointDistance: 1.25
   emergencySnapDistance: 2
   drawMovementGizmos: 1
+  showRuntimeDebugLabel: 0
+  logDiagnosticStateChanges: 1
   requestedDestination: {x: 0, y: 0, z: 0}
   lastPosition: {x: 0, y: 0, z: 0}
   lastMoveProgressTime: 0
@@ -5910,6 +6039,16 @@ MonoBehaviour:
   isStuck: 0
   recoveryAttempts: 0
   targetWasAdjusted: 0
+  currentTargetValid: 0
+  pathBlocked: 0
+  currentSlotKind: 0
+  pathStatusDebug: 
+  inactivityReasonDebug: 
+  objectiveDebug: 
+  roleDebug: 
+  combatDebug: 
+  enemyVisibleDebug: 0
+  bombPlantedDebug: 0
 --- !u!114 &1459890613
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6512,15 +6651,28 @@ MonoBehaviour:
   separationRadius: 1.5
   separationStrength: 2
   agentRadius: 0.4
-  obstacleClearance: 0.1
-  wallAvoidanceDistance: 0.2
+  minObstacleClearance: 0.1
+  minAgentSeparation: 0.8
+  targetArrivalDistance: 0.25
   maximumTargetAdjustment: 4
+  reservationSearchRadius: 4
+  separationWeight: 2
+  maxSeparationContribution: 0.45
+  separationSmoothing: 8
+  minimumCrowdSpeedFactor: 0.18
+  avoidanceDistance: 0.8
+  avoidanceStrength: 1.5
+  avoidanceSideHoldTime: 0.45
+  minTargetSwitchInterval: 0.75
+  targetSwitchScoreMargin: 2
   stuckDistanceThreshold: 0.05
   stuckTimeThreshold: 3
   hardStuckTimeThreshold: 7
   recoveryWaypointDistance: 1.25
   emergencySnapDistance: 2
   drawMovementGizmos: 1
+  showRuntimeDebugLabel: 0
+  logDiagnosticStateChanges: 1
   requestedDestination: {x: 0, y: 0, z: 0}
   lastPosition: {x: 0, y: 0, z: 0}
   lastMoveProgressTime: 0
@@ -6528,6 +6680,16 @@ MonoBehaviour:
   isStuck: 0
   recoveryAttempts: 0
   targetWasAdjusted: 0
+  currentTargetValid: 0
+  pathBlocked: 0
+  currentSlotKind: 0
+  pathStatusDebug: 
+  inactivityReasonDebug: 
+  objectiveDebug: 
+  roleDebug: 
+  combatDebug: 
+  enemyVisibleDebug: 0
+  bombPlantedDebug: 0
 --- !u!114 &1514125962
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7047,15 +7209,28 @@ MonoBehaviour:
   separationRadius: 1.5
   separationStrength: 2
   agentRadius: 0.4
-  obstacleClearance: 0.1
-  wallAvoidanceDistance: 0.2
+  minObstacleClearance: 0.1
+  minAgentSeparation: 0.8
+  targetArrivalDistance: 0.25
   maximumTargetAdjustment: 4
+  reservationSearchRadius: 4
+  separationWeight: 2
+  maxSeparationContribution: 0.45
+  separationSmoothing: 8
+  minimumCrowdSpeedFactor: 0.18
+  avoidanceDistance: 0.8
+  avoidanceStrength: 1.5
+  avoidanceSideHoldTime: 0.45
+  minTargetSwitchInterval: 0.75
+  targetSwitchScoreMargin: 2
   stuckDistanceThreshold: 0.05
   stuckTimeThreshold: 3
   hardStuckTimeThreshold: 7
   recoveryWaypointDistance: 1.25
   emergencySnapDistance: 2
   drawMovementGizmos: 1
+  showRuntimeDebugLabel: 0
+  logDiagnosticStateChanges: 1
   requestedDestination: {x: 0, y: 0, z: 0}
   lastPosition: {x: 0, y: 0, z: 0}
   lastMoveProgressTime: 0
@@ -7063,6 +7238,16 @@ MonoBehaviour:
   isStuck: 0
   recoveryAttempts: 0
   targetWasAdjusted: 0
+  currentTargetValid: 0
+  pathBlocked: 0
+  currentSlotKind: 0
+  pathStatusDebug: 
+  inactivityReasonDebug: 
+  objectiveDebug: 
+  roleDebug: 
+  combatDebug: 
+  enemyVisibleDebug: 0
+  bombPlantedDebug: 0
 --- !u!114 &1691728181
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8270,15 +8455,28 @@ MonoBehaviour:
   separationRadius: 1.5
   separationStrength: 2
   agentRadius: 0.4
-  obstacleClearance: 0.1
-  wallAvoidanceDistance: 0.2
+  minObstacleClearance: 0.1
+  minAgentSeparation: 0.8
+  targetArrivalDistance: 0.25
   maximumTargetAdjustment: 4
+  reservationSearchRadius: 4
+  separationWeight: 2
+  maxSeparationContribution: 0.45
+  separationSmoothing: 8
+  minimumCrowdSpeedFactor: 0.18
+  avoidanceDistance: 0.8
+  avoidanceStrength: 1.5
+  avoidanceSideHoldTime: 0.45
+  minTargetSwitchInterval: 0.75
+  targetSwitchScoreMargin: 2
   stuckDistanceThreshold: 0.05
   stuckTimeThreshold: 3
   hardStuckTimeThreshold: 7
   recoveryWaypointDistance: 1.25
   emergencySnapDistance: 2
   drawMovementGizmos: 1
+  showRuntimeDebugLabel: 0
+  logDiagnosticStateChanges: 1
   requestedDestination: {x: 0, y: 0, z: 0}
   lastPosition: {x: 0, y: 0, z: 0}
   lastMoveProgressTime: 0
@@ -8286,6 +8484,16 @@ MonoBehaviour:
   isStuck: 0
   recoveryAttempts: 0
   targetWasAdjusted: 0
+  currentTargetValid: 0
+  pathBlocked: 0
+  currentSlotKind: 0
+  pathStatusDebug: 
+  inactivityReasonDebug: 
+  objectiveDebug: 
+  roleDebug: 
+  combatDebug: 
+  enemyVisibleDebug: 0
+  bombPlantedDebug: 0
 --- !u!114 &1903467721
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9071,7 +9279,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 15303, guid: 0000000000000000f000000000000000, type: 0}
+  - {fileID: 2100000, guid: 1b002cf4d5c19a740bee9a5120c853ea, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -9148,15 +9356,28 @@ MonoBehaviour:
   separationRadius: 1.5
   separationStrength: 2
   agentRadius: 0.4
-  obstacleClearance: 0.1
-  wallAvoidanceDistance: 0.2
+  minObstacleClearance: 0.1
+  minAgentSeparation: 0.8
+  targetArrivalDistance: 0.25
   maximumTargetAdjustment: 4
+  reservationSearchRadius: 4
+  separationWeight: 2
+  maxSeparationContribution: 0.45
+  separationSmoothing: 8
+  minimumCrowdSpeedFactor: 0.18
+  avoidanceDistance: 0.8
+  avoidanceStrength: 1.5
+  avoidanceSideHoldTime: 0.45
+  minTargetSwitchInterval: 0.75
+  targetSwitchScoreMargin: 2
   stuckDistanceThreshold: 0.05
   stuckTimeThreshold: 3
   hardStuckTimeThreshold: 7
   recoveryWaypointDistance: 1.25
   emergencySnapDistance: 2
   drawMovementGizmos: 1
+  showRuntimeDebugLabel: 0
+  logDiagnosticStateChanges: 1
   requestedDestination: {x: 0, y: 0, z: 0}
   lastPosition: {x: 0, y: 0, z: 0}
   lastMoveProgressTime: 0
@@ -9164,6 +9385,16 @@ MonoBehaviour:
   isStuck: 0
   recoveryAttempts: 0
   targetWasAdjusted: 0
+  currentTargetValid: 0
+  pathBlocked: 0
+  currentSlotKind: 0
+  pathStatusDebug: 
+  inactivityReasonDebug: 
+  objectiveDebug: 
+  roleDebug: 
+  combatDebug: 
+  enemyVisibleDebug: 0
+  bombPlantedDebug: 0
 --- !u!114 &2050983418
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -553,9 +553,13 @@ public sealed class TeamTacticUI : MonoBehaviour
             WeaponDefinition weapon = pair.Key.Definition;
             float baseSpeed = pair.Key.GetComponent<AgentStats>() != null
                 ? pair.Key.GetComponent<AgentStats>().moveSpeed : 0f;
+            float damagePerSecond = CalculateSustainedDamagePerSecond(weapon);
             pair.Value.text = $"<b>{weapon.weaponType}</b>  |  " +
-                $"Range {weapon.effectiveMinimumRange:0.#}-{weapon.effectiveMaximumRange:0.#}  |  " +
-                $"Move {baseSpeed * weapon.movementSpeedMultiplier:0.##}\n" +
+                $"{weapon.agentHealth:0.#} HEALTH  |  " +
+                $"{GetDamageLabel(weapon)} DMG  |  " +
+                $"{damagePerSecond:0.#} DPS  |  " +
+                $"{weapon.effectiveMinimumRange:0.#}–{weapon.effectiveMaximumRange:0.#} RANGE  |  " +
+                $"{baseSpeed * weapon.movementSpeedMultiplier:0.##} MOV\n" +
                 $"<color=#AAB5C2>{weapon.behaviorDescription}</color>";
         }
         foreach (KeyValuePair<AgentRole, Text> pair in loadoutAgentLabels)
@@ -578,6 +582,27 @@ public sealed class TeamTacticUI : MonoBehaviour
                           roundManager.CurrentState != RoundState.BombPlanted;
             midRoundLabels[pair.Key].text = GetMidRoundLabel(pair.Key, queued);
         }
+    }
+
+    private static float CalculateSustainedDamagePerSecond(WeaponDefinition weapon)
+    {
+        int magazineSize = Mathf.Max(1, weapon.magazineSize);
+        int burstCount = Mathf.Max(1, weapon.burstCount);
+        int projectilesPerShot = Mathf.Max(1, weapon.projectilesPerShot);
+        int firingCycles = Mathf.CeilToInt((float)magazineSize / burstCount);
+        float magazineDamage = weapon.damage * projectilesPerShot * magazineSize;
+        float cycleTime = firingCycles * Mathf.Max(0.01f, weapon.fireCooldown);
+        float totalTime = cycleTime + Mathf.Max(0f, weapon.reloadTime);
+        return totalTime > 0f ? magazineDamage / totalTime : 0f;
+    }
+
+    private static string GetDamageLabel(WeaponDefinition weapon)
+    {
+        if (weapon.projectilesPerShot > 1)
+            return $"{weapon.projectilesPerShot}×{weapon.damage:0.#}";
+        if (weapon.burstCount > 1)
+            return $"{weapon.damage:0.#}×{weapon.burstCount}";
+        return weapon.damage.ToString("0.#");
     }
 
     private string GetMidRoundLabel(MidRoundTactic tactic, bool queued)

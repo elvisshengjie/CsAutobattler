@@ -26,8 +26,10 @@ public class HealthSystem : MonoBehaviour
     private void Awake()
     {
         stats = GetComponent<AgentStats>();
-        // Give every spawned agent a different starting health pool for this match.
-        stats.maxHealth = UnityEngine.Random.Range(50, 71);
+        WeaponLoadout startingLoadout = GetComponent<WeaponLoadout>();
+        stats.maxHealth = startingLoadout != null
+            ? startingLoadout.AgentHealth
+            : WeaponDefaults.Get(WeaponType.Rifle).agentHealth;
         animator = GetComponentInChildren<Animator>();
         controller = GetComponent<AgentController>();
         controller3D = GetComponent<AgentController3D>();
@@ -42,6 +44,13 @@ public class HealthSystem : MonoBehaviour
         {
             gameObject.AddComponent<AgentHealthBar3D>();
         }
+    }
+
+    public void SetLoadoutHealth(float newMaximumHealth)
+    {
+        if (stats == null || isDead) return;
+        stats.maxHealth = Mathf.Max(1f, newMaximumHealth);
+        currentHealth = stats.maxHealth;
     }
 
     public void TakeDamage(float amount, GameObject attacker = null)

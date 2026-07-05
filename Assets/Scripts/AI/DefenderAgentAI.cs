@@ -977,23 +977,28 @@ public sealed class DefenderAgentAI : MonoBehaviour
                 return true;
 
             case DefenderOrderType.Defuse:
-                if (currentState != DefenderCombatState.Defusing)
-                {
-                    Debug.Log("Defender starting defuse");
-                }
-                currentState = DefenderCombatState.Defusing;
                 if (coordinator.CanStartDefuse(gameObject, visibleThreat) &&
                     objectiveManager != null && objectiveManager.CanDefuse(gameObject))
                 {
+                    if (currentState != DefenderCombatState.Defusing)
+                    {
+                        Debug.Log("Defender starting defuse");
+                    }
+                    currentState = DefenderCombatState.Defusing;
                     motor.Stop();
                     objectiveManager.BeginDefuse(gameObject);
                     return true;
                 }
 
-                // The coordinator already decides whether this defuser should
-                // commit or wait for support. Do not replace that order with a
-                // local cover choice, which can strand the defuser indefinitely.
-                MoveOrHold(order.destination, order.watchPosition);
+                // Defuse positions may sit near the edge of the interaction radius.
+                // The normal 0.65 movement tolerance can stop the agent outside
+                // that radius, so approach this objective with a strict tolerance.
+                currentState = DefenderCombatState.RetakingBombSite;
+                if (!MoveTo(order.destination, 0.08f))
+                {
+                    motor.Stop();
+                    motor.FacePosition(order.watchPosition);
+                }
                 return true;
 
             case DefenderOrderType.CoverDefuser:

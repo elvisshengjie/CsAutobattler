@@ -11,6 +11,7 @@ public sealed class WeaponLoadout : MonoBehaviour
         customDefinition.weaponType == selectedWeapon
         ? customDefinition : WeaponDefaults.Get(selectedWeapon);
     public float Damage => Definition.damage;
+    public float AgentHealth => Definition.agentHealth;
     public float FireCooldown => Definition.fireCooldown;
     public float MinimumRange => Definition.effectiveMinimumRange;
     public float MaximumRange => Definition.effectiveMaximumRange;
@@ -50,6 +51,8 @@ public sealed class WeaponLoadout : MonoBehaviour
     public void SelectWeapon(WeaponType type)
     {
         selectedWeapon = type;
+        HealthSystem health = GetComponent<HealthSystem>();
+        if (health != null) health.SetLoadoutHealth(AgentHealth);
     }
 
     public static WeaponLoadout Get(GameObject agent)
