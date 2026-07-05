@@ -18,6 +18,7 @@ public sealed class AgentRole : MonoBehaviour
 
     private AgentStats stats;
     private AgentMotor motor;
+    private AgentRoleIndicator roleIndicator;
     private float nextDestinationEvaluation;
     private Vector3 lastRequestedDestination;
     private float destinationLockedUntil;
@@ -35,6 +36,12 @@ public sealed class AgentRole : MonoBehaviour
         stats = GetComponent<AgentStats>();
         motor = GetComponent<AgentMotor>();
         if (tuning == null) tuning = AgentRoleDefaults.Create(selectedRole);
+        EnsureRoleIndicator();
+    }
+
+    private void OnEnable()
+    {
+        EnsureRoleIndicator();
     }
 
     public void SetRole(AgentRoleType role)
@@ -44,6 +51,26 @@ public sealed class AgentRole : MonoBehaviour
         nextDestinationEvaluation = 0f;
         destinationLockedUntil = 0f;
         hasRoleDestination = false;
+        EnsureRoleIndicator();
+    }
+
+    private void EnsureRoleIndicator()
+    {
+        if (!Application.isPlaying)
+        {
+            return;
+        }
+
+        if (roleIndicator == null)
+        {
+            roleIndicator = GetComponent<AgentRoleIndicator>();
+            if (roleIndicator == null)
+            {
+                roleIndicator = gameObject.AddComponent<AgentRoleIndicator>();
+            }
+        }
+
+        roleIndicator.SetRole(selectedRole);
     }
 
     public GameObject SelectPreferredTarget(GameObject fallback, AgentSensors sensors)
