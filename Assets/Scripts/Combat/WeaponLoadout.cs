@@ -19,6 +19,8 @@ public sealed class WeaponLoadout : MonoBehaviour
     public float ProjectileSpeed => Definition.projectileSpeed;
     public float MovementSpeedMultiplier => Definition.movementSpeedMultiplier;
     public float PreferredCoverDistance => Definition.preferredCoverDistance;
+    public int magazineSize => Definition.magazineSize;
+    public float ReloadTime => Definition.reloadTime;
     public int BurstCount => Definition.burstCount;
     public float BurstInterval => Definition.burstInterval;
     public int ProjectilesPerShot => Definition.projectilesPerShot;

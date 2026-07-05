@@ -17,6 +17,9 @@ public class WeaponSystem : MonoBehaviour
     private WeaponLoadout loadout;
     private float nextAttackTime = 0f;
 
+    private int currentAmmo;
+    private bool isReloading = false;
+
     public bool IsReady => Time.time >= nextAttackTime;
     public float LastShotTime { get; private set; } = Mathf.NegativeInfinity;
     public float TimeSinceLastShot => Time.time - LastShotTime;
@@ -26,12 +29,22 @@ public class WeaponSystem : MonoBehaviour
         stats = GetComponent<AgentStats>();
         animator = GetComponentInChildren<Animator>();
         loadout = WeaponLoadout.Get(gameObject);
+        currentAmmo = loadout.magazineSize;
     }
 
     public void TryAttack(GameObject target)
     {
         if (target == null)
         {
+            return;
+        }
+
+        if (isReloading) {
+            return;
+        }
+
+        if (currentAmmo <= 0) {
+            StartCoroutine(ReloadCoroutine());
             return;
         }
 
@@ -49,6 +62,19 @@ public class WeaponSystem : MonoBehaviour
 
         StartCoroutine(FireProjectileAfterDelay(target));
         nextAttackTime = Time.time + loadout.FireCooldown;
+    }
+
+    private IEnumerator ReloadCoroutine() 
+    {
+        isReloading = true;
+        AgentHealthBar3D healthBar = GetComponent<AgentHealthBar3D>();
+        healthBar?.SetActionStatus("Reloading", loadout.ReloadTime);
+
+        yield return new WaitForSeconds(loadout.ReloadTime);
+
+        currentAmmo = loadout.magazineSize;
+        isReloading = false;
+        healthBar?.ClearActionStatus();
     }
 
     private IEnumerator FireProjectileAfterDelay(GameObject target)
@@ -73,6 +99,12 @@ public class WeaponSystem : MonoBehaviour
         int burstCount = Mathf.Max(1, loadout.BurstCount);
         for (int burstIndex = 0; burstIndex < burstCount; burstIndex++)
         {
+            if (currentAmmo <= 0) 
+            {
+                if (!isReloading) StartCoroutine(ReloadCoroutine());
+                yield break;
+            }
+
             if (target == null)
             {
                 yield break;
@@ -85,6 +117,7 @@ public class WeaponSystem : MonoBehaviour
             }
 
             FireVolley(target);
+            currentAmmo--;
             if (burstIndex + 1 < burstCount)
             {
                 yield return new WaitForSeconds(loadout.BurstInterval);
