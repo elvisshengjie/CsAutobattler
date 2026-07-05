@@ -27,6 +27,26 @@ public sealed class WeaponLoadout : MonoBehaviour
     public int ProjectilesPerShot => Definition.projectilesPerShot;
     public float MinimumDamageMultiplier => Definition.minimumDamageMultiplier;
 
+    private void Awake()
+    {
+        ApplyWeaponVisuals(Application.isPlaying);
+    }
+
+    private void OnEnable()
+    {
+        ApplyWeaponVisuals(Application.isPlaying);
+    }
+
+#if UNITY_EDITOR
+    private void OnValidate()
+    {
+        if (!Application.isPlaying)
+        {
+            ApplyWeaponVisuals(false);
+        }
+    }
+#endif
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void AttachToAgents()
     {
@@ -53,6 +73,7 @@ public sealed class WeaponLoadout : MonoBehaviour
         selectedWeapon = type;
         HealthSystem health = GetComponent<HealthSystem>();
         if (health != null) health.SetLoadoutHealth(AgentHealth);
+        ApplyWeaponVisuals(true);
     }
 
     public static WeaponLoadout Get(GameObject agent)
@@ -60,5 +81,19 @@ public sealed class WeaponLoadout : MonoBehaviour
         if (agent == null) return null;
         WeaponLoadout loadout = agent.GetComponent<WeaponLoadout>();
         return loadout != null ? loadout : agent.AddComponent<WeaponLoadout>();
+    }
+
+    private void ApplyWeaponVisuals(bool createIfMissing)
+    {
+        AgentWeaponVisuals visuals = GetComponent<AgentWeaponVisuals>();
+        if (visuals == null && createIfMissing && GetComponentInChildren<Renderer>(true) != null)
+        {
+            visuals = gameObject.AddComponent<AgentWeaponVisuals>();
+        }
+
+        if (visuals != null)
+        {
+            visuals.ApplyWeapon(selectedWeapon);
+        }
     }
 }
