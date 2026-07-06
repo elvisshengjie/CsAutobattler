@@ -142,16 +142,13 @@ public class BulletProjectile : MonoBehaviour
             return false;
         }
 
-        AgentStats targetStats = hitObject.GetComponentInParent<AgentStats>();
-
-        if (targetStats != null && targetStats.team == ownerTeam)
+        if (CombatTargetUtility.TryGetTeam(hitObject, out TeamType targetTeam) &&
+            targetTeam == ownerTeam)
         {
             return false;
         }
 
-        HealthSystem targetHealth = hitObject.GetComponentInParent<HealthSystem>();
-
-        if (targetHealth != null && !targetHealth.IsDead)
+        if (CombatTargetUtility.IsAlive(hitObject))
         {
             float appliedDamage = damage;
             if (damageFalloffRange > 0f && minimumDamageMultiplier < 1f)
@@ -160,7 +157,7 @@ public class BulletProjectile : MonoBehaviour
                 float falloff = Mathf.Clamp01(travelled / damageFalloffRange);
                 appliedDamage *= Mathf.Lerp(1f, minimumDamageMultiplier, falloff);
             }
-            targetHealth.TakeDamage(appliedDamage, owner);
+            CombatTargetUtility.TryApplyDamage(hitObject, appliedDamage, owner);
         }
 
         // Any solid wall or enemy collision consumes the projectile.

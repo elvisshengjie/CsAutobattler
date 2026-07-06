@@ -89,9 +89,7 @@ public class WeaponSystem : MonoBehaviour
             yield break;
         }
 
-        HealthSystem targetHealth = target.GetComponent<HealthSystem>();
-
-        if (targetHealth == null || targetHealth.IsDead)
+        if (!CombatTargetUtility.IsAlive(target))
         {
             yield break;
         }
@@ -110,8 +108,7 @@ public class WeaponSystem : MonoBehaviour
                 yield break;
             }
 
-            HealthSystem currentHealth = target.GetComponent<HealthSystem>();
-            if (currentHealth == null || currentHealth.IsDead)
+            if (!CombatTargetUtility.IsAlive(target))
             {
                 yield break;
             }

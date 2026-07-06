@@ -13,6 +13,7 @@ public class AgentHealthBar3D : MonoBehaviour
     private Transform fill;
     private Renderer fillRenderer;
     private TextMesh actionStatusText;
+    private TextMesh abilityStatusText;
     private Camera targetCamera;
 
     private static Material backgroundMaterial;
@@ -45,6 +46,29 @@ public class AgentHealthBar3D : MonoBehaviour
         {
             actionStatusText.text = string.Empty;
             actionStatusText.gameObject.SetActive(false);
+        }
+    }
+
+    public void SetAbilityStatus(string actionName, float timeRemaining, Color color)
+    {
+        if (abilityStatusText == null)
+        {
+            return;
+        }
+
+        abilityStatusText.text = timeRemaining > 0f
+            ? $"{actionName} {timeRemaining:0.0}s"
+            : actionName;
+        abilityStatusText.color = color;
+        abilityStatusText.gameObject.SetActive(true);
+    }
+
+    public void ClearAbilityStatus()
+    {
+        if (abilityStatusText != null)
+        {
+            abilityStatusText.text = string.Empty;
+            abilityStatusText.gameObject.SetActive(false);
         }
     }
 
@@ -103,6 +127,19 @@ public class AgentHealthBar3D : MonoBehaviour
         actionStatusText.color = Color.white;
         actionStatusText.text = string.Empty;
         statusObject.SetActive(false);
+
+        GameObject abilityObject = new GameObject("AbilityStatus");
+        abilityObject.transform.SetParent(barRoot, false);
+        abilityObject.transform.localPosition = new Vector3(0f, 0.32f, -0.02f);
+        abilityStatusText = abilityObject.AddComponent<TextMesh>();
+        abilityStatusText.anchor = TextAnchor.MiddleCenter;
+        abilityStatusText.alignment = TextAlignment.Center;
+        abilityStatusText.fontSize = 64;
+        abilityStatusText.characterSize = 0.032f;
+        abilityStatusText.fontStyle = FontStyle.Bold;
+        abilityStatusText.color = new Color(0.25f, 1f, 0.45f, 1f);
+        abilityStatusText.text = string.Empty;
+        abilityObject.SetActive(false);
     }
 
     private void UpdateBar()

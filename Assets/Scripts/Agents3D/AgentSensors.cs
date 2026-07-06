@@ -53,6 +53,23 @@ public class AgentSensors : MonoBehaviour
             }
         }
 
+        foreach (DeployableTurret turret in
+                 FindObjectsByType<DeployableTurret>(FindObjectsInactive.Exclude))
+        {
+            if (turret == null || turret.Team == stats.team || turret.IsDestroyed ||
+                !CanDetect(turret.gameObject))
+            {
+                continue;
+            }
+
+            float distance = FlatDistance(transform.position, turret.transform.position);
+            if (distance < closestDistance)
+            {
+                closestDistance = distance;
+                closestEnemy = turret.gameObject;
+            }
+        }
+
         return closestEnemy;
     }
 
@@ -63,19 +80,19 @@ public class AgentSensors : MonoBehaviour
             return false;
         }
 
-        AgentStats candidate = target.GetComponent<AgentStats>();
-        HealthSystem health = target.GetComponent<HealthSystem>();
-        if (candidate == null || stats == null || candidate.team == stats.team ||
-            health == null || health.IsDead)
+        GameObject root = CombatTargetUtility.GetRoot(target);
+        if (root == null || stats == null ||
+            !CombatTargetUtility.TryGetTeam(root, out TeamType targetTeam) ||
+            targetTeam == stats.team || !CombatTargetUtility.IsAlive(root))
         {
             return false;
         }
 
-        float distance = FlatDistance(transform.position, candidate.transform.position);
+        float distance = FlatDistance(transform.position, root.transform.position);
         bool detectedNearby = distance <= proximityDetectionRange;
         bool detectedInCone = distance <= sightRange &&
-                              IsInsideFieldOfView(candidate.transform.position);
-        return (detectedNearby || detectedInCone) && HasLineOfSight(target);
+                              IsInsideFieldOfView(root.transform.position);
+        return (detectedNearby || detectedInCone) && HasLineOfSight(root);
     }
 
     public bool HasLineOfSight(GameObject target)
@@ -99,6 +116,11 @@ public class AgentSensors : MonoBehaviour
             return true;
         }
 
+        if (TacticalSmokeCloud.BlocksLine(origin, targetPoint))
+        {
+            return false;
+        }
+
         if (!Physics.Raycast(
                 origin,
                 direction / distance,
@@ -110,8 +132,8 @@ public class AgentSensors : MonoBehaviour
             return false;
         }
 
-        AgentStats hitAgent = hit.collider.GetComponentInParent<AgentStats>();
-        return hitAgent != null && hitAgent.gameObject == target;
+        return CombatTargetUtility.GetRoot(hit.collider.gameObject) ==
+               CombatTargetUtility.GetRoot(target);
     }
 
     public bool IsInsideFieldOfView(Vector3 targetPosition)

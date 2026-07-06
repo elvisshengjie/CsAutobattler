@@ -69,6 +69,11 @@ public class AStarPathfinder3D : MonoBehaviour
         }
     }
 
+    public void RefreshGrid()
+    {
+        CreateGrid();
+    }
+
     public List<Vector3> FindPath(Vector3 startWorldPosition, Vector3 targetWorldPosition)
     {
         if (grid == null)

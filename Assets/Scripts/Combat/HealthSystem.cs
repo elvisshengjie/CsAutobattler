@@ -51,6 +51,26 @@ public class HealthSystem : MonoBehaviour
         currentHealth = stats.maxHealth;
     }
 
+    public float Heal(float amount, GameObject healer = null)
+    {
+        if (isDead || stats == null || amount <= 0f || currentHealth >= stats.maxHealth)
+        {
+            return 0f;
+        }
+
+        float previousHealth = currentHealth;
+        currentHealth = Mathf.Min(stats.maxHealth, currentHealth + amount);
+        float restored = currentHealth - previousHealth;
+        if (restored > 0f)
+        {
+            string healerName = healer != null ? healer.name : "Unknown";
+            Debug.Log($"{gameObject.name} healed {restored:0.#} HP by {healerName}. " +
+                      $"HP: {currentHealth:0.#}");
+        }
+
+        return restored;
+    }
+
     public void TakeDamage(float amount, GameObject attacker = null)
     {
         if (isDead)

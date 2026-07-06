@@ -276,7 +276,6 @@ public sealed class AgentRole : MonoBehaviour
 
     private float ScoreTarget(GameObject target)
     {
-        HealthSystem health = target.GetComponent<HealthSystem>();
         float distance = FlatDistance(transform.position, target.transform.position);
         int alliesEngaging = 0;
         foreach (AgentBrain brain in FindObjectsByType<AgentBrain>(FindObjectsInactive.Exclude))
@@ -288,7 +287,7 @@ public sealed class AgentRole : MonoBehaviour
         Vector3 forward = target.transform.forward; forward.y = 0f;
         float rear = targetToSelf.sqrMagnitude > 0.01f && forward.sqrMagnitude > 0.01f
             ? Mathf.Clamp01((-Vector3.Dot(forward.normalized, targetToSelf.normalized) + 1f) * 0.5f) : 0f;
-        float weak = health != null ? 1f - health.NormalizedHealth : 0f;
+        float weak = 1f - CombatTargetUtility.GetNormalizedHealth(target);
         float score = -distance * 0.08f;
         switch (selectedRole)
         {
