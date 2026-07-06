@@ -133,6 +133,8 @@ public sealed class AttackerCombatAI : MonoBehaviour
 
     public bool TryExecute(GameObject visibleTarget)
     {
+        GetComponent<AgentDebugVisual>()?.SetAIState(currentState.ToString());
+
         ResolveReferences();
         if (roundManager == null || tacticManager == null || stats == null ||
             sensors == null || motor == null || health == null || health.IsDead ||
@@ -321,7 +323,8 @@ public sealed class AttackerCombatAI : MonoBehaviour
             return ShootAndStrafe(target, targetPosition, true);
         }
 
-        bool seriousDanger = lowHealth || Time.time <= recentlyDamagedUntil;
+        bool isReloading = weapon != null && weapon.IsReloading;
+        bool seriousDanger = lowHealth || Time.time <= recentlyDamagedUntil || isReloading;
         if (hasShot &&
             (priorityTarget || (aggressiveTactic && !lowHealth) || !seriousDanger) &&
             (priorityTarget || aggressiveTactic ||
@@ -395,8 +398,7 @@ public sealed class AttackerCombatAI : MonoBehaviour
             case AttackerCombatState.InCover:
                 motor.Stop();
                 motor.FacePosition(targetPosition);
-                if (Time.time >= stateUntil ||
-                    Time.time >= coverCycleStartedAt + maxCoverIdleTime)
+                if ((Time.time >= stateUntil || Time.time >= coverCycleStartedAt + maxCoverIdleTime) && !isReloading)
                 {
                     BeginPeekOrReposition(targetPosition);
                 }
@@ -452,8 +454,8 @@ public sealed class AttackerCombatAI : MonoBehaviour
                     stateUntil = Time.time + hideDuration;
                 }
 
-                if (Time.time >= stateUntil ||
-                    Time.time >= coverCycleStartedAt + maxCoverIdleTime)
+                if ((Time.time >= stateUntil ||
+                    Time.time >= coverCycleStartedAt + maxCoverIdleTime) && !isReloading)
                 {
                     BeginPeekOrReposition(targetPosition);
                 }

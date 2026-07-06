@@ -908,6 +908,7 @@ GameObject:
   - component: {fileID: 384940714}
   - component: {fileID: 384940713}
   - component: {fileID: 384940717}
+  - component: {fileID: 384940718}
   m_Layer: 0
   m_Name: RedAgent3D_5
   m_TagString: Untagged
@@ -1062,7 +1063,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 9f9da8948b5d06e43be74b2b11c71d38, type: 2}
+  - {fileID: 2100000, guid: c2e40fa84d53ccd428f640eac126b1fb, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -1151,6 +1152,8 @@ MonoBehaviour:
   avoidanceDistance: 0.8
   avoidanceStrength: 1.5
   avoidanceSideHoldTime: 0.45
+  clearanceEscapeReleaseMargin: 0.12
+  clearanceNormalSmoothing: 10
   minTargetSwitchInterval: 0.75
   targetSwitchScoreMargin: 2
   stuckDistanceThreshold: 0.05
@@ -1225,6 +1228,18 @@ MonoBehaviour:
   portraitSprite: {fileID: 0}
   fallbackPortraitColor: {r: 0.64, g: 0.28, b: 0.34, a: 1}
   sourceRenderer: {fileID: 384940710}
+--- !u!114 &384940718
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 384940703}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2805dc7e468cd140a7e0e33fa8e9e77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AgentDebugVisual
 --- !u!1 &389118787
 GameObject:
   m_ObjectHideFlags: 0
@@ -1246,6 +1261,7 @@ GameObject:
   - component: {fileID: 389118799}
   - component: {fileID: 389118798}
   - component: {fileID: 389118797}
+  - component: {fileID: 389118801}
   m_Layer: 0
   m_Name: BlueAgent3D_2
   m_TagString: Untagged
@@ -1489,6 +1505,8 @@ MonoBehaviour:
   avoidanceDistance: 0.8
   avoidanceStrength: 1.5
   avoidanceSideHoldTime: 0.45
+  clearanceEscapeReleaseMargin: 0.12
+  clearanceNormalSmoothing: 10
   minTargetSwitchInterval: 0.75
   targetSwitchScoreMargin: 2
   stuckDistanceThreshold: 0.05
@@ -1548,6 +1566,18 @@ MonoBehaviour:
   lineOfSightMask:
     serializedVersion: 2
     m_Bits: 4294967295
+--- !u!114 &389118801
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 389118787}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2805dc7e468cd140a7e0e33fa8e9e77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AgentDebugVisual
 --- !u!1 &390852127
 GameObject:
   m_ObjectHideFlags: 0
@@ -1724,6 +1754,7 @@ GameObject:
   - component: {fileID: 409528793}
   - component: {fileID: 409528792}
   - component: {fileID: 409528796}
+  - component: {fileID: 409528797}
   m_Layer: 0
   m_Name: RedAgent3D_3
   m_TagString: Untagged
@@ -1878,7 +1909,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 9f9da8948b5d06e43be74b2b11c71d38, type: 2}
+  - {fileID: 2100000, guid: f170691ea73e5fa49a008dd91c882e71, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -1967,6 +1998,8 @@ MonoBehaviour:
   avoidanceDistance: 0.8
   avoidanceStrength: 1.5
   avoidanceSideHoldTime: 0.45
+  clearanceEscapeReleaseMargin: 0.12
+  clearanceNormalSmoothing: 10
   minTargetSwitchInterval: 0.75
   targetSwitchScoreMargin: 2
   stuckDistanceThreshold: 0.05
@@ -2041,6 +2074,18 @@ MonoBehaviour:
   portraitSprite: {fileID: 0}
   fallbackPortraitColor: {r: 0.42, g: 0.22, b: 0.12, a: 1}
   sourceRenderer: {fileID: 409528789}
+--- !u!114 &409528797
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 409528782}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2805dc7e468cd140a7e0e33fa8e9e77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AgentDebugVisual
 --- !u!1 &421775359
 GameObject:
   m_ObjectHideFlags: 0
@@ -2988,6 +3033,7 @@ GameObject:
   - component: {fileID: 842311403}
   - component: {fileID: 842311402}
   - component: {fileID: 842311406}
+  - component: {fileID: 842311407}
   m_Layer: 0
   m_Name: RedAgent3D_4
   m_TagString: Untagged
@@ -3142,7 +3188,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 9f9da8948b5d06e43be74b2b11c71d38, type: 2}
+  - {fileID: 2100000, guid: c63eb4f482966344afb4c328f09eb333, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -3231,6 +3277,8 @@ MonoBehaviour:
   avoidanceDistance: 0.8
   avoidanceStrength: 1.5
   avoidanceSideHoldTime: 0.45
+  clearanceEscapeReleaseMargin: 0.12
+  clearanceNormalSmoothing: 10
   minTargetSwitchInterval: 0.75
   targetSwitchScoreMargin: 2
   stuckDistanceThreshold: 0.05
@@ -3305,6 +3353,18 @@ MonoBehaviour:
   portraitSprite: {fileID: 0}
   fallbackPortraitColor: {r: 0, g: 0, b: 0, a: 1}
   sourceRenderer: {fileID: 842311399}
+--- !u!114 &842311407
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 842311392}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2805dc7e468cd140a7e0e33fa8e9e77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AgentDebugVisual
 --- !u!1 &917261360
 GameObject:
   m_ObjectHideFlags: 0
@@ -3809,6 +3869,50 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1035874990}
   m_CullTransparentMesh: 1
+--- !u!1 &1061096287
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1061096289}
+  - component: {fileID: 1061096288}
+  m_Layer: 0
+  m_Name: HeatMapManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1061096288
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1061096287}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f309b2ba495491e44975cea776b49ae7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::InfluenceMapVisualizer
+--- !u!4 &1061096289
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1061096287}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1132441533
 GameObject:
   m_ObjectHideFlags: 0
@@ -4613,6 +4717,7 @@ GameObject:
   - component: {fileID: 1335506317}
   - component: {fileID: 1335506316}
   - component: {fileID: 1335506315}
+  - component: {fileID: 1335506319}
   m_Layer: 0
   m_Name: BlueAgent3D_2 (2)
   m_TagString: Untagged
@@ -4856,6 +4961,8 @@ MonoBehaviour:
   avoidanceDistance: 0.8
   avoidanceStrength: 1.5
   avoidanceSideHoldTime: 0.45
+  clearanceEscapeReleaseMargin: 0.12
+  clearanceNormalSmoothing: 10
   minTargetSwitchInterval: 0.75
   targetSwitchScoreMargin: 2
   stuckDistanceThreshold: 0.05
@@ -4915,6 +5022,18 @@ MonoBehaviour:
   lineOfSightMask:
     serializedVersion: 2
     m_Bits: 4294967295
+--- !u!114 &1335506319
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1335506305}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2805dc7e468cd140a7e0e33fa8e9e77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AgentDebugVisual
 --- !u!1 &1346144408
 GameObject:
   m_ObjectHideFlags: 0
@@ -5779,6 +5898,7 @@ GameObject:
   - component: {fileID: 1459890612}
   - component: {fileID: 1459890611}
   - component: {fileID: 1459890615}
+  - component: {fileID: 1459890616}
   m_Layer: 0
   m_Name: RedAgent3D_1
   m_TagString: Untagged
@@ -6022,6 +6142,8 @@ MonoBehaviour:
   avoidanceDistance: 0.8
   avoidanceStrength: 1.5
   avoidanceSideHoldTime: 0.45
+  clearanceEscapeReleaseMargin: 0.12
+  clearanceNormalSmoothing: 10
   minTargetSwitchInterval: 0.75
   targetSwitchScoreMargin: 2
   stuckDistanceThreshold: 0.05
@@ -6096,6 +6218,18 @@ MonoBehaviour:
   portraitSprite: {fileID: 0}
   fallbackPortraitColor: {r: 0.35, g: 0.06, b: 0.06, a: 1}
   sourceRenderer: {fileID: 1459890608}
+--- !u!114 &1459890616
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1459890601}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2805dc7e468cd140a7e0e33fa8e9e77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AgentDebugVisual
 --- !u!1 &1462215007
 GameObject:
   m_ObjectHideFlags: 0
@@ -6420,6 +6554,7 @@ GameObject:
   - component: {fileID: 1514125962}
   - component: {fileID: 1514125961}
   - component: {fileID: 1514125960}
+  - component: {fileID: 1514125964}
   m_Layer: 0
   m_Name: BlueAgent3D_2 (1)
   m_TagString: Untagged
@@ -6663,6 +6798,8 @@ MonoBehaviour:
   avoidanceDistance: 0.8
   avoidanceStrength: 1.5
   avoidanceSideHoldTime: 0.45
+  clearanceEscapeReleaseMargin: 0.12
+  clearanceNormalSmoothing: 10
   minTargetSwitchInterval: 0.75
   targetSwitchScoreMargin: 2
   stuckDistanceThreshold: 0.05
@@ -6722,6 +6859,18 @@ MonoBehaviour:
   lineOfSightMask:
     serializedVersion: 2
     m_Bits: 4294967295
+--- !u!114 &1514125964
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1514125950}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2805dc7e468cd140a7e0e33fa8e9e77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AgentDebugVisual
 --- !u!1 &1611256586
 GameObject:
   m_ObjectHideFlags: 0
@@ -6978,6 +7127,7 @@ GameObject:
   - component: {fileID: 1691728181}
   - component: {fileID: 1691728180}
   - component: {fileID: 1691728179}
+  - component: {fileID: 1691728183}
   m_Layer: 0
   m_Name: BlueAgent3D_1
   m_TagString: Untagged
@@ -7221,6 +7371,8 @@ MonoBehaviour:
   avoidanceDistance: 0.8
   avoidanceStrength: 1.5
   avoidanceSideHoldTime: 0.45
+  clearanceEscapeReleaseMargin: 0.12
+  clearanceNormalSmoothing: 10
   minTargetSwitchInterval: 0.75
   targetSwitchScoreMargin: 2
   stuckDistanceThreshold: 0.05
@@ -7280,6 +7432,18 @@ MonoBehaviour:
   lineOfSightMask:
     serializedVersion: 2
     m_Bits: 4294967295
+--- !u!114 &1691728183
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1691728169}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2805dc7e468cd140a7e0e33fa8e9e77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AgentDebugVisual
 --- !u!1 &1699635696
 GameObject:
   m_ObjectHideFlags: 0
@@ -8224,6 +8388,7 @@ GameObject:
   - component: {fileID: 1903467721}
   - component: {fileID: 1903467720}
   - component: {fileID: 1903467719}
+  - component: {fileID: 1903467723}
   m_Layer: 0
   m_Name: BlueAgent3D_2 (3)
   m_TagString: Untagged
@@ -8467,6 +8632,8 @@ MonoBehaviour:
   avoidanceDistance: 0.8
   avoidanceStrength: 1.5
   avoidanceSideHoldTime: 0.45
+  clearanceEscapeReleaseMargin: 0.12
+  clearanceNormalSmoothing: 10
   minTargetSwitchInterval: 0.75
   targetSwitchScoreMargin: 2
   stuckDistanceThreshold: 0.05
@@ -8526,6 +8693,18 @@ MonoBehaviour:
   lineOfSightMask:
     serializedVersion: 2
     m_Bits: 4294967295
+--- !u!114 &1903467723
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1903467709}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2805dc7e468cd140a7e0e33fa8e9e77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AgentDebugVisual
 --- !u!1 &1961950428
 GameObject:
   m_ObjectHideFlags: 0
@@ -9125,6 +9304,7 @@ GameObject:
   - component: {fileID: 2050983417}
   - component: {fileID: 2050983416}
   - component: {fileID: 2050983420}
+  - component: {fileID: 2050983421}
   m_Layer: 0
   m_Name: RedAgent3D_2
   m_TagString: Untagged
@@ -9279,7 +9459,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 9f9da8948b5d06e43be74b2b11c71d38, type: 2}
+  - {fileID: 2100000, guid: 1b002cf4d5c19a740bee9a5120c853ea, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -9368,6 +9548,8 @@ MonoBehaviour:
   avoidanceDistance: 0.8
   avoidanceStrength: 1.5
   avoidanceSideHoldTime: 0.45
+  clearanceEscapeReleaseMargin: 0.12
+  clearanceNormalSmoothing: 10
   minTargetSwitchInterval: 0.75
   targetSwitchScoreMargin: 2
   stuckDistanceThreshold: 0.05
@@ -9442,6 +9624,18 @@ MonoBehaviour:
   portraitSprite: {fileID: 0}
   fallbackPortraitColor: {r: 0.85, g: 0.25, b: 0.08, a: 1}
   sourceRenderer: {fileID: 2050983413}
+--- !u!114 &2050983421
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2050983406}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2805dc7e468cd140a7e0e33fa8e9e77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AgentDebugVisual
 --- !u!1 &2088646559
 GameObject:
   m_ObjectHideFlags: 0
@@ -9953,3 +10147,4 @@ SceneRoots:
   - {fileID: 1323310641}
   - {fileID: 1300154084}
   - {fileID: 1430245549}
+  - {fileID: 1061096289}
