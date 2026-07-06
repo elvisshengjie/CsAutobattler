@@ -264,6 +264,45 @@ public class MovementSafetyTests
     }
 
     [Test]
+    public void WallEscape_UsesReleaseHysteresisInsteadOfBoundaryChatter()
+    {
+        const float requiredClearance = 0.65f;
+        const float releaseMargin = 0.12f;
+
+        Assert.That(
+            AgentMotor.ShouldContinueClearanceEscape(
+                false,
+                0.64f,
+                requiredClearance,
+                releaseMargin),
+            Is.True);
+        Assert.That(
+            AgentMotor.ShouldContinueClearanceEscape(
+                false,
+                0.68f,
+                requiredClearance,
+                releaseMargin),
+            Is.False,
+            "An agent outside the entry band should follow its path normally.");
+        Assert.That(
+            AgentMotor.ShouldContinueClearanceEscape(
+                true,
+                0.68f,
+                requiredClearance,
+                releaseMargin),
+            Is.True,
+            "An active escape must not switch off immediately after crossing the entry boundary.");
+        Assert.That(
+            AgentMotor.ShouldContinueClearanceEscape(
+                true,
+                0.78f,
+                requiredClearance,
+                releaseMargin),
+            Is.False,
+            "Escape steering should release only after the agent clears the hysteresis band.");
+    }
+
+    [Test]
     public void DefenderEncirclementOffsets_CoverBothFlanksAndEnemyRear()
     {
         Vector3 front = Vector3.forward;
@@ -427,6 +466,55 @@ public class MovementSafetyTests
         Assert.That(angles, Does.Contain(55f));
         Assert.That(angles, Does.Contain(-135f));
         Assert.That(angles, Does.Contain(135f));
+    }
+
+    [Test]
+    public void GuerrillaSpread_AssignsWidelySeparatedDirections()
+    {
+        const int teamCount = 5;
+        const float radius = 14f;
+        List<Vector3> offsets = new List<Vector3>();
+        for (int index = 0; index < teamCount; index++)
+        {
+            offsets.Add(TeamTacticExecutor.GetGuerrillaSpreadOffset(
+                index,
+                teamCount,
+                radius));
+        }
+
+        for (int left = 0; left < offsets.Count; left++)
+        {
+            Assert.That(offsets[left].magnitude, Is.EqualTo(radius).Within(0.01f));
+            for (int right = left + 1; right < offsets.Count; right++)
+            {
+                Assert.That(
+                    FlatDistance(offsets[left], offsets[right]),
+                    Is.GreaterThan(8f));
+            }
+        }
+    }
+
+    [Test]
+    public void PostPlantPositions_RespectInsideAndOutsideSiteCommands()
+    {
+        Bounds site = new Bounds(Vector3.zero, new Vector3(10f, 1f, 8f));
+        Vector3 inside = TeamTacticExecutor.ClampInsideSiteBounds(
+            new Vector3(20f, 0f, -20f),
+            site,
+            0.75f,
+            1f);
+        Assert.That(inside.x, Is.InRange(site.min.x + 0.74f, site.max.x - 0.74f));
+        Assert.That(inside.z, Is.InRange(site.min.z + 0.74f, site.max.z - 0.74f));
+
+        Vector3 outside = TeamTacticExecutor.PushOutsideSiteBounds(
+            Vector3.zero,
+            site,
+            0.75f,
+            1f);
+        Assert.That(
+            outside.x < site.min.x || outside.x > site.max.x ||
+            outside.z < site.min.z || outside.z > site.max.z,
+            Is.True);
     }
 
     [Test]

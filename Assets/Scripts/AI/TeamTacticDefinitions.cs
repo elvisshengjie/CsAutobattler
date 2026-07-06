@@ -79,15 +79,15 @@ public static class TeamTacticDefinitions
         return tactic switch
         {
             MidRoundTactic.GuerrillaAmbush =>
-                "Spread into cover and punish isolated or exposed defenders.",
+                "Spread as far as possible and hunt isolated defenders.",
             MidRoundTactic.WolfpackRegroup =>
-                "Gather around the leader and win fights with focus fire and trades.",
+                "Gather around the bomb carrier and fight as one pack.",
             MidRoundTactic.CutOffRotation =>
-                "Assign suitable players to deny defender reinforcement routes.",
+                "After the plant, hold cover outside the site and stop rotations.",
             MidRoundTactic.PostPlantLockdown =>
-                "Hold separate post-plant angles and make the defuser top priority.",
+                "After the plant, defend the bomb from inside the planted site.",
             MidRoundTactic.ProbeAndPlant =>
-                "Clear dangerous angles carefully and create a protected plant window.",
+                "Cover the bomb carrier while they commit fully to the plant.",
             _ => string.Empty
         };
     }

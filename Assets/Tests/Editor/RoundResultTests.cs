@@ -43,4 +43,31 @@ public class RoundResultTests
     {
         Assert.That(RoundManager.GetWinnerDisplayName(team), Is.EqualTo(expected));
     }
+
+    [Test]
+    public void FatalDamage_DeactivatesAgentInTheSameFrame()
+    {
+        GameObject agent = new GameObject("Fatal Damage Test Agent");
+        try
+        {
+            agent.AddComponent<AgentStats>();
+            HealthSystem health = agent.AddComponent<HealthSystem>();
+            bool diedEventRaised = false;
+            health.Died += _ => diedEventRaised = true;
+
+            health.TakeDamage(health.CurrentHealth + 1f);
+
+            Assert.That(diedEventRaised, Is.True);
+            Assert.That(health.IsDead, Is.True);
+            Assert.That(health.CurrentHealth, Is.Zero);
+            Assert.That(agent.activeSelf, Is.False);
+        }
+        finally
+        {
+            if (agent != null)
+            {
+                Object.DestroyImmediate(agent);
+            }
+        }
+    }
 }

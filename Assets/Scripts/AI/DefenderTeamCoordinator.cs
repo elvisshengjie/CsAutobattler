@@ -1712,7 +1712,9 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
                 (!pathfinder.IsValidAgentPosition(hiddenPosition, 0.5f) ||
                  pathfinder.FindPath(defender.transform.position, hiddenPosition) == null))
             {
-                Debug.Log("Cover point invalid, choosing another cover");
+                // Invalid candidates are expected near dense obstacle clusters.
+                // Logging every rejected cover every AI tick causes severe editor
+                // frame stalls that look like movement jitter for both teams.
                 continue;
             }
             bool blocksThreat = IsLineBlocked(threatPosition, hiddenPosition);

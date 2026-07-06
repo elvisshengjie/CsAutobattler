@@ -31,6 +31,9 @@ public class AgentMotor : MonoBehaviour
     [SerializeField] private float avoidanceDistance = 0.8f;
     [SerializeField] private float avoidanceStrength = 1.5f;
     [SerializeField] private float avoidanceSideHoldTime = 0.45f;
+    [Tooltip("Extra clearance required before leaving wall-escape steering. Prevents boundary chatter.")]
+    [SerializeField] private float clearanceEscapeReleaseMargin = 0.12f;
+    [SerializeField] private float clearanceNormalSmoothing = 10f;
 
     [Header("Target Stability")]
     [SerializeField] private float minTargetSwitchInterval = 0.75f;
@@ -93,6 +96,8 @@ public class AgentMotor : MonoBehaviour
     private bool hasReservedSlot;
     private bool recoveringLocally;
     private bool hasResolvedRequest;
+    private bool clearanceEscapeActive;
+    private Vector3 smoothedClearanceAwayDirection;
     private string currentTargetDebug;
     private string lastDiagnosticSignature;
 
@@ -127,6 +132,10 @@ public class AgentMotor : MonoBehaviour
 
         minAgentSeparation = Mathf.Max(minAgentSeparation, agentRadius * 2f);
         minObstacleClearance = Mathf.Max(minObstacleClearance, 0.15f);
+        clearanceEscapeReleaseMargin = Mathf.Max(
+            0.05f,
+            clearanceEscapeReleaseMargin);
+        clearanceNormalSmoothing = Mathf.Max(1f, clearanceNormalSmoothing);
         targetArrivalDistance = Mathf.Max(0.05f, targetArrivalDistance);
         // Older scene instances serialized the previous 1.2/3 second values.
         // Keep emergency recovery genuinely secondary to slot steering.
@@ -317,6 +326,10 @@ public class AgentMotor : MonoBehaviour
         currentWaypointIndex = 0;
         smoothedSeparation = Vector3.zero;
         pathBlocked = false;
+        clearanceEscapeActive = false;
+        smoothedClearanceAwayDirection = Vector3.zero;
+        avoidanceSide = 0;
+        avoidanceSideUntil = 0f;
         SpeedMultiplier = 1f;
         ResetStuckTracking();
     }
@@ -859,11 +872,43 @@ public class AgentMotor : MonoBehaviour
                 currentPosition,
                 pathfinder.obstacleMask,
                 out Vector3 awayFromObstacle,
-                out float currentClearance) ||
-            currentClearance >= ClearanceRadius + 0.01f)
+                out float currentClearance))
         {
+            clearanceEscapeActive = false;
+            smoothedClearanceAwayDirection = Vector3.zero;
             return false;
         }
+
+        bool wasEscapeActive = clearanceEscapeActive;
+        if (!ShouldContinueClearanceEscape(
+                wasEscapeActive,
+                currentClearance,
+                ClearanceRadius,
+                clearanceEscapeReleaseMargin))
+        {
+            clearanceEscapeActive = false;
+            smoothedClearanceAwayDirection = Vector3.zero;
+            avoidanceSide = 0;
+            avoidanceSideUntil = 0f;
+            return false;
+        }
+
+        clearanceEscapeActive = true;
+        if (!wasEscapeActive || smoothedClearanceAwayDirection.sqrMagnitude < 0.001f)
+        {
+            smoothedClearanceAwayDirection = awayFromObstacle;
+        }
+        else
+        {
+            float normalBlend = 1f - Mathf.Exp(
+                -clearanceNormalSmoothing * Time.fixedDeltaTime);
+            smoothedClearanceAwayDirection = Vector3.Lerp(
+                smoothedClearanceAwayDirection,
+                awayFromObstacle,
+                normalBlend).normalized;
+        }
+
+        awayFromObstacle = smoothedClearanceAwayDirection;
 
         Vector3 leftTangent = Vector3.Cross(Vector3.up, awayFromObstacle).normalized;
         Vector3 rightTangent = -leftTangent;
@@ -926,6 +971,19 @@ public class AgentMotor : MonoBehaviour
         }
 
         return false;
+    }
+
+    public static bool ShouldContinueClearanceEscape(
+        bool escapeActive,
+        float currentClearance,
+        float requiredClearance,
+        float releaseMargin)
+    {
+        float threshold = Mathf.Max(0f, requiredClearance) +
+                          (escapeActive
+                              ? Mathf.Max(0.02f, releaseMargin)
+                              : 0.01f);
+        return currentClearance < threshold;
     }
 
     private bool TryAcceptEscapeCandidate(

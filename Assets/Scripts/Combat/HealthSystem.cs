@@ -4,7 +4,6 @@ using UnityEngine;
 public class HealthSystem : MonoBehaviour
 {
     private AgentStats stats;
-    private Animator animator;
     private AgentController controller;
     private AgentController3D controller3D;
     private AgentBrain brain3D;
@@ -30,7 +29,6 @@ public class HealthSystem : MonoBehaviour
         stats.maxHealth = startingLoadout != null
             ? startingLoadout.AgentHealth
             : WeaponDefaults.Get(WeaponType.Rifle).agentHealth;
-        animator = GetComponentInChildren<Animator>();
         controller = GetComponent<AgentController>();
         controller3D = GetComponent<AgentController3D>();
         brain3D = GetComponent<AgentBrain>();
@@ -69,7 +67,7 @@ public class HealthSystem : MonoBehaviour
             }
         }
 
-        currentHealth -= amount;
+        currentHealth = Mathf.Max(0f, currentHealth - amount);
         Damaged?.Invoke(this, amount, attacker);
 
         Debug.Log(gameObject.name + " took " + amount + " damage. HP: " + currentHealth);
@@ -82,6 +80,11 @@ public class HealthSystem : MonoBehaviour
 
     private void Die()
     {
+        if (isDead)
+        {
+            return;
+        }
+
         isDead = true;
 
         Debug.Log(gameObject.name + " died.");
@@ -120,11 +123,11 @@ public class HealthSystem : MonoBehaviour
             body3D.angularVelocity = Vector3.zero;
         }
 
-        if (animator != null)
-        {
-            animator.SetTrigger("Dead");
-        }
-
+        // Died subscribers (bomb drop, scoring, round checks) run before this.
+        // Deactivation is immediate, so visuals, health bars, colliders, and AI
+        // disappear in the fatal-damage frame. Keep the inactive object briefly so
+        // squad caches can discard their references before final destruction.
+        gameObject.SetActive(false);
         Destroy(gameObject, 1.2f);
     }
 }

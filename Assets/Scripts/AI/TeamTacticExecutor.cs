@@ -37,9 +37,12 @@ public sealed class TeamTacticExecutor : MonoBehaviour
     [Header("Tuning")]
     [SerializeField] private float worldRefreshInterval = 0.2f;
     [SerializeField] private float executeDistance = 7f;
-    [SerializeField] private float regroupDistance = 4f;
+    [SerializeField] private float wolfpackFormationRadius = 1.8f;
     [SerializeField] private float siteThreatRadius = 9f;
     [SerializeField] private float coverSearchRadius = 18f;
+    [SerializeField] private float guerrillaSpreadRadius = 14f;
+    [SerializeField] private float guerrillaMinimumSpacing = 9f;
+    [SerializeField] private float siteInteriorMargin = 0.75f;
     [SerializeField] private float feintMinimumPressureDuration = 2f;
     [SerializeField] private float feintStagingMinimumSiteClearance = 2.5f;
     [SerializeField] private float feintStagingMaximumPlantDistance = 17f;
@@ -103,8 +106,12 @@ public sealed class TeamTacticExecutor : MonoBehaviour
     private readonly List<AgentStats> livingAttackers = new List<AgentStats>();
     private readonly List<AgentStats> livingDefenders = new List<AgentStats>();
     private readonly List<Transform> coverPoints = new List<Transform>();
+    private readonly Dictionary<GameObject, Vector3> guerrillaDestinations =
+        new Dictionary<GameObject, Vector3>();
     private readonly HashSet<HealthSystem> observedAttackerHealth =
         new HashSet<HealthSystem>();
+    private int guerrillaPlanRevision = -1;
+    private int guerrillaPlanAttackerCount = -1;
 
     public BombSite TargetSite => targetSite;
     public bool SilentAttackTriggered => silentAttackTriggered;
@@ -141,8 +148,9 @@ public sealed class TeamTacticExecutor : MonoBehaviour
     }
 
     /// <summary>
-    /// Applies the documented overlay priority. Post-plant protection wins first,
-    /// then safe planting, regrouping, specialist rotation control, and ambush play.
+    /// Mid-round commands replace baseline movement while they are applicable.
+    /// Phase-specific post-plant commands win first, followed by planting, regroup,
+    /// and ambush commands. Initial tactics run only when no mid-round command applies.
     /// </summary>
     public bool TryExecuteTacticalObjective(GameObject agent, AgentMotor motor)
     {
@@ -163,58 +171,34 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         TeamTacticRole role = GetRole(agent);
         bool rotationBlocker = IsRotationBlocker(agent);
 
-        motor.SpeedMultiplier = GetMovementSpeedMultiplier();
+        motor.SpeedMultiplier = GetMovementSpeedMultiplier(agent);
+
+        if (roundManager.CurrentState == RoundState.BombPlanted)
+        {
+            return ExecutePostPlant(agent, motor, rotationBlocker);
+        }
+
+        if (tacticManager.IsMidRoundTacticActive(MidRoundTactic.ProbeAndPlant))
+        {
+            return ExecuteProbeAndPlant(agent, motor, carrier);
+        }
+
+        if (tacticManager.IsMidRoundTacticActive(MidRoundTactic.WolfpackRegroup))
+        {
+            return ExecuteRegroup(agent, motor);
+        }
+
+        if (tacticManager.IsMidRoundTacticActive(MidRoundTactic.GuerrillaAmbush))
+        {
+            return ExecuteGuerrillaAmbush(agent, motor);
+        }
 
         bool feintAndRotateSelected = tacticManager.GetSelectedInitialTactic() ==
                                       InitialTeamTactic.FeintAndRotate;
         if (feintAndRotateSelected)
         {
             UpdateFeintAndRotateState();
-        }
-
-        if (roundManager.CurrentState == RoundState.BombPlanted)
-        {
-            if (tacticManager.GetSelectedInitialTactic() ==
-                InitialTeamTactic.FeintAndRotate &&
-                feintState != FeintAndRotateState.PostPlant)
-            {
-                feintState = FeintAndRotateState.PostPlant;
-                Debug.Log("Feint and Rotate: bomb planted at B; whole team is now protecting the bomb.");
-            }
-
-            return ExecutePostPlant(agent, motor, rotationBlocker);
-        }
-
-        // The 3/2 split is the core invariant of Feint and Rotate. Generic movement
-        // overlays cannot pull fake players away from A or send the hidden B pair in
-        // early; post-plant overlays still apply through ExecutePostPlant above.
-        if (feintAndRotateSelected)
-        {
             return ExecuteFeint(agent, motor, carrier);
-        }
-
-        bool heavilyOutnumbered = livingAttackers.Count > 0 &&
-                                  livingAttackers.Count < livingDefenders.Count;
-        if (tacticManager.IsMidRoundTacticActive(MidRoundTactic.GuerrillaAmbush) &&
-            heavilyOutnumbered)
-        {
-            return ExecuteGuerrillaAmbush(agent, motor);
-        }
-
-        if (rotationBlocker)
-        {
-            return ExecuteRotationBlock(agent, motor);
-        }
-
-        if (tacticManager.IsMidRoundTacticActive(MidRoundTactic.WolfpackRegroup) &&
-            NeedsRegroup(agent))
-        {
-            return ExecuteRegroup(agent, motor);
-        }
-
-        if (tacticManager.IsMidRoundTacticActive(MidRoundTactic.ProbeAndPlant))
-        {
-            return ExecuteProbeAndPlant(agent, motor, carrier, role);
         }
 
         return tacticManager.GetSelectedInitialTactic() switch
@@ -259,6 +243,51 @@ public sealed class TeamTacticExecutor : MonoBehaviour
             return defuser;
         }
 
+        bool postPlantCommandActive = roundManager.CurrentState == RoundState.BombPlanted &&
+            (tacticManager.IsMidRoundTacticActive(MidRoundTactic.CutOffRotation) ||
+             tacticManager.IsMidRoundTacticActive(MidRoundTactic.PostPlantLockdown));
+        bool probeActive = roundManager.CurrentState != RoundState.BombPlanted &&
+                           tacticManager.IsMidRoundTacticActive(
+                               MidRoundTactic.ProbeAndPlant);
+        bool wolfpackActive = !postPlantCommandActive && !probeActive &&
+                              tacticManager.IsMidRoundTacticActive(
+                                  MidRoundTactic.WolfpackRegroup);
+        bool guerrillaActive = !postPlantCommandActive && !probeActive &&
+                               !wolfpackActive &&
+                               tacticManager.IsMidRoundTacticActive(
+                                   MidRoundTactic.GuerrillaAmbush);
+
+        if (guerrillaActive)
+        {
+            return SelectGuerrillaCombatTarget(
+                agent,
+                sensors,
+                normallyDetectedTarget);
+        }
+
+        if (wolfpackActive)
+        {
+            if (IsLivingEnemy(focusFireTarget) && sensors.CanDetect(focusFireTarget))
+            {
+                return focusFireTarget;
+            }
+
+            if (normallyDetectedTarget != null)
+            {
+                focusFireTarget = normallyDetectedTarget;
+            }
+
+            return normallyDetectedTarget;
+        }
+
+        // Any applicable mid-round command suppresses combat rules inherited from
+        // the initial tactic (for example Feint target restrictions or Silent fire hold).
+        if (postPlantCommandActive || probeActive ||
+            roundManager.CurrentState == RoundState.BombPlanted)
+        {
+            return normallyDetectedTarget;
+        }
+
         if (tacticManager.GetSelectedInitialTactic() ==
             InitialTeamTactic.FeintAndRotate)
         {
@@ -279,28 +308,6 @@ public sealed class TeamTacticExecutor : MonoBehaviour
 
             // Contact or reaching the execute point is the signal for the sudden attack.
             silentAttackTriggered = true;
-        }
-
-        bool guerrilla = tacticManager.IsMidRoundTacticActive(
-                             MidRoundTactic.GuerrillaAmbush) &&
-                         livingAttackers.Count < livingDefenders.Count;
-        if (guerrilla && normallyDetectedTarget != null &&
-            !IsFavorableAmbushTarget(agent, normallyDetectedTarget))
-        {
-            return null;
-        }
-
-        if (tacticManager.IsMidRoundTacticActive(MidRoundTactic.WolfpackRegroup))
-        {
-            if (IsLivingEnemy(focusFireTarget) && sensors.CanDetect(focusFireTarget))
-            {
-                return focusFireTarget;
-            }
-
-            if (normallyDetectedTarget != null)
-            {
-                focusFireTarget = normallyDetectedTarget;
-            }
         }
 
         return normallyDetectedTarget;
@@ -623,70 +630,121 @@ public sealed class TeamTacticExecutor : MonoBehaviour
     private bool ExecuteProbeAndPlant(
         GameObject agent,
         AgentMotor motor,
-        BombCarrier carrier,
-        TeamTacticRole role)
+        BombCarrier carrier)
     {
-        motor.SpeedMultiplier = Mathf.Min(motor.SpeedMultiplier, 0.78f);
-        if (TryStartPlant(carrier, true))
+        AgentStats bombCarrier = GetBombCarrier();
+        if (bombCarrier == null)
         {
-            return true;
+            // Let ObjectiveManager's recovery logic take over if the bomb was dropped.
+            return false;
         }
 
-        bool safeWindow = IsPlantWindowSafe(true);
-        float back = role switch
+        if (bombCarrier.gameObject == agent)
         {
-            TeamTacticRole.Entry => safeWindow ? 0.5f : 2f,
-            TeamTacticRole.Trader => 2.8f,
-            TeamTacticRole.Support => 4f,
-            TeamTacticRole.BombCarrier => safeWindow ? 0f : 5.5f,
-            _ => 4.5f
-        };
-        float side = GetFormationSideOffset(agent, 1.6f);
-        Vector3 destination = GetApproachPosition(targetSite, back, side);
-
-        if (role == TeamTacticRole.BombCarrier && !safeWindow)
-        {
-            Transform cover = FindAssignedCover(agent, destination, 0f, 7f);
-            if (cover != null)
+            motor.SpeedMultiplier = Mathf.Max(motor.SpeedMultiplier, 1.25f);
+            if (TryStartPlant(carrier, true))
             {
-                destination = GetPositionBesideCover(cover, targetSite.PlantPosition);
+                return true;
             }
+
+            Vector3 plantPosition = targetSite.GetNearestPlantPosition(
+                agent.transform.position);
+            return MoveOrHold(
+                agent,
+                motor,
+                plantPosition,
+                GetDefenderCenter(),
+                false);
         }
 
-        return MoveOrHold(agent, motor, destination, targetSite.PlantPosition);
+        Vector3 carrierPosition = bombCarrier.transform.position;
+        Transform supportCover = FindAssignedCover(
+            agent,
+            carrierPosition,
+            1.5f,
+            objectiveManager != null ? objectiveManager.plantSupportRadius : 8f);
+        Vector3 destination;
+        if (supportCover != null)
+        {
+            destination = GetPositionBesideCover(supportCover, GetDefenderCenter());
+        }
+        else
+        {
+            int index = GetNonCarrierIndex(agent);
+            int escortCount = Mathf.Max(1, livingAttackers.Count - 1);
+            float angle = index * (360f / escortCount);
+            destination = carrierPosition +
+                          Quaternion.Euler(0f, angle, 0f) * Vector3.forward * 3f;
+        }
+
+        return MoveOrHold(
+            agent,
+            motor,
+            destination,
+            GetDefenderCenter(),
+            false);
     }
 
     private bool ExecuteRegroup(GameObject agent, AgentMotor motor)
     {
-        AgentStats leader = GetSquadLeader();
-        if (leader == null)
+        AgentStats bombCarrier = GetBombCarrier();
+        Vector3 regroupCenter;
+        if (bombCarrier != null)
+        {
+            regroupCenter = bombCarrier.transform.position;
+        }
+        else if (objectiveManager != null && objectiveManager.ActiveBomb != null)
+        {
+            regroupCenter = objectiveManager.ActiveBomb.transform.position;
+        }
+        else
         {
             return false;
         }
 
-        int index = GetAttackerIndex(agent);
-        float angle = index * (360f / Mathf.Max(1, livingAttackers.Count));
-        Vector3 offset = Quaternion.Euler(0f, angle, 0f) * Vector3.forward * 1.4f;
-        return MoveOrHold(agent, motor, leader.transform.position + offset,
-            targetSite.PlantPosition);
+        if (bombCarrier != null && bombCarrier.gameObject == agent)
+        {
+            motor.Stop();
+            motor.FacePosition(GetDefenderCenter());
+            return true;
+        }
+
+        int index = GetNonCarrierIndex(agent);
+        int followerCount = Mathf.Max(1, livingAttackers.Count - (bombCarrier != null ? 1 : 0));
+        float angle = index * (360f / followerCount);
+        Vector3 offset = Quaternion.Euler(0f, angle, 0f) *
+                         Vector3.forward * wolfpackFormationRadius;
+        return MoveOrHold(
+            agent,
+            motor,
+            regroupCenter + offset,
+            GetDefenderCenter(),
+            false);
     }
 
     private bool ExecuteRotationBlock(GameObject agent, AgentMotor motor)
     {
         Vector3 routePoint = GetRotationHoldPosition(agent);
-        return MoveOrHold(agent, motor, routePoint, GetDefenderCenter());
+        return MoveOrHold(
+            agent,
+            motor,
+            routePoint,
+            GetDefenderCenter(),
+            false);
     }
 
     private bool ExecuteGuerrillaAmbush(GameObject agent, AgentMotor motor)
     {
-        Vector3 center = targetSite != null
-            ? targetSite.PlantPosition
-            : agent.transform.position;
-        Transform cover = FindAssignedCover(agent, center, 4f, coverSearchRadius * 1.4f);
-        Vector3 destination = cover != null
-            ? GetPositionBesideCover(cover, GetDefenderCenter())
-            : center + GetSpreadOffset(agent, 7f);
-        return MoveOrHold(agent, motor, destination, GetDefenderCenter());
+        EnsureGuerrillaPlan();
+        Vector3 destination = guerrillaDestinations.TryGetValue(agent, out Vector3 assigned)
+            ? assigned
+            : GetAttackerCenter() + GetSpreadOffset(agent, guerrillaSpreadRadius);
+        return MoveOrHold(
+            agent,
+            motor,
+            destination,
+            GetAssignedGuerrillaWatchPosition(agent),
+            false);
     }
 
     private bool ExecutePostPlant(GameObject agent, AgentMotor motor, bool rotationBlocker)
@@ -695,29 +753,43 @@ public sealed class TeamTacticExecutor : MonoBehaviour
             ? objectiveManager.ActiveBomb.transform.position
             : targetSite.PlantPosition;
 
-        if (tacticManager.IsMidRoundTacticActive(MidRoundTactic.PostPlantLockdown))
-        {
-            // Cut Off Rotation reserves only suitable non-carriers; everyone else
-            // occupies a distinct site cover to create crossfire around the bomb.
-            if (rotationBlocker)
-            {
-                return ExecuteRotationBlock(agent, motor);
-            }
+        bool lockdown = tacticManager.IsMidRoundTacticActive(
+            MidRoundTactic.PostPlantLockdown);
+        bool cutOff = tacticManager.IsMidRoundTacticActive(
+            MidRoundTactic.CutOffRotation);
 
-            Transform cover = FindAssignedCover(agent, bombPosition, 1.5f, coverSearchRadius);
-            Vector3 destination = cover != null
-                ? GetPositionBesideCover(cover, GetDefenderCenter())
-                : bombPosition + GetSpreadOffset(agent, 4f);
-            return MoveOrHold(agent, motor, destination, GetDefenderCenter());
-        }
-
-        if (rotationBlocker)
+        if (cutOff && (!lockdown || rotationBlocker))
         {
             return ExecuteRotationBlock(agent, motor);
         }
 
-        return MoveOrHold(agent, motor, bombPosition + GetSpreadOffset(agent, 3f),
-            GetDefenderCenter());
+        if (lockdown)
+        {
+            Vector3 destination = GetSiteInteriorHoldPosition(agent, bombPosition);
+            return MoveOrHold(
+                agent,
+                motor,
+                destination,
+                GetDefenderCenter(),
+                false);
+        }
+
+        if (tacticManager.IsMidRoundTacticActive(MidRoundTactic.WolfpackRegroup))
+        {
+            return ExecuteRegroup(agent, motor);
+        }
+
+        if (tacticManager.IsMidRoundTacticActive(MidRoundTactic.GuerrillaAmbush))
+        {
+            return ExecuteGuerrillaAmbush(agent, motor);
+        }
+
+        return MoveOrHold(
+            agent,
+            motor,
+            bombPosition + GetSpreadOffset(agent, 3f),
+            GetDefenderCenter(),
+            false);
     }
 
     private bool TryStartPlant(BombCarrier carrier, bool carefulPlant)
@@ -769,7 +841,9 @@ public sealed class TeamTacticExecutor : MonoBehaviour
 
     private bool IsRotationBlocker(GameObject agent)
     {
-        if (!tacticManager.IsMidRoundTacticActive(MidRoundTactic.CutOffRotation) ||
+        if (roundManager == null ||
+            roundManager.CurrentState != RoundState.BombPlanted ||
+            !tacticManager.IsMidRoundTacticActive(MidRoundTactic.CutOffRotation) ||
             agent == null || agent.GetComponent<BombCarrier>()?.HasBomb == true)
         {
             return false;
@@ -784,37 +858,49 @@ public sealed class TeamTacticExecutor : MonoBehaviour
             }
         }
 
-        int blockerCount = roundManager.CurrentState == RoundState.BombPlanted &&
-                           tacticManager.IsMidRoundTacticActive(
-                               MidRoundTactic.PostPlantLockdown) && candidates.Count >= 4
-            ? 2
-            : 1;
+        if (!tacticManager.IsMidRoundTacticActive(MidRoundTactic.PostPlantLockdown))
+        {
+            return candidates.Exists(candidate => candidate.gameObject == agent);
+        }
+
+        int blockerCount = candidates.Count >= 4 ? 2 : 1;
         int index = candidates.FindIndex(candidate => candidate.gameObject == agent);
         return index >= 0 && index >= candidates.Count - blockerCount;
     }
 
-    private bool NeedsRegroup(GameObject agent)
-    {
-        AgentStats leader = GetSquadLeader();
-        if (leader == null || leader.gameObject == agent)
-        {
-            return false;
-        }
-
-        return FlatDistance(agent.transform.position, leader.transform.position) > regroupDistance;
-    }
-
-    private AgentStats GetSquadLeader()
+    private AgentStats GetBombCarrier()
     {
         foreach (AgentStats attacker in livingAttackers)
         {
-            if (attacker.GetComponent<BombCarrier>()?.HasBomb == true)
+            if (attacker != null &&
+                attacker.GetComponent<BombCarrier>()?.HasBomb == true)
             {
                 return attacker;
             }
         }
 
-        return livingAttackers.Count > 0 ? livingAttackers[0] : null;
+        return null;
+    }
+
+    private int GetNonCarrierIndex(GameObject agent)
+    {
+        int index = 0;
+        foreach (AgentStats attacker in livingAttackers)
+        {
+            if (attacker.GetComponent<BombCarrier>()?.HasBomb == true)
+            {
+                continue;
+            }
+
+            if (attacker.gameObject == agent)
+            {
+                return index;
+            }
+
+            index++;
+        }
+
+        return 0;
     }
 
     private bool IsFakeGroupMember(GameObject agent)
@@ -1150,11 +1236,33 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         return closest;
     }
 
-    private float GetMovementSpeedMultiplier()
+    private float GetMovementSpeedMultiplier(GameObject agent)
     {
-        if (tacticManager.IsMidRoundTacticActive(MidRoundTactic.ProbeAndPlant))
+        bool postPlant = roundManager != null &&
+                         roundManager.CurrentState == RoundState.BombPlanted;
+        if (postPlant &&
+            (tacticManager.IsMidRoundTacticActive(MidRoundTactic.CutOffRotation) ||
+             tacticManager.IsMidRoundTacticActive(MidRoundTactic.PostPlantLockdown)))
         {
-            return 0.78f;
+            return 1f;
+        }
+
+        if (!postPlant && tacticManager.IsMidRoundTacticActive(
+                MidRoundTactic.ProbeAndPlant))
+        {
+            return agent != null && agent.GetComponent<BombCarrier>()?.HasBomb == true
+                ? 1.25f
+                : 1.05f;
+        }
+
+        if (tacticManager.IsMidRoundTacticActive(MidRoundTactic.WolfpackRegroup))
+        {
+            return 1.15f;
+        }
+
+        if (tacticManager.IsMidRoundTacticActive(MidRoundTactic.GuerrillaAmbush))
+        {
+            return 1.1f;
         }
 
         return tacticManager.GetSelectedInitialTactic() switch
@@ -1167,16 +1275,41 @@ public sealed class TeamTacticExecutor : MonoBehaviour
 
     private Vector3 GetRotationHoldPosition(GameObject agent)
     {
-        Vector3 sitePosition = targetSite.PlantPosition;
-        Vector3 otherSitePosition = fakeSite != null
-            ? fakeSite.PlantPosition
+        BombSite plantedSite = objectiveManager != null && objectiveManager.PlantedSite != null
+            ? objectiveManager.PlantedSite
+            : targetSite;
+        if (plantedSite == null)
+        {
+            return agent.transform.position;
+        }
+
+        Vector3 sitePosition = plantedSite.PlantPosition;
+        BombSite otherSite = objectiveManager != null
+            ? plantedSite == objectiveManager.siteA
+                ? objectiveManager.siteB
+                : objectiveManager.siteA
+            : fakeSite;
+        Vector3 otherSitePosition = otherSite != null
+            ? otherSite.PlantPosition
             : GetDefenderCenter();
-        Vector3 connection = Vector3.Lerp(sitePosition, otherSitePosition, 0.45f);
+        Vector3 connection = Vector3.Lerp(sitePosition, otherSitePosition, 0.35f);
         connection += GetSpreadOffset(agent, 2f);
-        Transform cover = FindAssignedCover(agent, connection, 0f, 7f);
-        return cover != null
+        Transform cover = FindAssignedCoverOutsideSite(
+            agent,
+            plantedSite,
+            connection,
+            coverSearchRadius);
+        Vector3 holdPosition = cover != null
             ? GetPositionBesideCover(cover, GetDefenderCenter())
             : connection;
+        BoxCollider siteTrigger = plantedSite.GetComponent<BoxCollider>();
+        return siteTrigger != null
+            ? PushOutsideSiteBounds(
+                holdPosition,
+                siteTrigger.bounds,
+                siteInteriorMargin,
+                agent.transform.position.y)
+            : holdPosition;
     }
 
     private Vector3 GetFeintBWaitingPosition(GameObject agent)
@@ -2284,6 +2417,159 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         return candidates[GetAttackerIndex(agent) % candidates.Count];
     }
 
+    private Transform FindAssignedCoverOutsideSite(
+        GameObject agent,
+        BombSite site,
+        Vector3 desiredCenter,
+        float maximumDistance)
+    {
+        List<Transform> candidates = new List<Transform>();
+        foreach (Transform cover in coverPoints)
+        {
+            if (cover == null ||
+                FlatDistance(cover.position, desiredCenter) > maximumDistance)
+            {
+                continue;
+            }
+
+            Vector3 holdPosition = GetPositionBesideCover(
+                cover,
+                GetDefenderCenter());
+            if (!IsPointInsideSite(site, holdPosition, -siteInteriorMargin))
+            {
+                candidates.Add(cover);
+            }
+        }
+
+        candidates.Sort((left, right) =>
+        {
+            float leftScore = FlatDistance(left.position, desiredCenter) +
+                              FlatDistance(left.position, agent.transform.position) * 0.15f;
+            float rightScore = FlatDistance(right.position, desiredCenter) +
+                               FlatDistance(right.position, agent.transform.position) * 0.15f;
+            return leftScore.CompareTo(rightScore);
+        });
+
+        return candidates.Count > 0
+            ? candidates[GetAttackerIndex(agent) % candidates.Count]
+            : null;
+    }
+
+    private Vector3 GetSiteInteriorHoldPosition(GameObject agent, Vector3 bombPosition)
+    {
+        BombSite plantedSite = objectiveManager != null && objectiveManager.PlantedSite != null
+            ? objectiveManager.PlantedSite
+            : targetSite;
+        if (plantedSite == null)
+        {
+            return bombPosition + GetSpreadOffset(agent, 3f);
+        }
+
+        BoxCollider siteTrigger = plantedSite.GetComponent<BoxCollider>();
+        if (siteTrigger == null)
+        {
+            return bombPosition + GetSpreadOffset(agent, 3f);
+        }
+
+        List<Transform> interiorCover = new List<Transform>();
+        foreach (Transform cover in coverPoints)
+        {
+            if (cover != null && IsPointInsideSite(
+                    plantedSite,
+                    cover.position,
+                    siteInteriorMargin * 0.25f))
+            {
+                interiorCover.Add(cover);
+            }
+        }
+
+        interiorCover.Sort((left, right) =>
+            FlatDistance(left.position, bombPosition).CompareTo(
+                FlatDistance(right.position, bombPosition)));
+
+        Vector3 destination = interiorCover.Count > 0
+            ? GetPositionBesideCover(
+                interiorCover[GetAttackerIndex(agent) % interiorCover.Count],
+                GetDefenderCenter())
+            : bombPosition + GetSpreadOffset(agent, 4f);
+        return ClampInsideSiteBounds(
+            destination,
+            siteTrigger.bounds,
+            siteInteriorMargin,
+            agent.transform.position.y);
+    }
+
+    private static bool IsPointInsideSite(
+        BombSite site,
+        Vector3 point,
+        float inset)
+    {
+        BoxCollider siteTrigger = site != null ? site.GetComponent<BoxCollider>() : null;
+        if (siteTrigger == null)
+        {
+            return false;
+        }
+
+        Bounds bounds = siteTrigger.bounds;
+        float minX = bounds.min.x + inset;
+        float maxX = bounds.max.x - inset;
+        float minZ = bounds.min.z + inset;
+        float maxZ = bounds.max.z - inset;
+        return point.x >= minX && point.x <= maxX &&
+               point.z >= minZ && point.z <= maxZ;
+    }
+
+    public static Vector3 ClampInsideSiteBounds(
+        Vector3 point,
+        Bounds bounds,
+        float margin,
+        float height)
+    {
+        float safeMarginX = Mathf.Min(Mathf.Max(0f, margin), bounds.extents.x * 0.8f);
+        float safeMarginZ = Mathf.Min(Mathf.Max(0f, margin), bounds.extents.z * 0.8f);
+        return new Vector3(
+            Mathf.Clamp(point.x, bounds.min.x + safeMarginX, bounds.max.x - safeMarginX),
+            height,
+            Mathf.Clamp(point.z, bounds.min.z + safeMarginZ, bounds.max.z - safeMarginZ));
+    }
+
+    public static Vector3 PushOutsideSiteBounds(
+        Vector3 point,
+        Bounds bounds,
+        float margin,
+        float height)
+    {
+        float safeMargin = Mathf.Max(0f, margin);
+        Bounds expanded = bounds;
+        expanded.Expand(new Vector3(safeMargin * 2f, 0f, safeMargin * 2f));
+        if (point.x < expanded.min.x || point.x > expanded.max.x ||
+            point.z < expanded.min.z || point.z > expanded.max.z)
+        {
+            point.y = height;
+            return point;
+        }
+
+        Vector3 direction = point - bounds.center;
+        direction.y = 0f;
+        if (direction.sqrMagnitude < 0.001f)
+        {
+            direction = Vector3.forward;
+        }
+
+        direction.Normalize();
+        float xDistance = Mathf.Abs(direction.x) > 0.001f
+            ? bounds.extents.x / Mathf.Abs(direction.x)
+            : float.PositiveInfinity;
+        float zDistance = Mathf.Abs(direction.z) > 0.001f
+            ? bounds.extents.z / Mathf.Abs(direction.z)
+            : float.PositiveInfinity;
+        float boundaryDistance = Mathf.Min(xDistance, zDistance);
+        Vector3 outside = bounds.center +
+                          direction * (boundaryDistance + safeMargin);
+        outside.y = height;
+        return outside;
+    }
+
     private static Vector3 GetPositionBesideCover(Transform cover, Vector3 watchedPosition)
     {
         Vector3 awayFromWatch = cover.position - watchedPosition;
@@ -2300,10 +2586,11 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         GameObject agent,
         AgentMotor motor,
         Vector3 destination,
-        Vector3 watchPosition)
+        Vector3 watchPosition,
+        bool allowRoleRefinement = true)
     {
         AgentRole role = agent != null ? agent.GetComponent<AgentRole>() : null;
-        if (role != null)
+        if (allowRoleRefinement && role != null)
         {
             destination = role.RefineDestination(destination, watchPosition);
         }
@@ -2319,6 +2606,141 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         }
 
         return true;
+    }
+
+    private void EnsureGuerrillaPlan()
+    {
+        if (guerrillaPlanRevision == tacticManager.PlanRevision &&
+            guerrillaPlanAttackerCount == livingAttackers.Count &&
+            guerrillaDestinations.Count == livingAttackers.Count)
+        {
+            return;
+        }
+
+        guerrillaDestinations.Clear();
+        guerrillaPlanRevision = tacticManager.PlanRevision;
+        guerrillaPlanAttackerCount = livingAttackers.Count;
+        Vector3 squadCenter = GetAttackerCenter();
+        List<Vector3> selectedPositions = new List<Vector3>();
+        HashSet<Transform> selectedCover = new HashSet<Transform>();
+
+        for (int attackerIndex = 0; attackerIndex < livingAttackers.Count; attackerIndex++)
+        {
+            AgentStats attacker = livingAttackers[attackerIndex];
+            Vector3 watchPosition = GetAssignedGuerrillaWatchPosition(attacker.gameObject);
+            Transform bestCover = null;
+            Vector3 bestPosition = squadCenter +
+                                   GetGuerrillaSpreadOffset(
+                                       attackerIndex,
+                                       livingAttackers.Count,
+                                       guerrillaSpreadRadius);
+            float bestScore = float.NegativeInfinity;
+
+            foreach (Transform cover in coverPoints)
+            {
+                if (cover == null || selectedCover.Contains(cover))
+                {
+                    continue;
+                }
+
+                Vector3 candidate = GetPositionBesideCover(cover, watchPosition);
+                if (!IsAgentPositionOpen(candidate))
+                {
+                    continue;
+                }
+
+                float separation = selectedPositions.Count == 0
+                    ? FlatDistance(candidate, squadCenter)
+                    : GetMinimumDistance(candidate, selectedPositions);
+                float enemyDistance = FlatDistance(candidate, watchPosition);
+                float farFromSquad = FlatDistance(candidate, squadCenter);
+                float score = separation * 3f + farFromSquad * 0.2f -
+                              enemyDistance * 0.35f;
+                if (separation >= guerrillaMinimumSpacing)
+                {
+                    score += guerrillaMinimumSpacing * 2f;
+                }
+
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestCover = cover;
+                    bestPosition = candidate;
+                }
+            }
+
+            if (bestCover != null)
+            {
+                selectedCover.Add(bestCover);
+            }
+
+            selectedPositions.Add(bestPosition);
+            guerrillaDestinations[attacker.gameObject] = bestPosition;
+        }
+    }
+
+    private Vector3 GetAssignedGuerrillaWatchPosition(GameObject agent)
+    {
+        if (livingDefenders.Count == 0)
+        {
+            return targetSite != null
+                ? targetSite.PlantPosition
+                : agent.transform.position + agent.transform.forward;
+        }
+
+        int index = GetAttackerIndex(agent) % livingDefenders.Count;
+        return livingDefenders[index].transform.position;
+    }
+
+    private GameObject SelectGuerrillaCombatTarget(
+        GameObject agent,
+        AgentSensors sensors,
+        GameObject normallyDetectedTarget)
+    {
+        if (livingDefenders.Count == 0)
+        {
+            return null;
+        }
+
+        int startIndex = GetAttackerIndex(agent) % livingDefenders.Count;
+        for (int offset = 0; offset < livingDefenders.Count; offset++)
+        {
+            AgentStats candidate = livingDefenders[(startIndex + offset) % livingDefenders.Count];
+            if (candidate != null && sensors.CanDetect(candidate.gameObject) &&
+                IsFavorableAmbushTarget(agent, candidate.gameObject))
+            {
+                return candidate.gameObject;
+            }
+        }
+
+        return normallyDetectedTarget != null &&
+               IsFavorableAmbushTarget(agent, normallyDetectedTarget)
+            ? normallyDetectedTarget
+            : null;
+    }
+
+    public static Vector3 GetGuerrillaSpreadOffset(
+        int index,
+        int teamCount,
+        float radius)
+    {
+        float angle = 31f + Mathf.Max(0, index) *
+                      (360f / Mathf.Max(1, teamCount));
+        return Quaternion.Euler(0f, angle, 0f) *
+               Vector3.forward * Mathf.Max(0f, radius);
+    }
+
+    private static float GetMinimumDistance(
+        Vector3 candidate,
+        List<Vector3> positions)
+    {
+        float minimum = float.PositiveInfinity;
+        foreach (Vector3 position in positions)
+        {
+            minimum = Mathf.Min(minimum, FlatDistance(candidate, position));
+        }
+
+        return float.IsInfinity(minimum) ? 0f : minimum;
     }
 
     private bool IsFavorableAmbushTarget(GameObject agent, GameObject target)
@@ -2373,6 +2795,9 @@ public sealed class TeamTacticExecutor : MonoBehaviour
 
     private void RefreshPlanAndWorld()
     {
+        PruneUnavailableAgents(livingAttackers);
+        PruneUnavailableAgents(livingDefenders);
+
         if (Time.time >= nextWorldRefreshTime)
         {
             RefreshLivingAgents();
@@ -2441,11 +2866,37 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         livingDefenders.Sort((left, right) => string.CompareOrdinal(left.name, right.name));
     }
 
+    private static void PruneUnavailableAgents(List<AgentStats> agents)
+    {
+        agents.RemoveAll(agent =>
+        {
+            if (agent == null || !agent.gameObject.activeInHierarchy)
+            {
+                return true;
+            }
+
+            HealthSystem health = agent.GetComponent<HealthSystem>();
+            return health == null || health.IsDead;
+        });
+    }
+
     private void OnAttackerDied(HealthSystem deadTeammate)
     {
+        if (deadTeammate == null)
+        {
+            return;
+        }
+
+        AgentStats deadStats = deadTeammate.GetComponent<AgentStats>();
+        if (deadStats != null)
+        {
+            livingAttackers.Remove(deadStats);
+            guerrillaPlanAttackerCount = -1;
+        }
+
         if (tacticManager == null ||
             !tacticManager.IsMidRoundTacticActive(MidRoundTactic.WolfpackRegroup) ||
-            deadTeammate == null || !IsLivingEnemy(deadTeammate.LastAttacker))
+            !IsLivingEnemy(deadTeammate.LastAttacker))
         {
             return;
         }
@@ -2569,7 +3020,8 @@ public sealed class TeamTacticExecutor : MonoBehaviour
     {
         for (int i = 0; i < livingAttackers.Count; i++)
         {
-            if (livingAttackers[i].gameObject == agent)
+            if (livingAttackers[i] != null &&
+                livingAttackers[i].gameObject == agent)
             {
                 return i;
             }
@@ -2594,18 +3046,20 @@ public sealed class TeamTacticExecutor : MonoBehaviour
 
     private static Vector3 GetCenter(List<AgentStats> agents, Vector3 fallback)
     {
-        if (agents.Count == 0)
-        {
-            return fallback;
-        }
-
         Vector3 total = Vector3.zero;
+        int validCount = 0;
         foreach (AgentStats agent in agents)
         {
+            if (agent == null || !agent.gameObject.activeInHierarchy)
+            {
+                continue;
+            }
+
             total += agent.transform.position;
+            validCount++;
         }
 
-        return total / agents.Count;
+        return validCount > 0 ? total / validCount : fallback;
     }
 
     private static int CountLivingNear(
@@ -2616,6 +3070,11 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         int count = 0;
         foreach (AgentStats agent in agents)
         {
+            if (agent == null || !agent.gameObject.activeInHierarchy)
+            {
+                continue;
+            }
+
             if (FlatDistance(agent.transform.position, position) <= radius)
             {
                 count++;
