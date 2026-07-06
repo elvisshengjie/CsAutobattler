@@ -7,6 +7,7 @@ public sealed class AgentWeaponVisuals : MonoBehaviour
     [SerializeField] private bool useHumanoidModel = true;
     [SerializeField] private Color rifleTint = new Color(0.92f, 0.92f, 0.86f, 1f);
     [SerializeField] private Color smgTint = new Color(0.10f, 0.85f, 0.95f, 1f);
+    [SerializeField] private Color redTeamSmgTint = new Color(0.96f, 0.08f, 0.06f, 1f);
     [SerializeField] private Color sniperTint = new Color(0.98f, 0.88f, 0.20f, 1f);
     [SerializeField] private Color shotgunTint = new Color(1f, 0.36f, 0.18f, 1f);
 
@@ -289,6 +290,12 @@ public sealed class AgentWeaponVisuals : MonoBehaviour
 
     private Color GetWeaponTint(WeaponType weaponType)
     {
+        AgentStats stats = GetComponent<AgentStats>();
+        if (weaponType == WeaponType.SMG && stats != null && stats.team == TeamType.Red)
+        {
+            return redTeamSmgTint;
+        }
+
         return weaponType switch
         {
             WeaponType.SMG => smgTint,
