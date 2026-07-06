@@ -208,7 +208,6 @@ public sealed class AgentRole : MonoBehaviour
         float sideRear = GetSideRearValue(p, watch);
         float dangerPenalty = danger * Mathf.Max(0.15f, 3f - w.dangerTolerance);
         float movementPenalty = FlatDistance(transform.position, p) * 0.08f;
-        //float movementPenalty = selectedRole == AgentRoleType.Defender ? FlatDistance(transform.position, p) * 0.08f : 0f;
         float score = allyDistanceValue * w.allyProximity + sideRear * w.sideRearPreference +
                       objectiveValue * w.objectiveProximity + cover * w.coverPreference +
                       front * (selectedRole == AgentRoleType.Assaulter ? w.dangerTolerance : -0.8f) -
