@@ -50,6 +50,10 @@ public sealed class DefenderAgentAI : MonoBehaviour
     [SerializeField] private float searchLastKnownAreaDuration = 3f;
     [SerializeField] private float lastKnownSearchRadius = 1.8f;
     [SerializeField] private float defuseDamageCancelThreshold = 20f;
+    [Header("Retake Utility Clearing")]
+    [SerializeField] private float turretBlockClearRadius = 2.25f;
+    [SerializeField] private float turretBlockObjectiveRadius = 3.5f;
+    [SerializeField] private float turretClearNoProgressDelay = 1.25f;
     [SerializeField] private bool drawCombatGizmos = true;
 
     private DefenderTeamCoordinator coordinator;
@@ -993,6 +997,11 @@ public sealed class DefenderAgentAI : MonoBehaviour
                     return true;
                 }
 
+                if (TryClearBlockingTurret(order.destination))
+                {
+                    return true;
+                }
+
                 // Defuse positions may sit near the edge of the interaction radius.
                 // The normal 0.65 movement tolerance can stop the agent outside
                 // that radius, so approach this objective with a strict tolerance.
@@ -1025,6 +1034,12 @@ public sealed class DefenderAgentAI : MonoBehaviour
                     ? DefenderCombatState.RetakingBombSite
                     : DefenderCombatState.Repositioning;
                 currentCover = default;
+                if (order.type == DefenderOrderType.Retake &&
+                    TryClearBlockingTurret(order.destination))
+                {
+                    return true;
+                }
+
                 MoveOrHold(order.destination, order.watchPosition);
                 return true;
 
@@ -1035,6 +1050,84 @@ public sealed class DefenderAgentAI : MonoBehaviour
                 MoveOrHold(order.destination, order.watchPosition);
                 return true;
         }
+    }
+
+    private bool TryClearBlockingTurret(Vector3 objective)
+    {
+        if (stats == null || motor == null || weapon == null ||
+            loadout == null || sensors == null)
+        {
+            return false;
+        }
+
+        DeployableTurret turret = FindBlockingEnemyTurret(objective);
+        if (turret == null)
+        {
+            return false;
+        }
+
+        GameObject turretObject = turret.gameObject;
+        float distance = FlatDistance(transform.position, turretObject.transform.position);
+        if (distance > loadout.MaximumRange || !sensors.HasLineOfSight(turretObject))
+        {
+            return false;
+        }
+
+        currentState = DefenderCombatState.Shooting;
+        currentReasonDebug = "Clearing enemy turret blocking retake";
+        currentObjectiveDebug = "Destroy enemy turret";
+        currentCover = default;
+        forceReposition = false;
+        motor.Stop();
+        motor.FacePosition(turretObject.transform.position);
+        weapon.TryAttack(turretObject);
+        coordinator?.ReportCombat(gameObject, null);
+        return true;
+    }
+
+    private DeployableTurret FindBlockingEnemyTurret(Vector3 objective)
+    {
+        bool noObjectiveProgress =
+            Time.time >= lastObjectiveProgressTime + turretClearNoProgressDelay;
+        if (!motor.IsStuck && !noObjectiveProgress)
+        {
+            return null;
+        }
+
+        DeployableTurret best = null;
+        float bestScore = Mathf.NegativeInfinity;
+        foreach (DeployableTurret turret in
+                 FindObjectsByType<DeployableTurret>(FindObjectsInactive.Exclude))
+        {
+            if (turret == null || turret.IsDestroyed || turret.Team == stats.team)
+            {
+                continue;
+            }
+
+            Vector3 turretPosition = turret.transform.position;
+            float distanceToAgent = FlatDistance(transform.position, turretPosition);
+            float distanceToObjective = FlatDistance(turretPosition, objective);
+            float distanceToApproach =
+                FlatDistanceToSegment(turretPosition, transform.position, objective);
+            bool blocksApproach = distanceToApproach <= turretBlockClearRadius ||
+                                  distanceToObjective <= turretBlockObjectiveRadius ||
+                                  distanceToAgent <= turretBlockClearRadius;
+            if (!blocksApproach || distanceToAgent > loadout.MaximumRange)
+            {
+                continue;
+            }
+
+            float score = (turretBlockClearRadius - distanceToApproach) * 4f +
+                          (turretBlockObjectiveRadius - distanceToObjective) * 2f -
+                          distanceToAgent;
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = turret;
+            }
+        }
+
+        return best;
     }
 
     private bool TryShootWhileMoving(GameObject target)
@@ -1145,6 +1238,25 @@ public sealed class DefenderAgentAI : MonoBehaviour
         a.y = 0f;
         b.y = 0f;
         return Vector3.Distance(a, b);
+    }
+
+    private static float FlatDistanceToSegment(Vector3 point, Vector3 segmentStart,
+        Vector3 segmentEnd)
+    {
+        point.y = 0f;
+        segmentStart.y = 0f;
+        segmentEnd.y = 0f;
+        Vector3 segment = segmentEnd - segmentStart;
+        float lengthSquared = segment.sqrMagnitude;
+        if (lengthSquared <= 0.001f)
+        {
+            return Vector3.Distance(point, segmentStart);
+        }
+
+        float t = Mathf.Clamp01(Vector3.Dot(point - segmentStart, segment) /
+                                lengthSquared);
+        Vector3 closest = segmentStart + segment * t;
+        return Vector3.Distance(point, closest);
     }
 
     private void OnDrawGizmos()

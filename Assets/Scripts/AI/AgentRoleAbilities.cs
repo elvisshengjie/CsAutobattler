@@ -46,6 +46,8 @@ public sealed class AgentRoleAbilities : MonoBehaviour
     [SerializeField] private float shadowBlinkAgentClearance = 1.1f;
     [SerializeField] private float shadowBlinkTeamSpacing = 5f;
     [SerializeField] private float shadowBlinkMinimumScore = 8f;
+    [SerializeField] private float shadowBlinkArrivalEffectDuration = 0.75f;
+    [SerializeField] private float shadowBlinkArrivalRingRadius = 1.4f;
 
     [Header("Debug")]
     [SerializeField] private bool drawAbilityRangeGizmos;
@@ -1224,6 +1226,7 @@ public sealed class AgentRoleAbilities : MonoBehaviour
             0f,
             new Color(0.86f, 0.24f, 1f, 1f));
         SpawnShadowBlinkTrail(start, blinkPosition);
+        SpawnShadowBlinkArrivalEffect(blinkPosition, transform.forward);
         Debug.Log($"{name} used Shadow Blink ({triggerReason}) near {target.name}.");
     }
 
@@ -1555,6 +1558,156 @@ public sealed class AgentRoleAbilities : MonoBehaviour
         line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         line.receiveShadows = false;
         Destroy(trailObject, 0.35f);
+    }
+
+    private void SpawnShadowBlinkArrivalEffect(Vector3 position, Vector3 forward)
+    {
+        GameObject effectObject = new GameObject("Shadow Blink Arrival Effect");
+        effectObject.transform.position = position;
+        ShadowBlinkArrivalEffect effect =
+            effectObject.AddComponent<ShadowBlinkArrivalEffect>();
+        effect.Initialize(
+            position,
+            forward,
+            shadowBlinkArrivalEffectDuration,
+            shadowBlinkArrivalRingRadius,
+            GetShadowBlinkMaterial());
+    }
+
+    private sealed class ShadowBlinkArrivalEffect : MonoBehaviour
+    {
+        private const int RingSegments = 48;
+        private readonly LineRenderer[] rings = new LineRenderer[2];
+        private readonly LineRenderer[] slashes = new LineRenderer[5];
+        private Vector3 origin;
+        private Vector3 forward;
+        private float duration;
+        private float radius;
+        private float startedAt;
+
+        public void Initialize(
+            Vector3 effectOrigin,
+            Vector3 effectForward,
+            float effectDuration,
+            float effectRadius,
+            Material material)
+        {
+            origin = effectOrigin;
+            forward = effectForward.sqrMagnitude > 0.01f
+                ? effectForward.normalized
+                : Vector3.forward;
+            duration = Mathf.Max(0.1f, effectDuration);
+            radius = Mathf.Max(0.25f, effectRadius);
+            startedAt = Time.time;
+
+            rings[0] = CreateLine("Ground Shadow Ring", material, RingSegments + 1);
+            rings[1] = CreateLine("Upper Shadow Ring", material, RingSegments + 1);
+            for (int i = 0; i < slashes.Length; i++)
+            {
+                slashes[i] = CreateLine("Shadow Afterimage Slash", material, 2);
+            }
+
+            UpdateVisuals(0f);
+            Destroy(gameObject, duration + 0.05f);
+        }
+
+        private void Update()
+        {
+            float t = Mathf.Clamp01((Time.time - startedAt) / duration);
+            UpdateVisuals(t);
+        }
+
+        private void UpdateVisuals(float t)
+        {
+            float pulse = Mathf.Sin(t * Mathf.PI);
+            float jitter = Mathf.Sin(Time.time * 55f) * 0.08f * (1f - t);
+            Color bright = new Color(0.95f, 0.3f, 1f, Mathf.Lerp(0.9f, 0f, t));
+            Color dark = new Color(0.08f, 0f, 0.12f, Mathf.Lerp(0.75f, 0f, t));
+
+            UpdateRing(
+                rings[0],
+                origin + Vector3.up * 0.05f,
+                Mathf.Lerp(0.25f, radius, t) + jitter,
+                Mathf.Lerp(0.18f, 0.02f, t),
+                dark,
+                bright);
+            UpdateRing(
+                rings[1],
+                origin + Vector3.up * Mathf.Lerp(0.35f, 1.15f, t),
+                Mathf.Lerp(0.15f, radius * 0.72f, t),
+                Mathf.Lerp(0.08f, 0.01f, t),
+                bright,
+                dark);
+
+            Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
+            if (right.sqrMagnitude < 0.01f)
+            {
+                right = Vector3.right;
+            }
+
+            for (int i = 0; i < slashes.Length; i++)
+            {
+                float centered = i - (slashes.Length - 1) * 0.5f;
+                float side = centered * 0.28f;
+                float height = 0.35f + i * 0.17f;
+                Vector3 basePoint = origin + right * side +
+                                    forward * (0.15f + pulse * 0.35f) +
+                                    Vector3.up * height;
+                Vector3 shake = (right * Mathf.Sin(Time.time * 43f + i) +
+                                 forward * Mathf.Cos(Time.time * 37f + i)) *
+                                0.12f * (1f - t);
+                slashes[i].startWidth = Mathf.Lerp(0.09f, 0.01f, t);
+                slashes[i].endWidth = 0.01f;
+                slashes[i].startColor = bright;
+                slashes[i].endColor = dark;
+                slashes[i].SetPosition(0, basePoint + shake);
+                slashes[i].SetPosition(
+                    1,
+                    basePoint + shake + Vector3.up * Mathf.Lerp(0.9f, 0.2f, t) -
+                    forward * 0.25f);
+            }
+        }
+
+        private LineRenderer CreateLine(string lineName, Material material, int count)
+        {
+            GameObject lineObject = new GameObject(lineName);
+            lineObject.transform.SetParent(transform, false);
+            LineRenderer line = lineObject.AddComponent<LineRenderer>();
+            line.useWorldSpace = true;
+            line.positionCount = count;
+            line.sharedMaterial = material;
+            line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            line.receiveShadows = false;
+            return line;
+        }
+
+        private static void UpdateRing(
+            LineRenderer ring,
+            Vector3 center,
+            float ringRadius,
+            float width,
+            Color startColor,
+            Color endColor)
+        {
+            if (ring == null)
+            {
+                return;
+            }
+
+            ring.startWidth = width;
+            ring.endWidth = width * 0.45f;
+            ring.startColor = startColor;
+            ring.endColor = endColor;
+            for (int i = 0; i <= RingSegments; i++)
+            {
+                float angle = i * Mathf.PI * 2f / RingSegments;
+                Vector3 point = center + new Vector3(
+                    Mathf.Cos(angle) * ringRadius,
+                    0f,
+                    Mathf.Sin(angle) * ringRadius);
+                ring.SetPosition(i, point);
+            }
+        }
     }
 
     private static Material GetShadowBlinkMaterial()

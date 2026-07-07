@@ -118,6 +118,15 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
             new Dictionary<GameObject, Vector3>();
     }
 
+    private sealed class PostPlantOrderMemory
+    {
+        public DefenderOrderType type;
+        public BombSite site;
+        public Vector3 destination;
+        public Vector3 watchPosition;
+        public float validUntil;
+    }
+
     public static DefenderTeamCoordinator Instance { get; private set; }
 
     [Header("Shared Perception")]
@@ -140,6 +149,9 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
     [SerializeField] private float defuseExclusiveRadius = 3.25f;
     [SerializeField] private float bombTimerRiskThreshold = 7f;
     [SerializeField] private float activeCombatDefuserPenalty = 10f;
+    [SerializeField] private float postPlantOrderHoldTime = 1.75f;
+    [SerializeField] private float postPlantOrderSwitchDistance = 1.25f;
+    [SerializeField] private float postPlantOrderReachDistance = 0.85f;
     [SerializeField] private bool drawDebugGizmos = true;
 
     [Header("Bomb Search")]
@@ -176,6 +188,8 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
         new Dictionary<GameObject, BombSite>();
     private readonly Dictionary<GameObject, Transform> holdCoverAssignments =
         new Dictionary<GameObject, Transform>();
+    private readonly Dictionary<GameObject, PostPlantOrderMemory> postPlantOrders =
+        new Dictionary<GameObject, PostPlantOrderMemory>();
     private readonly List<Transform> coverPoints = new List<Transform>();
     private readonly List<VisionDebugLine> visionDebugLines =
         new List<VisionDebugLine>();
@@ -1116,6 +1130,7 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
             }
 
             bool attackersAlive = roundManager.AreAttackersAlive;
+            bool timerCritical = roundManager.BombTimeRemaining <= bombTimerRiskThreshold;
             if (!attackersAlive)
             {
                 if (!forcedDefuseLogged && isDefuser)
@@ -1146,7 +1161,11 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
                 {
                     Debug.Log("Defender moving to defuse");
                 }
-                return true;
+                return FinalizePostPlantOrder(
+                    defender,
+                    bombPosition,
+                    true,
+                    ref order);
             }
 
             if (FlatDistance(defender.transform.position, bombPosition) > 7f)
@@ -1154,7 +1173,7 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
                 order.type = DefenderOrderType.Retake;
                 order.site = plantedSite;
                 order.destination = isDefuser
-                    ? plantedSite.GetNearestPlantPosition(defender.transform.position)
+                    ? defusePosition
                     : GetPostPlantCoverPosition(
                         defender,
                         plantedSite,
@@ -1162,9 +1181,12 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
                         4.5f);
                 order.watchPosition = bombPosition;
                 order.speedMultiplier = 1.45f;
-                return true;
+                return FinalizePostPlantOrder(
+                    defender,
+                    bombPosition,
+                    false,
+                    ref order);
             }
-            bool timerCritical = roundManager.BombTimeRemaining <= bombTimerRiskThreshold;
             bool hasSupport = HasRetakeSupport(defender, bombPosition) ||
                               HasActiveDefuseCover(
                                   defender,
@@ -1208,7 +1230,11 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
             {
                 Debug.Log("Defender moving to defuse");
             }
-            return true;
+            return FinalizePostPlantOrder(
+                defender,
+                bombPosition,
+                timerCritical,
+                ref order);
         }
 
         BombSite homeSite = GetHomeSite(defender);
@@ -1666,6 +1692,68 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
             : defender != null ? defender.transform.position : Vector3.zero;
     }
 
+    private bool FinalizePostPlantOrder(
+        GameObject defender,
+        Vector3 bombPosition,
+        bool urgent,
+        ref DefenderOrder order)
+    {
+        StabilizePostPlantOrder(defender, bombPosition, urgent, ref order);
+        return true;
+    }
+
+    private void StabilizePostPlantOrder(
+        GameObject defender,
+        Vector3 bombPosition,
+        bool urgent,
+        ref DefenderOrder order)
+    {
+        if (defender == null || !IsPostPlantMovementOrder(order.type))
+        {
+            return;
+        }
+
+        if (postPlantOrders.TryGetValue(defender, out PostPlantOrderMemory memory))
+        {
+            bool expired = Time.time > memory.validUntil;
+            bool reachedPrevious =
+                FlatDistance(defender.transform.position, memory.destination) <=
+                postPlantOrderReachDistance;
+            bool sameDestination =
+                FlatDistance(memory.destination, order.destination) <=
+                postPlantOrderSwitchDistance;
+            bool differentSite = memory.site != null && order.site != null &&
+                                 memory.site != order.site;
+
+            if (!urgent && !expired && !reachedPrevious && !sameDestination &&
+                !differentSite)
+            {
+                order.type = memory.type;
+                order.site = memory.site;
+                order.destination = memory.destination;
+                order.watchPosition = memory.watchPosition;
+                return;
+            }
+        }
+
+        postPlantOrders[defender] = new PostPlantOrderMemory
+        {
+            type = order.type,
+            site = order.site,
+            destination = order.destination,
+            watchPosition = order.watchPosition,
+            validUntil = Time.time + postPlantOrderHoldTime
+        };
+    }
+
+    private static bool IsPostPlantMovementOrder(DefenderOrderType type)
+    {
+        return type == DefenderOrderType.Retake ||
+               type == DefenderOrderType.Defuse ||
+               type == DefenderOrderType.CoverDefuser ||
+               type == DefenderOrderType.SearchBombSite;
+    }
+
     public DefenderRole GetRole(GameObject defender)
     {
         return defender != null && roles.TryGetValue(defender, out DefenderRole role)
@@ -1847,6 +1935,7 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
         checkedBombSites.Clear();
         bombSearchAssignments.Clear();
         holdCoverAssignments.Clear();
+        postPlantOrders.Clear();
         ClearEncirclementPlan();
         designatedDefuser = null;
         defusePositionOwner = null;
@@ -2787,6 +2876,7 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
             checkedBombSites.Clear();
             bombSearchAssignments.Clear();
             holdCoverAssignments.Clear();
+            postPlantOrders.Clear();
             alertA.suspicionScore = 0f;
             alertB.suspicionScore = 0f;
             rotationLogged.Clear();
