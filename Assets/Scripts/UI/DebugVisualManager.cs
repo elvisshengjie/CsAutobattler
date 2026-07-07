@@ -6,9 +6,9 @@ public class DebugVisualManager : MonoBehaviour
     public static DebugVisualManager Instance { get; private set; }
 
     //  Toggle States
-    public bool ShowActions { get; private set; } = true;
-    public bool ShowPaths { get; private set; } = true;
-    public bool ShowTargets { get; private set; } = true;
+    public bool ShowActions { get; private set; } = false;
+    public bool ShowPaths { get; private set; } = false;
+    public bool ShowTargets { get; private set; } = false;
     public bool ShowHeatmap { get; private set; } = false;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
