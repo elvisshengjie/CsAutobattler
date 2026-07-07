@@ -36,6 +36,7 @@ public class DebugVisualManager : MonoBehaviour
     {
         Canvas canvas = FindAnyObjectByType<Canvas>();
         if (canvas == null) return;
+        HudCanvasScaleUtility.Configure(canvas);
 
         GameObject panel = new GameObject("DebugPanel", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup));
         panel.transform.SetParent(canvas.transform, false);
@@ -44,15 +45,15 @@ public class DebugVisualManager : MonoBehaviour
         rect.anchorMin = new Vector2(0, 1);
         rect.anchorMax = new Vector2(0, 1);
         rect.pivot = new Vector2(0, 1);
-        rect.anchoredPosition = new Vector2(10, -10);
-        rect.sizeDelta = new Vector2(220, 140); 
+        rect.anchoredPosition = new Vector2(14, -14);
+        rect.sizeDelta = new Vector2(280, 172);
         
         Image bg = panel.GetComponent<Image>();
         bg.color = new Color(0.1f, 0.1f, 0.1f, 0.9f);
 
         VerticalLayoutGroup layout = panel.GetComponent<VerticalLayoutGroup>();
-        layout.padding = new RectOffset(10, 10, 10, 10);
-        layout.spacing = 15;
+        layout.padding = new RectOffset(12, 12, 12, 12);
+        layout.spacing = 14;
         layout.childControlWidth = false;  
         layout.childControlHeight = false; 
 
@@ -71,7 +72,7 @@ public class DebugVisualManager : MonoBehaviour
         toggleObj.transform.SetParent(parent, false);
         
         RectTransform toggleRect = toggleObj.GetComponent<RectTransform>();
-        toggleRect.sizeDelta = new Vector2(20, 20); 
+        toggleRect.sizeDelta = new Vector2(24, 24);
 
         Image bgImage = toggleObj.GetComponent<Image>();
         bgImage.color = new Color(0.2f, 0.2f, 0.2f, 1f); 
@@ -87,7 +88,7 @@ public class DebugVisualManager : MonoBehaviour
         checkImage.color = new Color(0.2f, 0.86f, 0.96f, 1f); 
         
         RectTransform checkRect = checkObj.GetComponent<RectTransform>();
-        checkRect.sizeDelta = new Vector2(12, 12);
+        checkRect.sizeDelta = new Vector2(14, 14);
         checkRect.anchoredPosition = Vector2.zero;
         
         toggle.graphic = checkImage; 
@@ -100,11 +101,11 @@ public class DebugVisualManager : MonoBehaviour
         text.font = font;
         text.text = labelText;
         text.color = Color.white;
-        text.fontSize = 14;
+        text.fontSize = 16;
         text.alignment = TextAnchor.MiddleLeft;
 
         RectTransform textRect = labelObj.GetComponent<RectTransform>();
-        textRect.anchoredPosition = new Vector2(100, 0); 
-        textRect.sizeDelta = new Vector2(160, 20);
+        textRect.anchoredPosition = new Vector2(118, 0);
+        textRect.sizeDelta = new Vector2(210, 24);
     }
 }

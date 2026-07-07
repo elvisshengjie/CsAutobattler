@@ -20,6 +20,8 @@ public sealed class RedTeamStatsPanelUI : MonoBehaviour
     {
         panelCanvasGroup = GetComponent<CanvasGroup>();
         if (panelCanvasGroup == null) panelCanvasGroup = gameObject.AddComponent<CanvasGroup>();
+        Canvas parentCanvas = GetComponentInParent<Canvas>();
+        HudCanvasScaleUtility.Configure(parentCanvas);
         EnsureRequiredSlots();
         ApplyCompactLayout();
         UpdatePanelVisibility();
@@ -103,8 +105,8 @@ public sealed class RedTeamStatsPanelUI : MonoBehaviour
             : Screen.width;
         if (Mathf.Approximately(canvasWidth, lastCanvasWidth)) return;
 
-        const float miniMapSafeEdge = 230f;
-        const float rightPadding = 20f;
+        const float miniMapSafeEdge = 250f;
+        const float rightPadding = 24f;
         float naturalWidth = (RequiredSlotCount * RedTeamStatsSlotUI.DisplayWidth) +
                              ((RequiredSlotCount - 1) * 5f);
         float availableWidth = Mathf.Max(1f, canvasWidth - miniMapSafeEdge - rightPadding);
@@ -114,7 +116,7 @@ public sealed class RedTeamStatsPanelUI : MonoBehaviour
         panelRect.pivot = new Vector2(0.5f, 0f);
         panelRect.anchoredPosition = new Vector2(
             miniMapSafeEdge + availableWidth * 0.5f,
-            14f);
+            18f);
         panelRect.localScale = new Vector3(scale, scale, 1f);
         lastCanvasWidth = canvasWidth;
     }
