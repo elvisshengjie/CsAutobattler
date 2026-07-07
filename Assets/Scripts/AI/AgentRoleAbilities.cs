@@ -31,8 +31,30 @@ public sealed class AgentRoleAbilities : MonoBehaviour
     [SerializeField] private float turretThreatRange = 20f;
     [SerializeField] private float turretObjectiveRange = 11f;
 
+    [Header("Flanker Shadow Blink")]
+    [SerializeField] private float shadowBlinkCooldown = 30f;
+    [SerializeField] private float shadowBlinkOpeningCooldown = 10f;
+    [SerializeField] private float shadowBlinkMaxRange = 22f;
+    [SerializeField] private float shadowBlinkMinImprovement = 1.4f;
+    [SerializeField] private float shadowBlinkCombatRange = 12f;
+    [SerializeField] private float shadowBlinkRecentDamageWindow = 2.2f;
+    [SerializeField] private float shadowBlinkFinisherHealth = 0.35f;
+    [SerializeField] private float shadowBlinkPreferredDistance = 2.6f;
+    [SerializeField] private float shadowBlinkDangerLimit = 4.5f;
+    [SerializeField] private float shadowBlinkEnemyPileupRadius = 5.2f;
+    [SerializeField] private int shadowBlinkMaxNearbyEnemies = 2;
+    [SerializeField] private float shadowBlinkAgentClearance = 1.1f;
+    [SerializeField] private float shadowBlinkTeamSpacing = 5f;
+    [SerializeField] private float shadowBlinkMinimumScore = 8f;
+
+    [Header("Debug")]
+    [SerializeField] private bool drawAbilityRangeGizmos;
+    [SerializeField] private bool drawOnlyCurrentRoleAbility = true;
+
     private static readonly Dictionary<HealthSystem, AgentRoleAbilities> HealClaims =
         new Dictionary<HealthSystem, AgentRoleAbilities>();
+    private static readonly Dictionary<TeamType, float> NextTeamShadowBlinkTime =
+        new Dictionary<TeamType, float>();
     private static Material redWallMaterial;
     private static Material blueWallMaterial;
     private static Material healingBeamMaterial;
@@ -49,10 +71,12 @@ public sealed class AgentRoleAbilities : MonoBehaviour
     private float nextHealTime;
     private float nextWallTime;
     private float nextTurretTime;
+    private float nextShadowBlinkTime;
     private float nextThinkTime;
     private float wallMessageUntil;
     private float abilityMessageUntil;
     private float lastDamagedAt = Mathf.NegativeInfinity;
+    private bool shadowBlinkOpeningStarted;
     private bool isInstallingTurret;
     private float turretInstallStartedAt;
     private float turretInstallEndsAt;
@@ -60,11 +84,13 @@ public sealed class AgentRoleAbilities : MonoBehaviour
     private Vector3 turretInstallPosition;
     private Quaternion turretInstallRotation;
     private DeployableTurret ownedTurret;
+    private static Material shadowBlinkMaterial;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void AttachToAgents()
     {
         HealClaims.Clear();
+        NextTeamShadowBlinkTime.Clear();
         foreach (AgentStats agent in
                  FindObjectsByType<AgentStats>(FindObjectsInactive.Include))
         {
@@ -86,6 +112,7 @@ public sealed class AgentRoleAbilities : MonoBehaviour
         nextWallTime = Time.time + Random.Range(5f, 8f);
         nextHealTime = Time.time + Random.Range(1.5f, 3f);
         nextTurretTime = Time.time + Random.Range(6f, 9f);
+        nextShadowBlinkTime = float.PositiveInfinity;
     }
 
     private void OnEnable()
@@ -96,11 +123,50 @@ public sealed class AgentRoleAbilities : MonoBehaviour
             health.Damaged -= OnDamaged;
             health.Damaged += OnDamaged;
         }
+
+        RoundManager round = RoundManager.Instance;
+        if (round != null)
+        {
+            round.StateChanged -= OnRoundStateChanged;
+            round.StateChanged += OnRoundStateChanged;
+            SyncShadowBlinkCooldownWithRound(round.CurrentState);
+        }
+        else
+        {
+            ArmShadowBlinkOpeningCooldown();
+        }
     }
 
     private void OnDamaged(HealthSystem damagedHealth, float amount, GameObject attacker)
     {
         lastDamagedAt = Time.time;
+    }
+
+    private void OnRoundStateChanged(RoundState state)
+    {
+        SyncShadowBlinkCooldownWithRound(state);
+    }
+
+    private void SyncShadowBlinkCooldownWithRound(RoundState state)
+    {
+        if (state == RoundState.Preparation || state == RoundState.RoundEnd ||
+            state == RoundState.Defused || state == RoundState.Exploded)
+        {
+            shadowBlinkOpeningStarted = false;
+            nextShadowBlinkTime = float.PositiveInfinity;
+            return;
+        }
+
+        if (!shadowBlinkOpeningStarted)
+        {
+            ArmShadowBlinkOpeningCooldown();
+        }
+    }
+
+    private void ArmShadowBlinkOpeningCooldown()
+    {
+        shadowBlinkOpeningStarted = true;
+        nextShadowBlinkTime = Time.time + shadowBlinkOpeningCooldown;
     }
 
     private void Update()
@@ -170,6 +236,15 @@ public sealed class AgentRoleAbilities : MonoBehaviour
                 out Quaternion turretRotation))
         {
             BeginTurretInstallation(turretPosition, turretRotation);
+            return;
+        }
+
+        if (role.SelectedRole == AgentRoleType.Flanker &&
+            Time.time >= nextShadowBlinkTime &&
+            TryFindShadowBlink(out AgentStats blinkTarget, out Vector3 blinkPosition,
+                out string triggerReason))
+        {
+            ExecuteShadowBlink(blinkTarget, blinkPosition, triggerReason);
         }
     }
 
@@ -740,6 +815,769 @@ public sealed class AgentRoleAbilities : MonoBehaviour
         }
     }
 
+    private bool TryFindShadowBlink(
+        out AgentStats target,
+        out Vector3 blinkPosition,
+        out string triggerReason)
+    {
+        target = null;
+        blinkPosition = default;
+        triggerReason = string.Empty;
+        if (stats == null || role == null || role.SelectedRole != AgentRoleType.Flanker)
+        {
+            return false;
+        }
+
+        if (IsTeamShadowBlinkLocked())
+        {
+            return false;
+        }
+
+        bool teamEngaged = IsTeamEngaged();
+        bool recentlyDamaged = Time.time - lastDamagedAt <= shadowBlinkRecentDamageWindow;
+        bool hasUtilityTarget = TryFindUtilityOwner(out AgentStats utilityOwner);
+        float currentSafetyScore = ScoreShadowBlinkPosition(
+            transform.position,
+            null,
+            false,
+            out _);
+        float bestScore = float.NegativeInfinity;
+        string bestReason = string.Empty;
+
+        foreach (AgentStats enemy in
+                 FindObjectsByType<AgentStats>(FindObjectsInactive.Exclude))
+        {
+            if (!IsLivingEnemy(enemy))
+            {
+                continue;
+            }
+
+            ShadowBlinkTrigger trigger = GetShadowBlinkTrigger(
+                enemy,
+                teamEngaged,
+                recentlyDamaged,
+                hasUtilityTarget && enemy == utilityOwner);
+            if (trigger == ShadowBlinkTrigger.None)
+            {
+                continue;
+            }
+
+            if (IsAlreadyGoodAttackPosition(enemy))
+            {
+                continue;
+            }
+
+            if (!TryFindShadowBlinkDestination(enemy, trigger, out Vector3 candidate,
+                    out float candidateScore))
+            {
+                continue;
+            }
+
+            if (recentlyDamaged &&
+                candidateScore < currentSafetyScore + shadowBlinkMinImprovement)
+            {
+                continue;
+            }
+
+            float targetScore = ScoreShadowBlinkTarget(enemy, trigger);
+            float totalScore = candidateScore + targetScore;
+            if (trigger != ShadowBlinkTrigger.TakingDamage &&
+                totalScore < shadowBlinkMinimumScore)
+            {
+                continue;
+            }
+
+            if (totalScore > bestScore)
+            {
+                bestScore = totalScore;
+                target = enemy;
+                blinkPosition = candidate;
+                bestReason = GetShadowBlinkReason(trigger);
+            }
+        }
+
+        if (target == null)
+        {
+            return false;
+        }
+
+        triggerReason = bestReason;
+        return true;
+    }
+
+    private bool IsTeamShadowBlinkLocked()
+    {
+        return stats != null &&
+               NextTeamShadowBlinkTime.TryGetValue(stats.team, out float nextAllowed) &&
+               Time.time < nextAllowed;
+    }
+
+    private void ReserveTeamShadowBlinkWindow()
+    {
+        if (stats == null)
+        {
+            return;
+        }
+
+        NextTeamShadowBlinkTime[stats.team] = Time.time + shadowBlinkTeamSpacing;
+    }
+
+    private enum ShadowBlinkTrigger
+    {
+        None,
+        TeamEngage,
+        TakingDamage,
+        BacklineTarget,
+        Finisher,
+        AntiUtility
+    }
+
+    private ShadowBlinkTrigger GetShadowBlinkTrigger(
+        AgentStats enemy,
+        bool teamEngaged,
+        bool recentlyDamaged,
+        bool utilityOwner)
+    {
+        HealthSystem enemyHealth = enemy.GetComponent<HealthSystem>();
+        if (enemyHealth == null || enemyHealth.IsDead)
+        {
+            return ShadowBlinkTrigger.None;
+        }
+
+        if (!teamEngaged)
+        {
+            return recentlyDamaged
+                ? ShadowBlinkTrigger.TakingDamage
+                : ShadowBlinkTrigger.None;
+        }
+
+        if (enemyHealth.NormalizedHealth <= shadowBlinkFinisherHealth)
+        {
+            return ShadowBlinkTrigger.Finisher;
+        }
+
+        if (utilityOwner)
+        {
+            return ShadowBlinkTrigger.AntiUtility;
+        }
+
+        if (IsPriorityBacklineTarget(enemy))
+        {
+            return ShadowBlinkTrigger.BacklineTarget;
+        }
+
+        return IsTeamEngageBlinkOpportunity(enemy)
+            ? ShadowBlinkTrigger.TeamEngage
+            : ShadowBlinkTrigger.None;
+    }
+
+    private bool IsTeamEngageBlinkOpportunity(AgentStats enemy)
+    {
+        return GetEnemyIsolation(enemy) >= 0.55f ||
+               IsAttackingSomeoneElse(enemy) ||
+               GetSideRearScore(transform.position, enemy) >= 0.45f;
+    }
+
+    private bool TryFindShadowBlinkDestination(
+        AgentStats target,
+        ShadowBlinkTrigger trigger,
+        out Vector3 blinkPosition,
+        out float score)
+    {
+        blinkPosition = default;
+        score = float.NegativeInfinity;
+        if (FlatDistance(transform.position, target.transform.position) >
+            shadowBlinkMaxRange)
+        {
+            return false;
+        }
+
+        Vector3 targetForward = target.transform.forward;
+        targetForward.y = 0f;
+        if (targetForward.sqrMagnitude < 0.01f)
+        {
+            Vector3 teamCenter = GetTeamCenter(stats.team);
+            targetForward = target.transform.position - teamCenter;
+            targetForward.y = 0f;
+        }
+
+        if (targetForward.sqrMagnitude < 0.01f)
+        {
+            targetForward = transform.forward;
+        }
+
+        targetForward.Normalize();
+        Vector3 targetRight = Vector3.Cross(Vector3.up, targetForward).normalized;
+        Vector3 awayFromTarget = transform.position - target.transform.position;
+        awayFromTarget.y = 0f;
+        if (awayFromTarget.sqrMagnitude < 0.01f)
+        {
+            awayFromTarget = -targetForward;
+        }
+
+        awayFromTarget.Normalize();
+        Vector3[] directions = trigger == ShadowBlinkTrigger.TakingDamage
+            ? new[]
+            {
+                awayFromTarget,
+                (awayFromTarget + targetRight).normalized,
+                (awayFromTarget - targetRight).normalized,
+                targetRight,
+                -targetRight
+            }
+            : new[]
+            {
+                -targetForward,
+                (-targetForward + targetRight).normalized,
+                (-targetForward - targetRight).normalized,
+                targetRight,
+                -targetRight
+            };
+        float[] distances =
+        {
+            shadowBlinkPreferredDistance,
+            shadowBlinkPreferredDistance + 0.8f,
+            Mathf.Max(1.6f, shadowBlinkPreferredDistance - 0.6f)
+        };
+
+        foreach (float distance in distances)
+        {
+            foreach (Vector3 direction in directions)
+            {
+                Vector3 candidate = target.transform.position + direction * distance;
+                candidate.y = transform.position.y;
+                if (!IsValidShadowBlinkDestination(candidate, target))
+                {
+                    continue;
+                }
+
+                float candidateScore = ScoreShadowBlinkPosition(
+                    candidate,
+                    target,
+                    trigger == ShadowBlinkTrigger.TakingDamage,
+                    out _);
+                if (candidateScore > score)
+                {
+                    score = candidateScore;
+                    blinkPosition = candidate;
+                }
+            }
+        }
+
+        return score > float.NegativeInfinity;
+    }
+
+    private bool IsValidShadowBlinkDestination(Vector3 candidate, AgentStats target)
+    {
+        if (FlatDistance(transform.position, candidate) > shadowBlinkMaxRange)
+        {
+            return false;
+        }
+
+        AStarPathfinder3D pathfinder = AStarPathfinder3D.Instance;
+        float radius = motor != null
+            ? motor.AgentRadius + motor.MinObstacleClearance
+            : 0.55f;
+        if (pathfinder != null &&
+            !pathfinder.IsValidAgentPosition(
+                candidate,
+                radius,
+                gameObject,
+                true,
+                shadowBlinkAgentClearance))
+        {
+            return false;
+        }
+
+        if (pathfinder == null &&
+            Physics.CheckSphere(
+                candidate + Vector3.up * 0.55f,
+                radius,
+                ~0,
+                QueryTriggerInteraction.Ignore))
+        {
+            return false;
+        }
+
+        if (DefenderTeamCoordinator.IsLineBlocked(
+                candidate,
+                target.transform.position))
+        {
+            return false;
+        }
+
+        float danger = GetDanger(candidate);
+        if (danger > shadowBlinkDangerLimit)
+        {
+            return false;
+        }
+
+        return CountLivingEnemiesNear(candidate, shadowBlinkEnemyPileupRadius) <=
+               shadowBlinkMaxNearbyEnemies;
+    }
+
+    private float ScoreShadowBlinkTarget(
+        AgentStats target,
+        ShadowBlinkTrigger trigger)
+    {
+        HealthSystem targetHealth = target.GetComponent<HealthSystem>();
+        float weak = targetHealth != null ? 1f - targetHealth.NormalizedHealth : 0f;
+        float isolation = GetEnemyIsolation(target);
+        float score = weak * 8f + isolation * 4f -
+                      FlatDistance(transform.position, target.transform.position) * 0.12f;
+
+        AgentRole targetRole = target.GetComponent<AgentRole>();
+        WeaponLoadout targetLoadout = target.GetComponent<WeaponLoadout>();
+        if (targetRole != null && targetRole.SelectedRole == AgentRoleType.Support)
+        {
+            score += 6f;
+        }
+
+        if ((targetRole != null && targetRole.SelectedRole == AgentRoleType.Flanker) ||
+            (targetLoadout != null && targetLoadout.SelectedWeapon == WeaponType.Sniper))
+        {
+            score += 4f;
+        }
+
+        if (IsAttackingSomeoneElse(target))
+        {
+            score += 3f;
+        }
+
+        switch (trigger)
+        {
+            case ShadowBlinkTrigger.Finisher:
+                score += 8f;
+                break;
+            case ShadowBlinkTrigger.BacklineTarget:
+                score += 5f;
+                break;
+            case ShadowBlinkTrigger.AntiUtility:
+                score += 6f;
+                break;
+            case ShadowBlinkTrigger.TakingDamage:
+                score += 2f;
+                break;
+        }
+
+        return score;
+    }
+
+    private float ScoreShadowBlinkPosition(
+        Vector3 position,
+        AgentStats target,
+        bool escapeBlink,
+        out string reason)
+    {
+        float danger = GetDanger(position);
+        int nearbyEnemies = CountLivingEnemiesNear(position, shadowBlinkEnemyPileupRadius);
+        float nearestAlly = GetNearestAllyDistance(position);
+        float score = -danger * 2.5f - nearbyEnemies * 2.2f;
+
+        if (target != null)
+        {
+            float distance = FlatDistance(position, target.transform.position);
+            float rangeFit = GetShadowBlinkRangeFit(distance);
+            score += rangeFit * 5f + GetSideRearScore(position, target) * 4f;
+            if (DefenderTeamCoordinator.IsLineBlocked(position, target.transform.position))
+            {
+                score -= 10f;
+            }
+        }
+
+        if (escapeBlink)
+        {
+            score += Mathf.Clamp(nearestAlly, 2f, 9f) * 0.35f;
+        }
+        else
+        {
+            score -= Mathf.Abs(nearestAlly - 5.5f) * 0.18f;
+        }
+
+        reason = $"danger {danger:0.0}, enemies {nearbyEnemies}";
+        return score;
+    }
+
+    private void ExecuteShadowBlink(
+        AgentStats target,
+        Vector3 blinkPosition,
+        string triggerReason)
+    {
+        Vector3 start = transform.position;
+        motor?.Stop();
+        Rigidbody body = GetComponent<Rigidbody>();
+        if (body != null)
+        {
+            body.linearVelocity = Vector3.zero;
+            body.angularVelocity = Vector3.zero;
+            body.position = blinkPosition;
+        }
+
+        transform.position = blinkPosition;
+        motor?.FacePosition(target.transform.position);
+        Physics.SyncTransforms();
+        nextShadowBlinkTime = Time.time + shadowBlinkCooldown;
+        ReserveTeamShadowBlinkWindow();
+        abilityMessageUntil = Time.time + 1.2f;
+        healthBar?.SetAbilityStatus(
+            "SHADOW BLINK",
+            0f,
+            new Color(0.86f, 0.24f, 1f, 1f));
+        SpawnShadowBlinkTrail(start, blinkPosition);
+        Debug.Log($"{name} used Shadow Blink ({triggerReason}) near {target.name}.");
+    }
+
+    private bool IsTeamEngaged()
+    {
+        int alliesAttacking = 0;
+        foreach (AgentBrain brain in
+                 FindObjectsByType<AgentBrain>(FindObjectsInactive.Exclude))
+        {
+            AgentStats ally = brain.GetComponent<AgentStats>();
+            if (ally == null || ally.team != stats.team)
+            {
+                continue;
+            }
+
+            GameObject currentTarget = brain.CurrentTarget;
+            if (currentTarget != null &&
+                CombatTargetUtility.TryGetTeam(currentTarget, out TeamType team) &&
+                team != stats.team &&
+                CombatTargetUtility.IsAlive(currentTarget))
+            {
+                alliesAttacking++;
+            }
+        }
+
+        if (alliesAttacking >= 2)
+        {
+            return true;
+        }
+
+        foreach (AgentRole allyRole in
+                 FindObjectsByType<AgentRole>(FindObjectsInactive.Exclude))
+        {
+            AgentStats ally = allyRole.GetComponent<AgentStats>();
+            AgentBrain brain = allyRole.GetComponent<AgentBrain>();
+            if (ally != null && brain != null && ally.team == stats.team &&
+                allyRole.SelectedRole == AgentRoleType.Assaulter &&
+                brain.CurrentTarget != null &&
+                CombatTargetUtility.IsAlive(brain.CurrentTarget))
+            {
+                return true;
+            }
+        }
+
+        if (alliesAttacking > 0)
+        {
+            Vector3 teamCenter = GetTeamCenter(stats.team);
+            foreach (AgentStats enemy in
+                     FindObjectsByType<AgentStats>(FindObjectsInactive.Exclude))
+            {
+                if (IsLivingEnemy(enemy) &&
+                    FlatDistance(enemy.transform.position, teamCenter) <=
+                    shadowBlinkCombatRange)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private bool IsPriorityBacklineTarget(AgentStats enemy)
+    {
+        HealthSystem enemyHealth = enemy.GetComponent<HealthSystem>();
+        if (enemyHealth == null || enemyHealth.IsDead)
+        {
+            return false;
+        }
+
+        AgentRole enemyRole = enemy.GetComponent<AgentRole>();
+        WeaponLoadout enemyLoadout = enemy.GetComponent<WeaponLoadout>();
+        return enemyHealth.NormalizedHealth <= 0.55f ||
+               GetEnemyIsolation(enemy) >= 0.6f ||
+               IsAttackingSomeoneElse(enemy) ||
+               (enemyRole != null && enemyRole.SelectedRole == AgentRoleType.Support) ||
+               (enemyLoadout != null && enemyLoadout.SelectedWeapon == WeaponType.Sniper);
+    }
+
+    private bool TryFindUtilityOwner(out AgentStats owner)
+    {
+        owner = null;
+        float bestDistance = Mathf.Infinity;
+        foreach (DeployableTurret turret in
+                 FindObjectsByType<DeployableTurret>(FindObjectsInactive.Exclude))
+        {
+            if (turret == null || turret.IsDestroyed || turret.Team == stats.team)
+            {
+                continue;
+            }
+
+            AgentStats candidate = FindNearestLivingEnemyRole(
+                turret.transform.position,
+                AgentRoleType.Assaulter);
+            if (candidate != null)
+            {
+                float distance = FlatDistance(transform.position,
+                    candidate.transform.position);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    owner = candidate;
+                }
+            }
+        }
+
+        foreach (DeployedDefenderWall wall in
+                 FindObjectsByType<DeployedDefenderWall>(FindObjectsInactive.Exclude))
+        {
+            if (wall == null || wall.Team == stats.team)
+            {
+                continue;
+            }
+
+            AgentStats candidate = FindNearestLivingEnemyRole(
+                wall.transform.position,
+                AgentRoleType.Defender);
+            if (candidate != null)
+            {
+                float distance = FlatDistance(transform.position,
+                    candidate.transform.position);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    owner = candidate;
+                }
+            }
+        }
+
+        return owner != null;
+    }
+
+    private AgentStats FindNearestLivingEnemyRole(
+        Vector3 position,
+        AgentRoleType requiredRole)
+    {
+        AgentStats best = null;
+        float bestDistance = Mathf.Infinity;
+        foreach (AgentStats candidate in
+                 FindObjectsByType<AgentStats>(FindObjectsInactive.Exclude))
+        {
+            AgentRole candidateRole = candidate.GetComponent<AgentRole>();
+            if (!IsLivingEnemy(candidate) || candidateRole == null ||
+                candidateRole.SelectedRole != requiredRole)
+            {
+                continue;
+            }
+
+            float distance = FlatDistance(position, candidate.transform.position);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = candidate;
+            }
+        }
+
+        return best;
+    }
+
+    private bool IsAlreadyGoodAttackPosition(AgentStats target)
+    {
+        float distance = FlatDistance(transform.position, target.transform.position);
+        WeaponLoadout loadout = WeaponLoadout.Get(gameObject);
+        float maxRange = loadout != null ? loadout.MaximumRange : stats.attackRange;
+        return distance <= Mathf.Min(maxRange, shadowBlinkPreferredDistance + 1.3f) &&
+               GetSideRearScore(transform.position, target) >= 0.65f &&
+               GetDanger(transform.position) <= shadowBlinkDangerLimit * 0.65f;
+    }
+
+    private bool IsLivingEnemy(AgentStats candidate)
+    {
+        if (candidate == null || candidate == stats || candidate.team == stats.team)
+        {
+            return false;
+        }
+
+        HealthSystem candidateHealth = candidate.GetComponent<HealthSystem>();
+        return candidateHealth != null && !candidateHealth.IsDead;
+    }
+
+    private float GetDanger(Vector3 position)
+    {
+        float danger = InfluenceMapManager.Instance != null
+            ? InfluenceMapManager.Instance.Sample(InfluenceLayerType.Danger, position)
+            : 0f;
+        return danger + CountLivingEnemiesNear(position, 3.5f) * 0.9f;
+    }
+
+    private int CountLivingEnemiesNear(Vector3 position, float radius)
+    {
+        int count = 0;
+        foreach (AgentStats enemy in
+                 FindObjectsByType<AgentStats>(FindObjectsInactive.Exclude))
+        {
+            if (IsLivingEnemy(enemy) &&
+                FlatDistance(position, enemy.transform.position) <= radius)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private float GetNearestAllyDistance(Vector3 position)
+    {
+        float nearest = Mathf.Infinity;
+        foreach (AgentStats ally in
+                 FindObjectsByType<AgentStats>(FindObjectsInactive.Exclude))
+        {
+            if (ally == null || ally == stats || ally.team != stats.team)
+            {
+                continue;
+            }
+
+            HealthSystem allyHealth = ally.GetComponent<HealthSystem>();
+            if (allyHealth == null || allyHealth.IsDead)
+            {
+                continue;
+            }
+
+            nearest = Mathf.Min(nearest, FlatDistance(position, ally.transform.position));
+        }
+
+        return float.IsInfinity(nearest) ? 8f : nearest;
+    }
+
+    private float GetEnemyIsolation(AgentStats enemy)
+    {
+        int nearbyAllies = 0;
+        foreach (AgentStats other in
+                 FindObjectsByType<AgentStats>(FindObjectsInactive.Exclude))
+        {
+            if (other == null || other == enemy || other.team != enemy.team)
+            {
+                continue;
+            }
+
+            HealthSystem otherHealth = other.GetComponent<HealthSystem>();
+            if (otherHealth == null || otherHealth.IsDead)
+            {
+                continue;
+            }
+
+            if (FlatDistance(enemy.transform.position, other.transform.position) <= 5f)
+            {
+                nearbyAllies++;
+            }
+        }
+
+        return nearbyAllies == 0 ? 1f : nearbyAllies == 1 ? 0.55f : 0f;
+    }
+
+    private bool IsAttackingSomeoneElse(AgentStats enemy)
+    {
+        AgentBrain brain = enemy.GetComponent<AgentBrain>();
+        if (brain == null || brain.CurrentTarget == null)
+        {
+            return false;
+        }
+
+        GameObject currentTarget = CombatTargetUtility.GetRoot(brain.CurrentTarget);
+        return currentTarget != null && currentTarget != gameObject &&
+               CombatTargetUtility.TryGetTeam(currentTarget, out TeamType targetTeam) &&
+               targetTeam == stats.team &&
+               CombatTargetUtility.IsAlive(currentTarget);
+    }
+
+    private float GetSideRearScore(Vector3 position, AgentStats target)
+    {
+        Vector3 targetToPosition = position - target.transform.position;
+        targetToPosition.y = 0f;
+        Vector3 forward = target.transform.forward;
+        forward.y = 0f;
+        if (targetToPosition.sqrMagnitude < 0.01f || forward.sqrMagnitude < 0.01f)
+        {
+            return 0f;
+        }
+
+        float dot = Vector3.Dot(forward.normalized, targetToPosition.normalized);
+        return Mathf.Clamp01((-dot + 1f) * 0.5f);
+    }
+
+    private float GetShadowBlinkRangeFit(float distance)
+    {
+        WeaponLoadout loadout = WeaponLoadout.Get(gameObject);
+        float minimum = loadout != null ? loadout.MinimumRange : 0f;
+        float maximum = loadout != null ? loadout.MaximumRange : stats.attackRange;
+        float preferred = Mathf.Clamp(
+            shadowBlinkPreferredDistance,
+            minimum + 0.2f,
+            Mathf.Max(minimum + 0.3f, maximum - 0.2f));
+        return Mathf.Clamp01(1f - Mathf.Abs(distance - preferred) /
+            Mathf.Max(0.2f, maximum - minimum));
+    }
+
+    private static string GetShadowBlinkReason(ShadowBlinkTrigger trigger)
+    {
+        switch (trigger)
+        {
+            case ShadowBlinkTrigger.TeamEngage:
+                return "team engage";
+            case ShadowBlinkTrigger.TakingDamage:
+                return "taking damage";
+            case ShadowBlinkTrigger.BacklineTarget:
+                return "backline target";
+            case ShadowBlinkTrigger.Finisher:
+                return "finisher";
+            case ShadowBlinkTrigger.AntiUtility:
+                return "anti-utility";
+            default:
+                return "tactical";
+        }
+    }
+
+    private void SpawnShadowBlinkTrail(Vector3 start, Vector3 end)
+    {
+        GameObject trailObject = new GameObject("Shadow Blink Trail");
+        LineRenderer line = trailObject.AddComponent<LineRenderer>();
+        line.useWorldSpace = true;
+        line.positionCount = 2;
+        line.SetPosition(0, start + Vector3.up * 0.8f);
+        line.SetPosition(1, end + Vector3.up * 0.8f);
+        line.startWidth = 0.16f;
+        line.endWidth = 0.04f;
+        line.startColor = new Color(0.86f, 0.24f, 1f, 0.75f);
+        line.endColor = new Color(0.25f, 0.04f, 0.35f, 0.1f);
+        line.sharedMaterial = GetShadowBlinkMaterial();
+        line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        line.receiveShadows = false;
+        Destroy(trailObject, 0.35f);
+    }
+
+    private static Material GetShadowBlinkMaterial()
+    {
+        if (shadowBlinkMaterial != null)
+        {
+            return shadowBlinkMaterial;
+        }
+
+        Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
+        if (shader == null)
+        {
+            shader = Shader.Find("Unlit/Color");
+        }
+
+        shadowBlinkMaterial = new Material(shader)
+        {
+            name = "Shadow Blink Material",
+            color = new Color(0.86f, 0.24f, 1f, 0.8f)
+        };
+        return shadowBlinkMaterial;
+    }
+
     private static BombSite GetNearestSite(ObjectiveManager objective, Vector3 position)
     {
         BombSite best = null;
@@ -890,7 +1728,7 @@ public sealed class AgentRoleAbilities : MonoBehaviour
         Renderer renderer = wall.GetComponent<Renderer>();
         renderer.sharedMaterial = GetWallMaterial(stats.team);
         DeployedDefenderWall deployed = wall.AddComponent<DeployedDefenderWall>();
-        deployed.Initialize(wallLifetime);
+        deployed.Initialize(stats.team, wallLifetime);
         Physics.SyncTransforms();
         AStarPathfinder3D.Instance?.RefreshGrid();
 
@@ -1038,8 +1876,62 @@ public sealed class AgentRoleAbilities : MonoBehaviour
             health.Damaged -= OnDamaged;
         }
 
+        RoundManager round = RoundManager.Instance;
+        if (round != null)
+        {
+            round.StateChanged -= OnRoundStateChanged;
+        }
+
         CancelHealing(false);
         CancelTurretInstallation(false);
+    }
+
+    private void OnDrawGizmosSelected()
+    {
+        if (!drawAbilityRangeGizmos)
+        {
+            return;
+        }
+
+        AgentRole activeRole = role != null ? role : GetComponent<AgentRole>();
+        AgentRoleType selectedRole = activeRole != null
+            ? activeRole.SelectedRole
+            : AgentRoleType.Flanker;
+        Vector3 origin = transform.position + Vector3.up * 0.08f;
+
+        if (ShouldDrawAbilityRange(selectedRole, AgentRoleType.Support))
+        {
+            DrawRangeGizmo(origin, healRange, new Color(0.15f, 1f, 0.35f, 0.85f));
+        }
+
+        if (ShouldDrawAbilityRange(selectedRole, AgentRoleType.Defender))
+        {
+            DrawRangeGizmo(origin, wallThreatRange, new Color(0.2f, 0.55f, 1f, 0.85f));
+        }
+
+        if (ShouldDrawAbilityRange(selectedRole, AgentRoleType.Assaulter))
+        {
+            DrawRangeGizmo(origin, turretRange, new Color(1f, 0.55f, 0.1f, 0.9f));
+            DrawRangeGizmo(origin, turretThreatRange, new Color(1f, 0.2f, 0.1f, 0.45f));
+        }
+
+        if (ShouldDrawAbilityRange(selectedRole, AgentRoleType.Flanker))
+        {
+            DrawRangeGizmo(origin, shadowBlinkMaxRange, new Color(0.86f, 0.24f, 1f, 0.9f));
+        }
+    }
+
+    private bool ShouldDrawAbilityRange(
+        AgentRoleType selectedRole,
+        AgentRoleType abilityRole)
+    {
+        return !drawOnlyCurrentRoleAbility || selectedRole == abilityRole;
+    }
+
+    private static void DrawRangeGizmo(Vector3 origin, float radius, Color color)
+    {
+        Gizmos.color = color;
+        Gizmos.DrawWireSphere(origin, Mathf.Max(0f, radius));
     }
 
     private static float FlatDistance(Vector3 a, Vector3 b)
@@ -1052,11 +1944,15 @@ public sealed class AgentRoleAbilities : MonoBehaviour
 
 public sealed class DeployedDefenderWall : MonoBehaviour
 {
+    [SerializeField] private TeamType team;
     private float expiresAt;
     private bool expiring;
 
-    public void Initialize(float lifetime)
+    public TeamType Team => team;
+
+    public void Initialize(TeamType ownerTeam, float lifetime)
     {
+        team = ownerTeam;
         expiresAt = Time.time + Mathf.Max(1f, lifetime);
     }
 
