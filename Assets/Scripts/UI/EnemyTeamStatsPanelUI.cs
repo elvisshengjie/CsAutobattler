@@ -25,7 +25,6 @@ public sealed class EnemyTeamStatsPanelUI : MonoBehaviour
             if (canvas == null || candidate.name == "Canvas3D") canvas = candidate;
         }
         if (canvas == null) return;
-        HudCanvasScaleUtility.Configure(canvas);
 
         GameObject panelObject = new GameObject(
             "EnemyTeamStatsPanel", typeof(RectTransform), typeof(VerticalLayoutGroup),
@@ -35,7 +34,7 @@ public sealed class EnemyTeamStatsPanelUI : MonoBehaviour
         RectTransform rect = panelObject.GetComponent<RectTransform>();
         rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
         rect.pivot = new Vector2(0f, 1f);
-        rect.anchoredPosition = new Vector2(14f, -200f);
+        rect.anchoredPosition = new Vector2(10f, -160f);
         rect.sizeDelta = new Vector2(
             RedTeamStatsSlotUI.DisplayWidth,
             SlotCount * RedTeamStatsSlotUI.DisplayHeight + (SlotCount - 1) * Spacing);
@@ -118,8 +117,8 @@ public sealed class EnemyTeamStatsPanelUI : MonoBehaviour
         Image portrait = CreateUIObject("Portrait", slotRect).AddComponent<Image>();
         portrait.rectTransform.anchorMin = portrait.rectTransform.anchorMax = new Vector2(0f, 0.5f);
         portrait.rectTransform.pivot = new Vector2(0f, 0.5f);
-        portrait.rectTransform.anchoredPosition = new Vector2(8f, 0f);
-        portrait.rectTransform.sizeDelta = new Vector2(56f, 56f);
+        portrait.rectTransform.anchoredPosition = new Vector2(6f, 0f);
+        portrait.rectTransform.sizeDelta = new Vector2(40f, 40f);
         portrait.raycastTarget = false;
 
         Text hp = CreateText("HPText", slotRect, font, new Vector2(0f, 0.5f), new Vector2(1f, 1f));
@@ -135,15 +134,15 @@ public sealed class EnemyTeamStatsPanelUI : MonoBehaviour
     {
         Text text = CreateUIObject(name, parent).AddComponent<Text>();
         text.font = font;
-        text.fontSize = 13;
+        text.fontSize = 10;
         text.fontStyle = FontStyle.Bold;
         text.color = Color.white;
         text.alignment = TextAnchor.MiddleLeft;
         text.raycastTarget = false;
         text.rectTransform.anchorMin = anchorMin;
         text.rectTransform.anchorMax = anchorMax;
-        text.rectTransform.offsetMin = new Vector2(72f, 2f);
-        text.rectTransform.offsetMax = new Vector2(-6f, -2f);
+        text.rectTransform.offsetMin = new Vector2(52f, 1f);
+        text.rectTransform.offsetMax = new Vector2(-4f, -1f);
         return text;
     }
 

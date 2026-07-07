@@ -22,7 +22,6 @@ public class ObjectiveTimerUI : MonoBehaviour
     private Texture2D defuseFillTexture;
     private Texture2D tooLateFillTexture;
     private Texture2D progressBackgroundTexture;
-    private float cachedStyleScale = -1f;
 
     private void OnGUI()
     {
@@ -33,30 +32,27 @@ public class ObjectiveTimerUI : MonoBehaviour
             return;
         }
 
-        float uiScale = GetUiScale();
-        EnsureStyles(uiScale);
+        EnsureStyles();
         DrawRoundTimer(round);
 
         string message = GetMessage(round, objective);
         if (!string.IsNullOrEmpty(message))
         {
-            float contentWidth =
-                textStyle.CalcSize(new GUIContent(message)).x + 34f * uiScale;
-            float fittedWidth = Mathf.Clamp(
-                contentWidth,
-                220f * uiScale,
-                Mathf.Min(width * uiScale, Screen.width - rightMargin * uiScale * 2f));
-            Rect panel = new Rect(
-                Screen.width - fittedWidth - rightMargin * uiScale,
-                Screen.height - height * uiScale - bottomMargin * uiScale,
-                fittedWidth,
-                height * uiScale);
-            GUI.Box(panel, GUIContent.none, panelStyle);
-            GUI.Box(new Rect(panel.x + 3f * uiScale, panel.y + 3f * uiScale,
-                    panel.width - 6f * uiScale, panel.height - 6f * uiScale),
-                GUIContent.none,
-                backgroundStyle);
-            GUI.Label(panel, message, textStyle);
+        float contentWidth = textStyle.CalcSize(new GUIContent(message)).x + 30f;
+        float fittedWidth = Mathf.Clamp(
+            contentWidth,
+            170f,
+            Mathf.Min(width, Screen.width - rightMargin * 2f));
+        Rect panel = new Rect(
+            Screen.width - fittedWidth - rightMargin,
+            Screen.height - height - bottomMargin,
+            fittedWidth,
+            height);
+        GUI.Box(panel, GUIContent.none, panelStyle);
+        GUI.Box(new Rect(panel.x + 3f, panel.y + 3f, panel.width - 6f, panel.height - 6f),
+            GUIContent.none,
+            backgroundStyle);
+        GUI.Label(panel, message, textStyle);
         }
 
         if (ShouldShowEnemyDefuse(round, objective))
@@ -87,15 +83,13 @@ public class ObjectiveTimerUI : MonoBehaviour
 
         int totalSeconds = Mathf.Max(0, Mathf.CeilToInt(seconds));
         string time = $"{totalSeconds / 60:00}:{totalSeconds % 60:00}";
-        float uiScale = GetUiScale();
-        float timerWidth = 310f * uiScale;
-        float timerHeight = 66f * uiScale;
+        const float timerWidth = 240f;
+        const float timerHeight = 54f;
         Rect panel = new Rect((Screen.width - timerWidth) * 0.5f, 16f,
             timerWidth, timerHeight);
         GUI.Box(panel, GUIContent.none, panelStyle);
-        GUI.Box(new Rect(panel.x + 3f * uiScale, panel.y + 3f * uiScale,
-            panel.width - 6f * uiScale, panel.height - 6f * uiScale),
-            GUIContent.none, backgroundStyle);
+        GUI.Box(new Rect(panel.x + 3f, panel.y + 3f, panel.width - 6f,
+            panel.height - 6f), GUIContent.none, backgroundStyle);
         GUI.Label(panel, $"{label}   {time}", roundTimerStyle);
     }
 
@@ -114,37 +108,32 @@ public class ObjectiveTimerUI : MonoBehaviour
 
     private void DrawEnemyDefuseAlert(RoundManager round, ObjectiveManager objective)
     {
-        float uiScale = GetUiScale();
-        float alertWidth = Mathf.Min(620f * uiScale, Screen.width - 40f * uiScale);
-        float alertHeight = 132f * uiScale;
-        Rect alert = new Rect((Screen.width - alertWidth) * 0.5f, 86f * uiScale,
+        float alertWidth = Mathf.Min(520f, Screen.width - 40f);
+        const float alertHeight = 112f;
+        Rect alert = new Rect((Screen.width - alertWidth) * 0.5f, 82f,
             alertWidth, alertHeight);
         GUI.Box(alert, GUIContent.none, panelStyle);
-        GUI.Box(new Rect(alert.x + 3f * uiScale, alert.y + 3f * uiScale,
-            alert.width - 6f * uiScale, alert.height - 6f * uiScale),
-            GUIContent.none, backgroundStyle);
+        GUI.Box(new Rect(alert.x + 3f, alert.y + 3f, alert.width - 6f,
+            alert.height - 6f), GUIContent.none, backgroundStyle);
 
         float remaining = Mathf.Max(0f, round.defuseDuration - objective.DefuseProgress);
         bool tooLate = remaining > round.BombTimeRemaining + 0.01f;
         string defuserName = objective.ActiveDefuser != null
             ? objective.ActiveDefuser.name
             : "Defender";
-        GUI.Label(new Rect(alert.x + 14f * uiScale, alert.y + 10f * uiScale,
-                alert.width - 28f * uiScale, 38f * uiScale),
+        GUI.Label(new Rect(alert.x + 12f, alert.y + 9f, alert.width - 24f, 32f),
             tooLate ? "ENEMY DEFUSING - TOO LATE" : "ENEMY IS DEFUSING!",
             defuseTitleStyle);
-        GUI.Label(new Rect(alert.x + 14f * uiScale, alert.y + 48f * uiScale,
-                alert.width - 28f * uiScale, 28f * uiScale),
+        GUI.Label(new Rect(alert.x + 12f, alert.y + 39f, alert.width - 24f, 24f),
             $"{defuserName}  |  {remaining:0.0}s remaining  |  Bomb {round.BombTimeRemaining:0.0}s",
             defuseDetailStyle);
 
-        Rect bar = new Rect(alert.x + 24f * uiScale, alert.y + 88f * uiScale,
-            alert.width - 48f * uiScale, 24f * uiScale);
+        Rect bar = new Rect(alert.x + 22f, alert.y + 75f, alert.width - 44f, 20f);
         GUI.DrawTexture(bar, progressBackgroundTexture);
         float progress = round.defuseDuration <= 0f ? 1f :
             Mathf.Clamp01(objective.DefuseProgress / round.defuseDuration);
-        Rect fill = new Rect(bar.x + 2f * uiScale, bar.y + 2f * uiScale,
-            (bar.width - 4f * uiScale) * progress, bar.height - 4f * uiScale);
+        Rect fill = new Rect(bar.x + 2f, bar.y + 2f,
+            (bar.width - 4f) * progress, bar.height - 4f);
         GUI.DrawTexture(fill, tooLate ? tooLateFillTexture : defuseFillTexture);
     }
 
@@ -180,14 +169,12 @@ public class ObjectiveTimerUI : MonoBehaviour
         return team == TeamType.Blue ? "DEFENDERS" : "STRIKERS";
     }
 
-    private void EnsureStyles(float uiScale)
+    private void EnsureStyles()
     {
-        if (panelStyle != null && Mathf.Approximately(cachedStyleScale, uiScale))
+        if (panelStyle != null)
         {
             return;
         }
-
-        cachedStyleScale = uiScale;
 
         panelTexture = new Texture2D(1, 1);
         panelTexture.name = "ObjectiveTimerPanelBackground";
@@ -204,7 +191,7 @@ public class ObjectiveTimerUI : MonoBehaviour
         textStyle = new GUIStyle(GUI.skin.label)
         {
             alignment = TextAnchor.MiddleCenter,
-            fontSize = ScaleFont(fontSize, uiScale),
+            fontSize = fontSize,
             fontStyle = FontStyle.Bold,
             wordWrap = false,
             normal = { textColor = Color.white }
@@ -213,18 +200,18 @@ public class ObjectiveTimerUI : MonoBehaviour
         defuseTitleStyle = new GUIStyle(textStyle)
         {
             alignment = TextAnchor.MiddleCenter,
-            fontSize = ScaleFont(26, uiScale),
+            fontSize = 22,
             normal = { textColor = new Color(1f, 0.32f, 0.22f) }
         };
         defuseDetailStyle = new GUIStyle(textStyle)
         {
             alignment = TextAnchor.MiddleCenter,
-            fontSize = ScaleFont(18, uiScale)
+            fontSize = 15
         };
         roundTimerStyle = new GUIStyle(textStyle)
         {
             alignment = TextAnchor.MiddleCenter,
-            fontSize = ScaleFont(22, uiScale),
+            fontSize = 18,
             normal = { textColor = new Color(0.2f, 0.86f, 0.96f, 1f) }
         };
         progressBackgroundTexture = CreateTexture("DefuseProgressBackground",
@@ -241,18 +228,6 @@ public class ObjectiveTimerUI : MonoBehaviour
         texture.SetPixel(0, 0, color);
         texture.Apply();
         return texture;
-    }
-
-    private static float GetUiScale()
-    {
-        float widthScale = Screen.width / HudCanvasScaleUtility.ReferenceResolution.x;
-        float heightScale = Screen.height / HudCanvasScaleUtility.ReferenceResolution.y;
-        return Mathf.Clamp(Mathf.Min(widthScale, heightScale), 0.85f, 1.35f);
-    }
-
-    private static int ScaleFont(int baseSize, float uiScale)
-    {
-        return Mathf.RoundToInt(baseSize * uiScale);
     }
 
     private void OnDestroy()

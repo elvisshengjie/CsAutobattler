@@ -97,7 +97,11 @@ public sealed class TeamTacticUI : MonoBehaviour
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 80;
 
-        HudCanvasScaleUtility.Configure(canvas);
+        CanvasScaler scaler = canvasObject.GetComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1600f, 900f);
+        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+        scaler.matchWidthOrHeight = 0.5f;
 
         BuildInitialSelection(canvasObject.transform);
         BuildCurrentTacticPanel(canvasObject.transform);
@@ -427,12 +431,12 @@ public sealed class TeamTacticUI : MonoBehaviour
             new Color(0.045f, 0.06f, 0.08f, 0.97f));
         SetRect(currentTacticPanel.GetComponent<RectTransform>(),
             new Vector2(1f, 1f), new Vector2(1f, 1f),
-            new Vector2(-24f, -24f), new Vector2(410f, 116f), new Vector2(1f, 1f));
+            new Vector2(-20f, -20f), new Vector2(340f, 92f), new Vector2(1f, 1f));
         AddOutline(currentTacticPanel, AccentColor, new Vector2(-2f, -2f));
 
         currentTacticText = CreateText("CurrentTacticText", currentTacticPanel.transform,
-            string.Empty, 22, FontStyle.Normal, TextAnchor.MiddleLeft);
-        StretchToParent(currentTacticText.rectTransform, 22f, 22f, 12f, 12f);
+            string.Empty, 18, FontStyle.Normal, TextAnchor.MiddleLeft);
+        StretchToParent(currentTacticText.rectTransform, 18f, 18f, 10f, 10f);
     }
 
     private void BuildMidRoundPanel(Transform parent)
@@ -441,7 +445,7 @@ public sealed class TeamTacticUI : MonoBehaviour
             new Color(0.035f, 0.045f, 0.06f, 0.93f));
         SetRect(midRoundPanel.GetComponent<RectTransform>(),
             new Vector2(1f, 1f), new Vector2(1f, 1f),
-            new Vector2(-24f, -154f), new Vector2(410f, 660f), new Vector2(1f, 1f));
+            new Vector2(-20f, -126f), new Vector2(360f, 615f), new Vector2(1f, 1f));
 
         Text heading = CreateText("Heading", midRoundPanel.transform,
             "MID-ROUND TACTICS", 20, FontStyle.Bold, TextAnchor.MiddleLeft);
