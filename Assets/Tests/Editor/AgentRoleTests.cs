@@ -1,3 +1,4 @@
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -67,6 +68,50 @@ public sealed class AgentRoleTests
         Color blue = AgentRoleAbilities.GetWallColor(TeamType.Blue);
         Assert.That(red.r, Is.GreaterThan(red.b));
         Assert.That(blue.b, Is.GreaterThan(blue.r));
+    }
+
+    [Test]
+    public void ManualWall_UsesTheSameCooldownAsAiAbility()
+    {
+        GameObject agent = new GameObject("Manual Wall Test Agent");
+        try
+        {
+            AgentStats stats = agent.AddComponent<AgentStats>();
+            stats.team = TeamType.Red;
+            agent.AddComponent<HealthSystem>();
+            AgentRole role = agent.AddComponent<AgentRole>();
+            role.SetRole(AgentRoleType.Defender);
+            AgentRoleAbilities abilities = agent.AddComponent<AgentRoleAbilities>();
+            typeof(AgentRoleAbilities)
+                .GetField("nextWallTime", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?.SetValue(abilities, 0f);
+
+            abilities.SetPlayerCommandSelected(true);
+            Assert.That(abilities.IsReservedForPlayerCommand, Is.True);
+            abilities.SetPlayerCommandSelected(false);
+            Assert.That(abilities.IsReservedForPlayerCommand, Is.False);
+
+            Assert.That(
+                abilities.TryManualDeployWall(new Vector3(4f, 0f, 0f)),
+                Is.True);
+            Assert.That(
+                abilities.CanManuallyDeployWall(
+                    new Vector3(8f, 0f, 0f),
+                    out _,
+                    out string reason),
+                Is.False);
+            Assert.That(reason, Does.Contain("cooldown"));
+        }
+        finally
+        {
+            foreach (DeployedDefenderWall wall in
+                     Object.FindObjectsByType<DeployedDefenderWall>(
+                         FindObjectsInactive.Include))
+            {
+                Object.DestroyImmediate(wall.gameObject);
+            }
+            Object.DestroyImmediate(agent);
+        }
     }
 
     [Test]

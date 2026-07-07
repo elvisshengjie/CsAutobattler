@@ -80,6 +80,7 @@ public sealed class AgentRoleAbilities : MonoBehaviour
     private float lastDamagedAt = Mathf.NegativeInfinity;
     private bool shadowBlinkOpeningStarted;
     private bool isInstallingTurret;
+    private bool playerCommandSelected;
     private float turretInstallStartedAt;
     private float turretInstallEndsAt;
     private Vector3 turretInstallStart;
@@ -87,6 +88,35 @@ public sealed class AgentRoleAbilities : MonoBehaviour
     private Quaternion turretInstallRotation;
     private DeployableTurret ownedTurret;
     private static Material shadowBlinkMaterial;
+
+    public AgentRoleType ActiveRole => role != null
+        ? role.SelectedRole
+        : AgentRoleType.Assaulter;
+    public Vector3 WallPreviewSize => wallSize;
+    public bool IsReservedForPlayerCommand => playerCommandSelected;
+    public float ManualCooldownRemaining
+    {
+        get
+        {
+            role ??= GetComponent<AgentRole>();
+            if (role == null)
+            {
+                return 0f;
+            }
+
+            float readyAt = role.SelectedRole switch
+            {
+                AgentRoleType.Support => nextHealTime,
+                AgentRoleType.Defender => nextWallTime,
+                AgentRoleType.Assaulter => nextTurretTime,
+                AgentRoleType.Flanker => nextShadowBlinkTime,
+                _ => Time.time
+            };
+            return float.IsPositiveInfinity(readyAt)
+                ? float.PositiveInfinity
+                : Mathf.Max(0f, readyAt - Time.time);
+        }
+    }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void AttachToAgents()
@@ -207,6 +237,11 @@ public sealed class AgentRoleAbilities : MonoBehaviour
         }
 
         ClearExpiredWallMessage();
+        if (playerCommandSelected)
+        {
+            return;
+        }
+
         if (Time.time < nextThinkTime)
         {
             return;
@@ -264,6 +299,281 @@ public sealed class AgentRoleAbilities : MonoBehaviour
                 round.CurrentState != RoundState.RoundEnd &&
                 round.CurrentState != RoundState.Defused &&
                 round.CurrentState != RoundState.Exploded);
+    }
+
+    public bool CanManuallyDeployWall(
+        Vector3 requestedPosition,
+        out Quaternion rotation,
+        out string reason)
+    {
+        rotation = GetManualPlacementRotation(requestedPosition);
+        if (!CanBeginManualAbility(AgentRoleType.Defender, nextWallTime, out reason))
+        {
+            return false;
+        }
+
+        requestedPosition.y = transform.position.y;
+        if (FlatDistance(transform.position, requestedPosition) > wallThreatRange)
+        {
+            reason = $"Wall range: {wallThreatRange:0.#}m";
+            return false;
+        }
+
+        if (!IsWallPlacementClear(requestedPosition, rotation))
+        {
+            reason = "Choose empty ground for the wall";
+            return false;
+        }
+
+        reason = "Click to deploy wall";
+        return true;
+    }
+
+    public bool TryManualDeployWall(Vector3 requestedPosition)
+    {
+        requestedPosition.y = transform.position.y;
+        if (!CanManuallyDeployWall(requestedPosition, out Quaternion rotation, out _))
+        {
+            return false;
+        }
+
+        DeployWall(requestedPosition, rotation);
+        return true;
+    }
+
+    public bool CanManuallyInstallTurret(
+        Vector3 requestedPosition,
+        out Quaternion rotation,
+        out string reason)
+    {
+        rotation = GetManualPlacementRotation(requestedPosition);
+        if (!CanBeginManualAbility(AgentRoleType.Assaulter, nextTurretTime, out reason))
+        {
+            return false;
+        }
+
+        if (ownedTurret != null)
+        {
+            reason = "This assaulter already has an active turret";
+            return false;
+        }
+
+        requestedPosition.y = transform.position.y;
+        if (FlatDistance(transform.position, requestedPosition) > turretObjectiveRange)
+        {
+            reason = $"Turret range: {turretObjectiveRange:0.#}m";
+            return false;
+        }
+
+        if (!IsTurretPlacementClear(requestedPosition, rotation) ||
+            !HasTurretForwardClearance(requestedPosition, rotation))
+        {
+            reason = "Choose clear ground with space in front";
+            return false;
+        }
+
+        reason = "Click to install turret";
+        return true;
+    }
+
+    public bool TryManualInstallTurret(Vector3 requestedPosition)
+    {
+        requestedPosition.y = transform.position.y;
+        if (!CanManuallyInstallTurret(requestedPosition, out Quaternion rotation, out _))
+        {
+            return false;
+        }
+
+        BeginTurretInstallation(requestedPosition, rotation);
+        return true;
+    }
+
+    public bool CanManuallyShadowBlink(Vector3 requestedPosition, out string reason)
+    {
+        if (!CanBeginManualAbility(
+                AgentRoleType.Flanker,
+                nextShadowBlinkTime,
+                out reason))
+        {
+            return false;
+        }
+
+        if (IsTeamShadowBlinkLocked())
+        {
+            reason = "Team Shadow Blink spacing is active";
+            return false;
+        }
+
+        requestedPosition.y = transform.position.y;
+        if (!IsManualShadowBlinkDestinationClear(requestedPosition))
+        {
+            reason = $"Choose empty ground within {shadowBlinkMaxRange:0.#}m";
+            return false;
+        }
+
+        reason = "Click to Shadow Blink";
+        return true;
+    }
+
+    public bool TryManualShadowBlink(Vector3 requestedPosition)
+    {
+        requestedPosition.y = transform.position.y;
+        if (!CanManuallyShadowBlink(requestedPosition, out _))
+        {
+            return false;
+        }
+
+        ExecuteShadowBlink(null, requestedPosition, "player command");
+        return true;
+    }
+
+    public bool CanManuallyHeal(HealthSystem target, out string reason)
+    {
+        if (!CanBeginManualAbility(AgentRoleType.Support, nextHealTime, out reason))
+        {
+            return false;
+        }
+
+        PruneHealingClaims();
+        AgentStats targetStats = target != null ? target.GetComponent<AgentStats>() : null;
+        if (target == null || targetStats == null || targetStats == stats ||
+            targetStats.team != stats.team || target.IsDead ||
+            !target.gameObject.activeInHierarchy)
+        {
+            reason = "Click a living teammate";
+            return false;
+        }
+
+        if (target.NormalizedHealth >= 0.995f)
+        {
+            reason = "That teammate is already at full health";
+            return false;
+        }
+
+        if (HealClaims.TryGetValue(target, out AgentRoleAbilities owner) && owner != this)
+        {
+            reason = "Another support is already healing that teammate";
+            return false;
+        }
+
+        if (FlatDistance(transform.position, target.transform.position) > healRange ||
+            DefenderTeamCoordinator.IsLineBlocked(
+                transform.position,
+                target.transform.position))
+        {
+            reason = $"Teammate must be visible within {healRange:0.#}m";
+            return false;
+        }
+
+        reason = "Click teammate to heal";
+        return true;
+    }
+
+    public bool TryManualHeal(HealthSystem target)
+    {
+        if (!CanManuallyHeal(target, out _))
+        {
+            return false;
+        }
+
+        BeginHealing(target);
+        return true;
+    }
+
+    public void SetPlayerCommandSelected(bool selected)
+    {
+        playerCommandSelected = selected;
+        if (selected)
+        {
+            // Make the AI re-evaluate after the player releases this agent instead
+            // of firing an autonomous ability in the release frame.
+            nextThinkTime = Mathf.Max(nextThinkTime, Time.time + 0.15f);
+        }
+    }
+
+    private bool CanBeginManualAbility(
+        AgentRoleType expectedRole,
+        float readyAt,
+        out string reason)
+    {
+        role ??= GetComponent<AgentRole>();
+        if (!CanUseAbilities() || role == null || role.SelectedRole != expectedRole)
+        {
+            reason = "Ability is unavailable right now";
+            return false;
+        }
+
+        if (!ReferenceEquals(healingTarget, null) || isInstallingTurret)
+        {
+            reason = "This player is already using an ability";
+            return false;
+        }
+
+        if (Time.time < readyAt)
+        {
+            reason = float.IsPositiveInfinity(readyAt)
+                ? "Ability is not armed yet"
+                : $"Ability cooldown: {Mathf.CeilToInt(readyAt - Time.time)}s";
+            return false;
+        }
+
+        reason = string.Empty;
+        return true;
+    }
+
+    private Quaternion GetManualPlacementRotation(Vector3 requestedPosition)
+    {
+        Vector3 forward = requestedPosition - transform.position;
+        forward.y = 0f;
+        if (forward.sqrMagnitude < 0.01f)
+        {
+            forward = transform.forward;
+            forward.y = 0f;
+        }
+
+        return Quaternion.LookRotation(
+            forward.sqrMagnitude > 0.01f ? forward.normalized : Vector3.forward,
+            Vector3.up);
+    }
+
+    private bool IsManualShadowBlinkDestinationClear(Vector3 candidate)
+    {
+        if (FlatDistance(transform.position, candidate) > shadowBlinkMaxRange)
+        {
+            return false;
+        }
+
+        float radius = motor != null
+            ? motor.AgentRadius + motor.MinObstacleClearance
+            : 0.55f;
+        AStarPathfinder3D pathfinder = AStarPathfinder3D.Instance;
+        if (pathfinder != null)
+        {
+            return pathfinder.IsValidAgentPosition(
+                candidate,
+                radius,
+                gameObject,
+                true,
+                shadowBlinkAgentClearance);
+        }
+
+        Collider[] overlaps = Physics.OverlapSphere(
+            candidate + Vector3.up * 0.55f,
+            radius,
+            ~0,
+            QueryTriggerInteraction.Ignore);
+        foreach (Collider overlap in overlaps)
+        {
+            if (overlap == null || overlap.GetComponentInParent<AgentStats>() == stats ||
+                overlap.name.IndexOf("Floor", System.StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     private HealthSystem FindHealingTarget()
@@ -1216,7 +1526,10 @@ public sealed class AgentRoleAbilities : MonoBehaviour
         }
 
         transform.position = blinkPosition;
-        motor?.FacePosition(target.transform.position);
+        if (target != null)
+        {
+            motor?.FacePosition(target.transform.position);
+        }
         Physics.SyncTransforms();
         nextShadowBlinkTime = Time.time + shadowBlinkCooldown;
         ReserveTeamShadowBlinkWindow();
@@ -1227,7 +1540,8 @@ public sealed class AgentRoleAbilities : MonoBehaviour
             new Color(0.86f, 0.24f, 1f, 1f));
         SpawnShadowBlinkTrail(start, blinkPosition);
         SpawnShadowBlinkArrivalEffect(blinkPosition, transform.forward);
-        Debug.Log($"{name} used Shadow Blink ({triggerReason}) near {target.name}.");
+        string targetName = target != null ? target.name : "player destination";
+        Debug.Log($"{name} used Shadow Blink ({triggerReason}) near {targetName}.");
     }
 
     private bool IsTeamEngaged()
@@ -2024,6 +2338,7 @@ public sealed class AgentRoleAbilities : MonoBehaviour
 
     private void OnDisable()
     {
+        playerCommandSelected = false;
         if (health != null)
         {
             health.Damaged -= OnDamaged;

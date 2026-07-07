@@ -7,9 +7,14 @@ public sealed class AgentWeaponVisuals : MonoBehaviour
     [SerializeField] private bool useHumanoidModel = true;
     [SerializeField] private Color rifleTint = new Color(0.92f, 0.92f, 0.86f, 1f);
     [SerializeField] private Color smgTint = new Color(0.10f, 0.85f, 0.95f, 1f);
-    [SerializeField] private Color redTeamSmgTint = new Color(0.96f, 0.08f, 0.06f, 1f);
     [SerializeField] private Color sniperTint = new Color(0.98f, 0.88f, 0.20f, 1f);
     [SerializeField] private Color shotgunTint = new Color(1f, 0.36f, 0.18f, 1f);
+    [Header("Striker Palette")]
+    [SerializeField] private Color strikerBodyTint = new Color(0.68f, 0.025f, 0f, 1f);
+    [SerializeField] private Color strikerRifleTint = new Color(0.98f, 0.18f, 0.02f, 1f);
+    [SerializeField] private Color strikerSmgTint = new Color(0.86f, 0.035f, 0f, 1f);
+    [SerializeField] private Color strikerSniperTint = new Color(0.96f, 0.48f, 0.02f, 1f);
+    [SerializeField] private Color strikerShotgunTint = new Color(1f, 0.24f, 0.01f, 1f);
 
     private const int TextureSize = 64;
     private const string HumanoidRootName = "GeneratedHumanVisual";
@@ -64,7 +69,10 @@ public sealed class AgentWeaponVisuals : MonoBehaviour
         }
 
         Material material = targetRenderer.sharedMaterial;
-        Color baseColor = GetRendererBaseColor(material);
+        AgentStats stats = GetComponent<AgentStats>();
+        Color baseColor = stats != null && stats.team == TeamType.Red
+            ? strikerBodyTint
+            : GetRendererBaseColor(material);
         Color accent = GetWeaponTint(weaponType);
         Texture2D texture = GetWeaponTexture(weaponType, baseColor, accent);
 
@@ -467,9 +475,15 @@ public sealed class AgentWeaponVisuals : MonoBehaviour
     private Color GetWeaponTint(WeaponType weaponType)
     {
         AgentStats stats = GetComponent<AgentStats>();
-        if (weaponType == WeaponType.SMG && stats != null && stats.team == TeamType.Red)
+        if (stats != null && stats.team == TeamType.Red)
         {
-            return redTeamSmgTint;
+            return weaponType switch
+            {
+                WeaponType.SMG => strikerSmgTint,
+                WeaponType.Sniper => strikerSniperTint,
+                WeaponType.Shotgun => strikerShotgunTint,
+                _ => strikerRifleTint
+            };
         }
 
         return weaponType switch
