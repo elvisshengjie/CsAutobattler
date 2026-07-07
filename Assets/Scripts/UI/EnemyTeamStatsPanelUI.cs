@@ -4,13 +4,12 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-/// <summary>Creates an eight-row enemy roster on the left side of the battle HUD.</summary>
+/// <summary>Creates a five-row enemy roster on the left side of the battle HUD.</summary>
 public sealed class EnemyTeamStatsPanelUI : MonoBehaviour
 {
-    private const int SlotCount = 8;
-    private const float Spacing = 5f;
+    private const int SlotCount = 5;
+    private const float Spacing = 8f;
     private readonly RedTeamStatsSlotUI[] slots = new RedTeamStatsSlotUI[SlotCount];
-    private CanvasGroup panelCanvasGroup;
     private float nextRefreshTime;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -28,13 +27,13 @@ public sealed class EnemyTeamStatsPanelUI : MonoBehaviour
 
         GameObject panelObject = new GameObject(
             "EnemyTeamStatsPanel", typeof(RectTransform), typeof(VerticalLayoutGroup),
-            typeof(CanvasGroup), typeof(EnemyTeamStatsPanelUI));
+            typeof(EnemyTeamStatsPanelUI));
         panelObject.transform.SetParent(canvas.transform, false);
 
         RectTransform rect = panelObject.GetComponent<RectTransform>();
-        rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
-        rect.pivot = new Vector2(0f, 1f);
-        rect.anchoredPosition = new Vector2(10f, -160f);
+        rect.anchorMin = rect.anchorMax = new Vector2(0f, 0.5f);
+        rect.pivot = new Vector2(0f, 0.5f);
+        rect.anchoredPosition = new Vector2(18f, 30f);
         rect.sizeDelta = new Vector2(
             RedTeamStatsSlotUI.DisplayWidth,
             SlotCount * RedTeamStatsSlotUI.DisplayHeight + (SlotCount - 1) * Spacing);
@@ -50,8 +49,6 @@ public sealed class EnemyTeamStatsPanelUI : MonoBehaviour
 
     private void Start()
     {
-        panelCanvasGroup = GetComponent<CanvasGroup>();
-        UpdatePanelVisibility();
         Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         for (int i = 0; i < SlotCount; i++) slots[i] = CreateSlot(i + 1, font);
         AssignEnemyAgents();
@@ -60,23 +57,10 @@ public sealed class EnemyTeamStatsPanelUI : MonoBehaviour
 
     private void Update()
     {
-        UpdatePanelVisibility();
         if (Time.unscaledTime < nextRefreshTime) return;
         nextRefreshTime = Time.unscaledTime + 0.2f;
         foreach (RedTeamStatsSlotUI slot in slots)
             if (slot != null) slot.Refresh();
-    }
-
-    private void UpdatePanelVisibility()
-    {
-        if (panelCanvasGroup == null) panelCanvasGroup = GetComponent<CanvasGroup>();
-        if (panelCanvasGroup == null) return;
-
-        bool hiddenForSelection = TeamTacticManager.Instance != null &&
-                                  TeamTacticManager.Instance.IsInitialSelectionBlockingInput;
-        panelCanvasGroup.alpha = hiddenForSelection ? 0f : 1f;
-        panelCanvasGroup.interactable = false;
-        panelCanvasGroup.blocksRaycasts = false;
     }
 
     private void AssignEnemyAgents()
@@ -117,8 +101,8 @@ public sealed class EnemyTeamStatsPanelUI : MonoBehaviour
         Image portrait = CreateUIObject("Portrait", slotRect).AddComponent<Image>();
         portrait.rectTransform.anchorMin = portrait.rectTransform.anchorMax = new Vector2(0f, 0.5f);
         portrait.rectTransform.pivot = new Vector2(0f, 0.5f);
-        portrait.rectTransform.anchoredPosition = new Vector2(6f, 0f);
-        portrait.rectTransform.sizeDelta = new Vector2(40f, 40f);
+        portrait.rectTransform.anchoredPosition = new Vector2(7f, 0f);
+        portrait.rectTransform.sizeDelta = new Vector2(58f, 58f);
         portrait.raycastTarget = false;
 
         Text hp = CreateText("HPText", slotRect, font, new Vector2(0f, 0.5f), new Vector2(1f, 1f));
@@ -134,15 +118,15 @@ public sealed class EnemyTeamStatsPanelUI : MonoBehaviour
     {
         Text text = CreateUIObject(name, parent).AddComponent<Text>();
         text.font = font;
-        text.fontSize = 10;
+        text.fontSize = 12;
         text.fontStyle = FontStyle.Bold;
         text.color = Color.white;
         text.alignment = TextAnchor.MiddleLeft;
         text.raycastTarget = false;
         text.rectTransform.anchorMin = anchorMin;
         text.rectTransform.anchorMax = anchorMax;
-        text.rectTransform.offsetMin = new Vector2(52f, 1f);
-        text.rectTransform.offsetMax = new Vector2(-4f, -1f);
+        text.rectTransform.offsetMin = new Vector2(72f, 2f);
+        text.rectTransform.offsetMax = new Vector2(-6f, -2f);
         return text;
     }
 

@@ -186,7 +186,7 @@ public sealed class TeamTacticUI : MonoBehaviour
         roleSelectionWindow = CreatePanel("RoleSelectionWindow", parent,
             new Color(0.055f, 0.07f, 0.095f, 0.99f));
         SetRect(roleSelectionWindow.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f),
-            new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1040f, 650f), new Vector2(0.5f, 0.5f));
+            new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(920f, 680f), new Vector2(0.5f, 0.5f));
         AddOutline(roleSelectionWindow, AccentColor, new Vector2(2f, -2f));
 
         Text title = CreateText("RoleTitle", roleSelectionWindow.transform,
@@ -201,27 +201,21 @@ public sealed class TeamTacticUI : MonoBehaviour
             new Vector2(0f, -82f), new Vector2(800f, 35f), new Vector2(0.5f, 0.5f));
 
         List<AgentRole> agents = tacticManager.GetControlledRoles();
-        int rowsPerColumn = Mathf.Max(1, Mathf.CeilToInt(agents.Count / 2f));
         roleLabels.Clear();
         roleAgentNames.Clear();
         for (int i = 0; i < agents.Count; i++)
         {
             AgentRole captured = agents[i];
-            int column = i / rowsPerColumn;
-            int row = i % rowsPerColumn;
-            float columnOffset = column * 510f;
-            CreateAgentMaterialSwatch(captured, column, row);
+            CreateAgentMaterialSwatch(captured, i);
             Text name = CreateText("AgentName", roleSelectionWindow.transform,
                 captured.name, 18, FontStyle.Bold, TextAnchor.MiddleLeft);
             SetRect(name.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-                new Vector2(-335f + columnOffset, -145f - row * 92f),
-                new Vector2(190f, 58f), new Vector2(0.5f, 0.5f));
+                new Vector2(-155f, -145f - i * 78f), new Vector2(370f, 58f), new Vector2(0.5f, 0.5f));
             roleAgentNames[captured] = name;
             Button roleButton = CreateTacticButton("Role_" + captured.name,
                 roleSelectionWindow.transform, string.Empty, 17);
             SetRect(roleButton.GetComponent<RectTransform>(), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-                new Vector2(-120f + columnOffset, -145f - row * 92f),
-                new Vector2(200f, 58f), new Vector2(0.5f, 0.5f));
+                new Vector2(210f, -145f - i * 78f), new Vector2(330f, 58f), new Vector2(0.5f, 0.5f));
             Text label = roleButton.GetComponentInChildren<Text>();
             roleLabels[captured] = label;
             roleButton.onClick.AddListener(() => CycleRole(captured));
@@ -253,7 +247,7 @@ public sealed class TeamTacticUI : MonoBehaviour
             new Color(0.055f, 0.07f, 0.095f, 0.99f));
         SetRect(loadoutSelectionWindow.GetComponent<RectTransform>(),
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero,
-            new Vector2(1240f, 720f), new Vector2(0.5f, 0.5f));
+            new Vector2(1120f, 720f), new Vector2(0.5f, 0.5f));
         AddOutline(loadoutSelectionWindow, AccentColor, new Vector2(2f, -2f));
 
         Text title = CreateText("LoadoutTitle", loadoutSelectionWindow.transform,
@@ -270,29 +264,23 @@ public sealed class TeamTacticUI : MonoBehaviour
         loadoutLabels.Clear();
         loadoutAgentLabels.Clear();
         List<AgentRole> roles = tacticManager.GetControlledRoles();
-        int rowsPerColumn = Mathf.Max(1, Mathf.CeilToInt(roles.Count / 2f));
         for (int i = 0; i < roles.Count; i++)
         {
             AgentRole role = roles[i];
-            int column = i / rowsPerColumn;
-            int row = i % rowsPerColumn;
-            float columnOffset = column * 585f;
             WeaponLoadout loadout = WeaponLoadout.Get(role.gameObject);
             Text agentLabel = CreateText("LoadoutAgentName", loadoutSelectionWindow.transform,
                 $"<b>{role.name}</b>\n<color=#33DBF5>{role.SelectedRole}</color>",
                 17, FontStyle.Normal, TextAnchor.MiddleLeft);
             SetRect(agentLabel.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-                new Vector2(-505f + columnOffset, -145f - row * 110f),
-                new Vector2(160f, 82f),
+                new Vector2(-390f, -145f - i * 88f), new Vector2(260f, 70f),
                 new Vector2(0.5f, 0.5f));
             loadoutAgentLabels[role] = agentLabel;
 
             Button weaponButton = CreateTacticButton("Weapon_" + role.name,
-                loadoutSelectionWindow.transform, string.Empty, 13);
+                loadoutSelectionWindow.transform, string.Empty, 15);
             SetRect(weaponButton.GetComponent<RectTransform>(),
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-                new Vector2(-220f + columnOffset, -145f - row * 110f),
-                new Vector2(390f, 90f),
+                new Vector2(145f, -145f - i * 88f), new Vector2(760f, 76f),
                 new Vector2(0.5f, 0.5f));
             Text weaponLabel = weaponButton.GetComponentInChildren<Text>();
             loadoutLabels[loadout] = weaponLabel;
@@ -321,7 +309,7 @@ public sealed class TeamTacticUI : MonoBehaviour
         tacticManager.SetAgentWeapon(loadout, next);
     }
 
-    private void CreateAgentMaterialSwatch(AgentRole agent, int column, int row)
+    private void CreateAgentMaterialSwatch(AgentRole agent, int row)
     {
         GameObject swatchObject = new GameObject(
             "MaterialSwatch_" + agent.name,
@@ -330,11 +318,9 @@ public sealed class TeamTacticUI : MonoBehaviour
             typeof(RawImage),
             typeof(Outline));
         swatchObject.transform.SetParent(roleSelectionWindow.transform, false);
-        float columnOffset = column * 510f;
         SetRect(swatchObject.GetComponent<RectTransform>(),
             new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-            new Vector2(-465f + columnOffset, -145f - row * 92f),
-            new Vector2(54f, 54f),
+            new Vector2(-385f, -145f - row * 78f), new Vector2(54f, 54f),
             new Vector2(0.5f, 0.5f));
 
         RawImage preview = swatchObject.GetComponent<RawImage>();

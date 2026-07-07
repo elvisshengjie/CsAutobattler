@@ -108,5 +108,4 @@ InitTestScene*.unity*
 
 # Local compiler validation artifacts
 /CodexBuild/
-/.tmp-dotnet/
 /casesensitivetest
