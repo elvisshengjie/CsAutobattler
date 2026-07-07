@@ -16,7 +16,8 @@ public static class RedTeamStatsPanelBuilder
     private const int SlotCount = 5;
     private const float SlotWidth = RedTeamStatsSlotUI.DisplayWidth;
     private const float SlotHeight = RedTeamStatsSlotUI.DisplayHeight;
-    private const float SlotSpacing = 10f;
+    private const float SlotSpacing = 12f;
+    private static readonly Vector2 HudReferenceResolution = new Vector2(1600f, 900f);
 
     private static readonly Color[] DefaultFallbackPortraitColors =
     {
@@ -238,7 +239,7 @@ public static class RedTeamStatsPanelBuilder
 
         CanvasScaler scaler = canvasObject.GetComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
+        scaler.referenceResolution = HudReferenceResolution;
         scaler.matchWidthOrHeight = 0.5f;
 
         createdCanvas = true;
@@ -277,8 +278,8 @@ public static class RedTeamStatsPanelBuilder
             "HP: --",
             new Vector2(0f, 0.5f),
             new Vector2(1f, 1f),
-            new Vector2(63f, 0f),
-            new Vector2(-6f, -5f));
+            new Vector2(88f, 0f),
+            new Vector2(-8f, -5f));
 
         Text tacticText = CreateLabel(
             "TacticText",
@@ -287,8 +288,8 @@ public static class RedTeamStatsPanelBuilder
             "Role: --",
             new Vector2(0f, 0f),
             new Vector2(1f, 0.5f),
-            new Vector2(63f, 5f),
-            new Vector2(-6f, 0f));
+            new Vector2(88f, 5f),
+            new Vector2(-8f, 0f));
 
         slotUI.Configure(portrait, hpText, tacticText, background);
         return slotUI;
@@ -301,8 +302,8 @@ public static class RedTeamStatsPanelBuilder
         portraitRect.anchorMin = new Vector2(0f, 0.5f);
         portraitRect.anchorMax = new Vector2(0f, 0.5f);
         portraitRect.pivot = new Vector2(0f, 0.5f);
-        portraitRect.anchoredPosition = new Vector2(7f, 0f);
-        portraitRect.sizeDelta = new Vector2(50f, 50f);
+        portraitRect.anchoredPosition = new Vector2(8f, 0f);
+        portraitRect.sizeDelta = new Vector2(70f, 70f);
 
         Image portrait = Undo.AddComponent<Image>(portraitObject);
         portrait.color = Color.white;
@@ -331,7 +332,7 @@ public static class RedTeamStatsPanelBuilder
         Text label = Undo.AddComponent<Text>(textObject);
         label.font = font;
         label.text = initialText;
-        label.fontSize = 13;
+        label.fontSize = 14;
         label.fontStyle = FontStyle.Bold;
         label.color = new Color(1f, 0.92f, 0.88f, 1f);
         label.alignment = TextAnchor.MiddleLeft;
@@ -339,7 +340,7 @@ public static class RedTeamStatsPanelBuilder
         label.verticalOverflow = VerticalWrapMode.Truncate;
         label.resizeTextForBestFit = true;
         label.resizeTextMinSize = 10;
-        label.resizeTextMaxSize = 13;
+        label.resizeTextMaxSize = 14;
         label.raycastTarget = false;
         return label;
     }

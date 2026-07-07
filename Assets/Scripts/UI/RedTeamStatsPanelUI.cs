@@ -24,7 +24,7 @@ public sealed class RedTeamStatsPanelUI : MonoBehaviour
 
     private void ApplyExpandedLayout()
     {
-        const float spacing = 10f;
+        const float spacing = 12f;
         RectTransform panelRect = transform as RectTransform;
         if (panelRect != null)
         {

@@ -4,8 +4,8 @@ using UnityEngine.UI;
 [RequireComponent(typeof(CanvasGroup))]
 public sealed class RedTeamStatsSlotUI : MonoBehaviour
 {
-    public const float DisplayWidth = 185f;
-    public const float DisplayHeight = 96f;
+    public const float DisplayWidth = 225f;
+    public const float DisplayHeight = 116f;
     private static readonly Color NeutralPortraitColor = new Color(0.65f, 0.65f, 0.65f, 1f);
 
     [Header("Wired by RedTeamStatsPanelBuilder")]
@@ -54,7 +54,7 @@ public sealed class RedTeamStatsSlotUI : MonoBehaviour
         if (tacticText != null)
         {
             tacticText.text = "Role: --\nWeapon: --";
-            tacticText.fontSize = 12;
+            tacticText.fontSize = 14;
             tacticText.color = Color.white;
         }
 
@@ -84,7 +84,7 @@ public sealed class RedTeamStatsSlotUI : MonoBehaviour
             string weaponName = loadout != null ? loadout.SelectedWeapon.ToString() : "Rifle";
             tacticText.text = $"Role: {roleName}\nWeapon: {weaponName}" +
                               (hasBomb ? "\nPLANTER" : string.Empty);
-            tacticText.fontSize = hasBomb ? 11 : 12;
+            tacticText.fontSize = hasBomb ? 13 : 14;
             tacticText.color = hasBomb
                 ? new Color(1f, 0.82f, 0.35f, 1f)
                 : Color.white;
@@ -130,22 +130,29 @@ public sealed class RedTeamStatsSlotUI : MonoBehaviour
         if (portraitImage != null)
         {
             RectTransform portraitRect = portraitImage.rectTransform;
-            portraitRect.sizeDelta = new Vector2(58f, 58f);
-            portraitRect.anchoredPosition = new Vector2(7f, 0f);
+            portraitRect.sizeDelta = new Vector2(70f, 70f);
+            portraitRect.anchoredPosition = new Vector2(8f, 0f);
         }
 
         if (hpText != null)
         {
-            hpText.rectTransform.offsetMin = new Vector2(72f, 0f);
-            hpText.rectTransform.offsetMax = new Vector2(-6f, -5f);
+            hpText.rectTransform.offsetMin = new Vector2(88f, 0f);
+            hpText.rectTransform.offsetMax = new Vector2(-8f, -5f);
+            hpText.fontSize = 14;
+            hpText.resizeTextForBestFit = true;
+            hpText.resizeTextMinSize = 11;
+            hpText.resizeTextMaxSize = 14;
         }
 
         if (tacticText != null)
         {
-            tacticText.rectTransform.offsetMin = new Vector2(72f, 4f);
-            tacticText.rectTransform.offsetMax = new Vector2(-6f, 0f);
+            tacticText.rectTransform.offsetMin = new Vector2(88f, 5f);
+            tacticText.rectTransform.offsetMax = new Vector2(-8f, 0f);
             tacticText.horizontalOverflow = HorizontalWrapMode.Wrap;
             tacticText.verticalOverflow = VerticalWrapMode.Overflow;
+            tacticText.resizeTextForBestFit = true;
+            tacticText.resizeTextMinSize = 11;
+            tacticText.resizeTextMaxSize = 14;
         }
     }
 
