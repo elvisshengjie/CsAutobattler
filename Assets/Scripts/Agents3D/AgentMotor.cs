@@ -7,6 +7,8 @@ using UnityEngine.Serialization;
 /// </summary>
 public class AgentMotor : MonoBehaviour
 {
+    private const float ExactObjectiveReachDistance = 0.08f;
+
     [Header("Path Following")]
     public float pathRefreshTime = 0.3f;
     public float waypointReachDistance = 0.3f;
@@ -335,6 +337,13 @@ public class AgentMotor : MonoBehaviour
 
     private float GetEffectiveArrivalTolerance(float requestedTolerance)
     {
+        if (exactObjectiveMovement)
+        {
+            return Mathf.Min(
+                ExactObjectiveReachDistance,
+                Mathf.Max(0.02f, requestedTolerance));
+        }
+
         float tolerance = Mathf.Max(targetArrivalDistance, requestedTolerance);
         return hasReservedSlot
             ? Mathf.Min(tolerance, targetArrivalDistance)
@@ -706,7 +715,11 @@ public class AgentMotor : MonoBehaviour
         Vector3 targetWaypoint = currentPath[currentWaypointIndex];
         targetWaypoint.y = currentPosition.y;
 
-        if (FlatDistance(currentPosition, targetWaypoint) <= waypointReachDistance)
+        bool isFinalWaypoint = currentWaypointIndex == currentPath.Count - 1;
+        float waypointTolerance = exactObjectiveMovement && isFinalWaypoint
+            ? ExactObjectiveReachDistance
+            : waypointReachDistance;
+        if (FlatDistance(currentPosition, targetWaypoint) <= waypointTolerance)
         {
             currentWaypointIndex++;
             if (currentWaypointIndex >= currentPath.Count)
