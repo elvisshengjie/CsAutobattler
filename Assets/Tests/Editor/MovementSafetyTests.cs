@@ -195,6 +195,15 @@ public class MovementSafetyTests
 
         Assert.That(manager.TryGetReservedSlot(motor, out _, out _), Is.False);
         Assert.That(FlatDistance(motor.Destination, objective), Is.LessThan(0.01f));
+
+        motor.transform.position = objective + Vector3.right * 0.2f;
+        Assert.That(
+            motor.HasReachedDestination(0.65f),
+            Is.False,
+            "Exact interactions must not inherit the loose formation tolerance.");
+
+        motor.transform.position = objective + Vector3.right * 0.05f;
+        Assert.That(motor.HasReachedDestination(0.65f), Is.True);
     }
 
     [Test]
