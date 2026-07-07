@@ -140,6 +140,8 @@ public sealed class DefenderAgentAI : MonoBehaviour
 
     public bool TryExecute(GameObject visibleTarget)
     {
+        GetComponent<AgentDebugVisual>()?.SetAIState(currentState.ToString());
+
         ResolveReferences();
         if (coordinator == null || roundManager == null || stats == null ||
             sensors == null || motor == null || health == null || health.IsDead ||
@@ -523,7 +525,8 @@ public sealed class DefenderAgentAI : MonoBehaviour
         {
             return antiStalemateAction;
         }
-        if (hasCurrentVision && target != null &&
+        bool isReloading = weapon != null && weapon.IsReloading;
+        if (hasCurrentVision && target != null && !isReloading &&
             FlatDistance(transform.position, targetPosition) <= closeCombatDistance)
         {
             return ExecuteCloseCombat(target, targetPosition);
@@ -615,8 +618,8 @@ public sealed class DefenderAgentAI : MonoBehaviour
             case DefenderCombatState.InCover:
                 motor.Stop();
                 motor.FacePosition(targetPosition);
-                if (Time.time >= stateUntil ||
-                    Time.time >= coverCycleStartedAt + maxCoverIdleTime)
+                if ((Time.time >= stateUntil ||
+                    Time.time >= coverCycleStartedAt + maxCoverIdleTime) && !isReloading)
                 {
                     BeginPeekOrReposition(targetPosition);
                 }
@@ -639,8 +642,8 @@ public sealed class DefenderAgentAI : MonoBehaviour
                         : hideDuration);
                 }
 
-                if (Time.time >= stateUntil ||
-                    Time.time >= coverCycleStartedAt + maxCoverIdleTime)
+                if ((Time.time >= stateUntil ||
+                    Time.time >= coverCycleStartedAt + maxCoverIdleTime) && !isReloading)
                 {
                     BeginPeekOrReposition(targetPosition);
                 }

@@ -20,7 +20,8 @@ public class WeaponSystem : MonoBehaviour
     private int currentAmmo;
     private bool isReloading = false;
 
-    public bool IsReady => Time.time >= nextAttackTime;
+    public bool IsReady => Time.time >= nextAttackTime && !isReloading;
+    public bool IsReloading => isReloading;
     public float LastShotTime { get; private set; } = Mathf.NegativeInfinity;
     public float TimeSinceLastShot => Time.time - LastShotTime;
 

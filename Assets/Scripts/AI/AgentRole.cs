@@ -148,7 +148,8 @@ public sealed class AgentRole : MonoBehaviour
                 requested,
                 watchPosition,
                 out string existingReason);
-            if (!immediateDanger && bestScore < existingScore + minimumScoreImprovement)
+            float requiredImprovement = immediateDanger ? (minimumScoreImprovement * 0.05f) : minimumScoreImprovement;
+            if (bestScore < existingScore + requiredImprovement)
             {
                 currentDebugScore = existingScore;
                 currentDebugReason = existingReason + " | holding: improvement too small";
@@ -206,13 +207,20 @@ public sealed class AgentRole : MonoBehaviour
         float allyDistanceValue = GetAllyDistanceValue(p, w.preferredAllyDistance);
         float sideRear = GetSideRearValue(p, watch);
         float dangerPenalty = danger * Mathf.Max(0.15f, 3f - w.dangerTolerance);
-        float movementPenalty = selectedRole == AgentRoleType.Defender
-            ? FlatDistance(transform.position, p) * 0.08f : 0f;
+        float movementPenalty = FlatDistance(transform.position, p) * 0.08f;
         float score = allyDistanceValue * w.allyProximity + sideRear * w.sideRearPreference +
                       objectiveValue * w.objectiveProximity + cover * w.coverPreference +
                       front * (selectedRole == AgentRoleType.Assaulter ? w.dangerTolerance : -0.8f) -
                       dangerPenalty - occupancy * 3f - movementPenalty -
                       FlatDistance(p, objective) * 0.025f;
+        
+        WeaponSystem weaponSystem = GetComponent<WeaponSystem>();
+        if (weaponSystem != null && weaponSystem.IsReloading) 
+        {
+            score += cover * 8f;
+            score -= danger * 10f;
+        }
+
         if (selectedRole == AgentRoleType.Flanker) score -= enemy * 1.5f;
         float weaponScore = ScoreWeaponPosition(p, cover, occupancy, danger,
             front, sideRear);

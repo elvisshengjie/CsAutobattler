@@ -21,6 +21,7 @@ GameObject:
   - component: {fileID: 3727270586566723727}
   - component: {fileID: 6969988175594508899}
   - component: {fileID: 5969569968036139173}
+  - component: {fileID: 7649961877432732857}
   m_Layer: 0
   m_Name: RedAgent3D_1
   m_TagString: Untagged
@@ -271,6 +272,46 @@ MonoBehaviour:
   rotationSpeed: 720
   separationRadius: 1.5
   separationStrength: 2
+  agentRadius: 0.4
+  minObstacleClearance: 0.15
+  minAgentSeparation: 0.8
+  targetArrivalDistance: 0.25
+  maximumTargetAdjustment: 4
+  reservationSearchRadius: 4
+  separationWeight: 2
+  maxSeparationContribution: 0.45
+  separationSmoothing: 8
+  minimumCrowdSpeedFactor: 0.18
+  avoidanceDistance: 0.8
+  avoidanceStrength: 1.5
+  avoidanceSideHoldTime: 0.45
+  minTargetSwitchInterval: 0.75
+  targetSwitchScoreMargin: 2
+  stuckDistanceThreshold: 0.05
+  stuckTimeThreshold: 3
+  hardStuckTimeThreshold: 7
+  recoveryWaypointDistance: 1.25
+  emergencySnapDistance: 2
+  drawMovementGizmos: 1
+  showRuntimeDebugLabel: 0
+  logDiagnosticStateChanges: 1
+  requestedDestination: {x: 0, y: 0, z: 0}
+  lastPosition: {x: 0, y: 0, z: 0}
+  lastMoveProgressTime: 0
+  stuckTimer: 0
+  isStuck: 0
+  recoveryAttempts: 0
+  targetWasAdjusted: 0
+  currentTargetValid: 0
+  pathBlocked: 0
+  currentSlotKind: 0
+  pathStatusDebug: 
+  inactivityReasonDebug: 
+  objectiveDebug: 
+  roleDebug: 
+  combatDebug: 
+  enemyVisibleDebug: 0
+  bombPlantedDebug: 0
 --- !u!114 &5969569968036139173
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -283,3 +324,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d1a4afe308ef42d6a520f5a20a25fe28, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentBrain
+--- !u!114 &7649961877432732857
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3353339567777665373}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2805dc7e468cd140a7e0e33fa8e9e77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AgentDebugVisual

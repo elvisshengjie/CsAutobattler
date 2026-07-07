@@ -13,11 +13,14 @@ public sealed class AgentWeaponVisuals : MonoBehaviour
 
     private const int TextureSize = 64;
     private const string HumanoidRootName = "GeneratedHumanVisual";
+    private const string WeaponRootName = "Weapon";
     private MaterialPropertyBlock propertyBlock;
     private readonly Texture2D[] weaponTextures = new Texture2D[4];
     private readonly Renderer[] bodyRenderers = new Renderer[5];
     private readonly Renderer[] skinRenderers = new Renderer[3];
-    private Renderer weaponRenderer;
+    private readonly Renderer[] weaponRenderers = new Renderer[8];
+    private Transform weaponRoot;
+    private WeaponType displayedWeaponType = (WeaponType)(-1);
     private Material bodyMaterial;
     private Material skinMaterial;
     private Material gearMaterial;
@@ -73,6 +76,7 @@ public sealed class AgentWeaponVisuals : MonoBehaviour
 
         ApplyBodyTexture(texture);
         ApplySkinColor(new Color(0.78f, 0.58f, 0.42f, 1f));
+        ApplyWeaponShape(weaponType);
         ApplyGearColor(Color.Lerp(baseColor, Color.black, 0.55f));
     }
 
@@ -138,9 +142,8 @@ public sealed class AgentWeaponVisuals : MonoBehaviour
         skinRenderers[2] = CreatePart("RightHand", root.transform, PrimitiveType.Sphere,
             new Vector3(0.46f, -0.20f, 0.18f), new Vector3(0.12f, 0.12f, 0.12f),
             Quaternion.identity, skinMaterial);
-        weaponRenderer = CreatePart("Weapon", root.transform, PrimitiveType.Cube,
-            new Vector3(0.26f, 0.02f, 0.44f), new Vector3(0.12f, 0.12f, 0.58f),
-            Quaternion.Euler(0f, 12f, 0f), gearMaterial);
+        weaponRoot = CreateWeaponRoot(root.transform);
+        BuildWeaponShape(WeaponType.Rifle);
 
         targetRenderer.enabled = false;
     }
@@ -155,7 +158,8 @@ public sealed class AgentWeaponVisuals : MonoBehaviour
         skinRenderers[0] = FindRenderer(root, "Head");
         skinRenderers[1] = FindRenderer(root, "LeftHand");
         skinRenderers[2] = FindRenderer(root, "RightHand");
-        weaponRenderer = FindRenderer(root, "Weapon");
+        weaponRoot = root.Find(WeaponRootName);
+        CacheWeaponRenderers();
 
         if (bodyMaterial == null && bodyRenderers[0] != null)
         {
@@ -167,9 +171,13 @@ public sealed class AgentWeaponVisuals : MonoBehaviour
             skinMaterial = skinRenderers[0].sharedMaterial;
         }
 
-        if (gearMaterial == null && weaponRenderer != null)
+        if (gearMaterial == null)
         {
-            gearMaterial = weaponRenderer.sharedMaterial;
+            Renderer renderer = GetFirstWeaponRenderer();
+            if (renderer != null)
+            {
+                gearMaterial = renderer.sharedMaterial;
+            }
         }
     }
 
@@ -213,6 +221,171 @@ public sealed class AgentWeaponVisuals : MonoBehaviour
         return renderer;
     }
 
+    private static Transform CreateWeaponRoot(Transform parent)
+    {
+        GameObject root = new GameObject(WeaponRootName);
+        root.transform.SetParent(parent, false);
+        root.transform.localPosition = new Vector3(0.26f, 0.02f, 0.44f);
+        root.transform.localRotation = Quaternion.Euler(0f, 12f, 0f);
+        root.transform.localScale = Vector3.one;
+        return root.transform;
+    }
+
+    private void ApplyWeaponShape(WeaponType weaponType)
+    {
+        if (weaponRoot == null)
+        {
+            Transform visualRoot = transform.Find(HumanoidRootName);
+            if (visualRoot != null)
+            {
+                weaponRoot = visualRoot.Find(WeaponRootName);
+                if (weaponRoot == null)
+                {
+                    weaponRoot = CreateWeaponRoot(visualRoot);
+                    displayedWeaponType = (WeaponType)(-1);
+                }
+            }
+        }
+
+        if (weaponRoot == null)
+        {
+            return;
+        }
+
+        if (displayedWeaponType != weaponType || GetFirstWeaponRenderer() == null)
+        {
+            BuildWeaponShape(weaponType);
+        }
+    }
+
+    private void BuildWeaponShape(WeaponType weaponType)
+    {
+        if (weaponRoot == null)
+        {
+            return;
+        }
+
+        ClearWeaponShape();
+        displayedWeaponType = weaponType;
+
+        switch (weaponType)
+        {
+            case WeaponType.SMG:
+                AddWeaponPart(0, "Receiver", PrimitiveType.Cube,
+                    new Vector3(0f, 0f, 0.02f), new Vector3(0.16f, 0.14f, 0.36f), Quaternion.identity);
+                AddWeaponPart(1, "ShortBarrel", PrimitiveType.Cube,
+                    new Vector3(0f, 0f, 0.28f), new Vector3(0.08f, 0.08f, 0.22f), Quaternion.identity);
+                AddWeaponPart(2, "Grip", PrimitiveType.Cube,
+                    new Vector3(0f, -0.13f, -0.04f), new Vector3(0.08f, 0.24f, 0.08f), Quaternion.Euler(-12f, 0f, 0f));
+                AddWeaponPart(3, "Magazine", PrimitiveType.Cube,
+                    new Vector3(0f, -0.18f, 0.10f), new Vector3(0.09f, 0.28f, 0.07f), Quaternion.Euler(10f, 0f, 0f));
+                break;
+            case WeaponType.Sniper:
+                AddWeaponPart(0, "LongStock", PrimitiveType.Cube,
+                    new Vector3(0f, 0f, -0.16f), new Vector3(0.13f, 0.13f, 0.42f), Quaternion.identity);
+                AddWeaponPart(1, "LongBarrel", PrimitiveType.Cube,
+                    new Vector3(0f, 0.01f, 0.36f), new Vector3(0.055f, 0.055f, 0.72f), Quaternion.identity);
+                AddWeaponPart(2, "Scope", PrimitiveType.Capsule,
+                    new Vector3(0f, 0.13f, 0.10f), new Vector3(0.08f, 0.20f, 0.08f), Quaternion.Euler(90f, 0f, 0f));
+                AddWeaponPart(3, "Grip", PrimitiveType.Cube,
+                    new Vector3(0f, -0.14f, -0.05f), new Vector3(0.07f, 0.22f, 0.08f), Quaternion.Euler(-10f, 0f, 0f));
+                break;
+            case WeaponType.Shotgun:
+                AddWeaponPart(0, "WideBody", PrimitiveType.Cube,
+                    new Vector3(0f, 0f, 0.02f), new Vector3(0.18f, 0.15f, 0.52f), Quaternion.identity);
+                AddWeaponPart(1, "TwinBarrelA", PrimitiveType.Cube,
+                    new Vector3(-0.045f, 0.035f, 0.35f), new Vector3(0.06f, 0.06f, 0.42f), Quaternion.identity);
+                AddWeaponPart(2, "TwinBarrelB", PrimitiveType.Cube,
+                    new Vector3(0.045f, 0.035f, 0.35f), new Vector3(0.06f, 0.06f, 0.42f), Quaternion.identity);
+                AddWeaponPart(3, "Pump", PrimitiveType.Cube,
+                    new Vector3(0f, -0.08f, 0.18f), new Vector3(0.16f, 0.08f, 0.24f), Quaternion.identity);
+                AddWeaponPart(4, "Stock", PrimitiveType.Cube,
+                    new Vector3(0f, -0.03f, -0.28f), new Vector3(0.18f, 0.13f, 0.22f), Quaternion.identity);
+                break;
+            case WeaponType.Rifle:
+            default:
+                AddWeaponPart(0, "Receiver", PrimitiveType.Cube,
+                    new Vector3(0f, 0f, 0.02f), new Vector3(0.13f, 0.12f, 0.46f), Quaternion.identity);
+                AddWeaponPart(1, "Barrel", PrimitiveType.Cube,
+                    new Vector3(0f, 0.005f, 0.34f), new Vector3(0.055f, 0.055f, 0.38f), Quaternion.identity);
+                AddWeaponPart(2, "Stock", PrimitiveType.Cube,
+                    new Vector3(0f, -0.015f, -0.26f), new Vector3(0.15f, 0.11f, 0.22f), Quaternion.identity);
+                AddWeaponPart(3, "Magazine", PrimitiveType.Cube,
+                    new Vector3(0f, -0.15f, 0.05f), new Vector3(0.08f, 0.22f, 0.08f), Quaternion.Euler(8f, 0f, 0f));
+                break;
+        }
+    }
+
+    private void AddWeaponPart(
+        int index,
+        string partName,
+        PrimitiveType primitiveType,
+        Vector3 localPosition,
+        Vector3 localScale,
+        Quaternion localRotation)
+    {
+        if (index < 0 || index >= weaponRenderers.Length)
+        {
+            return;
+        }
+
+        weaponRenderers[index] = CreatePart(partName, weaponRoot, primitiveType,
+            localPosition, localScale, localRotation, gearMaterial);
+    }
+
+    private void ClearWeaponShape()
+    {
+        for (int i = 0; i < weaponRenderers.Length; i++)
+        {
+            weaponRenderers[i] = null;
+        }
+
+        for (int i = weaponRoot.childCount - 1; i >= 0; i--)
+        {
+            Transform child = weaponRoot.GetChild(i);
+            if (Application.isPlaying)
+            {
+                Destroy(child.gameObject);
+            }
+            else
+            {
+                DestroyImmediate(child.gameObject);
+            }
+        }
+    }
+
+    private void CacheWeaponRenderers()
+    {
+        for (int i = 0; i < weaponRenderers.Length; i++)
+        {
+            weaponRenderers[i] = null;
+        }
+
+        if (weaponRoot == null)
+        {
+            return;
+        }
+
+        int count = Mathf.Min(weaponRoot.childCount, weaponRenderers.Length);
+        for (int i = 0; i < count; i++)
+        {
+            weaponRenderers[i] = weaponRoot.GetChild(i).GetComponent<Renderer>();
+        }
+    }
+
+    private Renderer GetFirstWeaponRenderer()
+    {
+        for (int i = 0; i < weaponRenderers.Length; i++)
+        {
+            if (weaponRenderers[i] != null)
+            {
+                return weaponRenderers[i];
+            }
+        }
+
+        return null;
+    }
+
     private static Material CreateRuntimeMaterial(Material source, Color color)
     {
         Material material = source != null ? new Material(source) : new Material(Shader.Find("Universal Render Pipeline/Lit"));
@@ -239,7 +412,10 @@ public sealed class AgentWeaponVisuals : MonoBehaviour
 
     private void ApplyGearColor(Color color)
     {
-        ApplyColorBlock(weaponRenderer, gearMaterial, color);
+        for (int i = 0; i < weaponRenderers.Length; i++)
+        {
+            ApplyColorBlock(weaponRenderers[i], gearMaterial, color);
+        }
     }
 
     private Texture2D GetWeaponTexture(WeaponType weaponType, Color baseColor, Color accent)
