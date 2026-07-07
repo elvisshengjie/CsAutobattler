@@ -22,15 +22,6 @@ public sealed class AgentRoleAbilities : MonoBehaviour
     [SerializeField] private float healChannelDuration = 1.6f;
     [SerializeField] private float healCooldown = 8f;
 
-    [Header("Flanker Smoke")]
-    [SerializeField] private float smokeCooldown = 21f;
-    [SerializeField] private float smokeDuration = 9f;
-    [SerializeField] private float smokeRadius = 3.4f;
-    [SerializeField] private float smokeThrowRange = 15f;
-    [SerializeField] private float smokeThreatRange = 18f;
-    [SerializeField, Range(0.1f, 0.9f)] private float smokeEscapeHealth = 0.42f;
-    [SerializeField] private float recentDamageSmokeWindow = 3f;
-
     [Header("Assaulter Turret")]
     [SerializeField] private float turretCooldown = 36f;
     [SerializeField] private float turretInstallDuration = 2.6f;
@@ -57,7 +48,6 @@ public sealed class AgentRoleAbilities : MonoBehaviour
     private float healingEndsAt;
     private float nextHealTime;
     private float nextWallTime;
-    private float nextSmokeTime;
     private float nextTurretTime;
     private float nextThinkTime;
     private float wallMessageUntil;
@@ -95,7 +85,6 @@ public sealed class AgentRoleAbilities : MonoBehaviour
         healthBar = GetComponent<AgentHealthBar3D>();
         nextWallTime = Time.time + Random.Range(5f, 8f);
         nextHealTime = Time.time + Random.Range(1.5f, 3f);
-        nextSmokeTime = Time.time + Random.Range(4f, 7f);
         nextTurretTime = Time.time + Random.Range(6f, 9f);
     }
 
@@ -172,13 +161,6 @@ public sealed class AgentRoleAbilities : MonoBehaviour
                 out Quaternion rotation))
         {
             DeployWall(position, rotation);
-            return;
-        }
-
-        if (role.SelectedRole == AgentRoleType.Flanker && Time.time >= nextSmokeTime &&
-            TryFindSmokeTarget(out Vector3 smokeTarget))
-        {
-            ThrowSmoke(smokeTarget);
             return;
         }
 
@@ -400,164 +382,6 @@ public sealed class AgentRoleAbilities : MonoBehaviour
         healingBeam.enabled = false;
     }
 
-    private bool TryFindSmokeTarget(out Vector3 target)
-    {
-        target = default;
-        ObjectiveManager objective = ObjectiveManager.Instance;
-        Vector3 protectedPoint;
-        AgentStats threat;
-
-        if (objective != null && objective.ActiveDefuser != null &&
-            CombatTargetUtility.TryGetTeam(objective.ActiveDefuser,
-                out TeamType defuserTeam) && defuserTeam == stats.team &&
-            IsWithinAbilitySupportRange(objective.ActiveDefuser.transform.position) &&
-            TryFindOpenFiringThreat(objective.ActiveDefuser.transform.position,
-                smokeThreatRange, out threat))
-        {
-            protectedPoint = objective.ActiveDefuser.transform.position;
-            return TryBuildSmokeCutPoint(protectedPoint, threat.transform.position,
-                out target);
-        }
-
-        foreach (BombCarrier carrier in
-                 FindObjectsByType<BombCarrier>(FindObjectsInactive.Exclude))
-        {
-            AgentStats carrierStats = carrier.GetComponent<AgentStats>();
-            if (carrierStats == null || carrierStats.team != stats.team ||
-                !carrier.IsAlive)
-            {
-                continue;
-            }
-
-            bool enteringSite = carrier.HasBomb && objective != null &&
-                                objective.SelectedAttackSite != null &&
-                                FlatDistance(carrier.transform.position,
-                                    objective.SelectedAttackSite.PlantPosition) <= 9f;
-            if ((carrier.IsPlanting || enteringSite) &&
-                IsWithinAbilitySupportRange(carrier.transform.position) &&
-                TryFindOpenFiringThreat(carrier.transform.position,
-                    smokeThreatRange, out threat))
-            {
-                protectedPoint = carrier.transform.position;
-                return TryBuildSmokeCutPoint(protectedPoint, threat.transform.position,
-                    out target);
-            }
-        }
-
-        if (objective != null && objective.IsBombPlanted &&
-            FlatDistance(transform.position, objective.PlantedBombPosition) <=
-            smokeThrowRange + smokeRadius &&
-            TryFindOpenFiringThreat(objective.PlantedBombPosition,
-                smokeThreatRange, out threat))
-        {
-            // Both holding the planted bomb and approaching it for a defuse are
-            // valid, but only after an enemy has an actual open angle on the area.
-            return TryBuildSmokeCutPoint(objective.PlantedBombPosition,
-                threat.transform.position, out target);
-        }
-
-        bool escapeNeeded = IsEscapeSmokeNeeded(
-            health.NormalizedHealth,
-            Time.time - lastDamagedAt,
-            smokeEscapeHealth,
-            recentDamageSmokeWindow);
-        if (escapeNeeded && TryFindOpenFiringThreat(transform.position,
-                smokeThreatRange, out threat))
-        {
-            return TryBuildSmokeCutPoint(transform.position,
-                threat.transform.position, out target);
-        }
-
-        // A healthy flanker may use smoke to break a firing angle and continue
-        // around the side, but never merely because the cooldown is ready.
-        AgentBrain brain = GetComponent<AgentBrain>();
-        GameObject combatTarget = brain != null ? brain.CurrentTarget : null;
-        if (combatTarget != null && CombatTargetUtility.IsAlive(combatTarget) &&
-            CombatTargetUtility.TryGetTeam(combatTarget, out TeamType targetTeam) &&
-            targetTeam != stats.team && IsExposedDuringFlank(combatTarget) &&
-            !DefenderTeamCoordinator.IsLineBlocked(
-                transform.position, combatTarget.transform.position) &&
-            !TacticalSmokeCloud.BlocksLine(
-                transform.position + Vector3.up * 0.8f,
-                combatTarget.transform.position + Vector3.up * 0.8f))
-        {
-            return TryBuildSmokeCutPoint(transform.position,
-                combatTarget.transform.position, out target);
-        }
-
-        return false;
-    }
-
-    private bool IsExposedDuringFlank(GameObject combatTarget)
-    {
-        float targetDistance = FlatDistance(
-            transform.position, combatTarget.transform.position);
-        if (targetDistance < 4f || targetDistance > smokeThreatRange)
-        {
-            return false;
-        }
-
-        float nearestAlly = Mathf.Infinity;
-        foreach (AgentStats ally in
-                 FindObjectsByType<AgentStats>(FindObjectsInactive.Exclude))
-        {
-            if (ally == null || ally == stats || ally.team != stats.team)
-            {
-                continue;
-            }
-
-            HealthSystem allyHealth = ally.GetComponent<HealthSystem>();
-            if (allyHealth != null && !allyHealth.IsDead)
-            {
-                nearestAlly = Mathf.Min(nearestAlly,
-                    FlatDistance(transform.position, ally.transform.position));
-            }
-        }
-
-        Vector3 targetToFlanker = transform.position - combatTarget.transform.position;
-        targetToFlanker.y = 0f;
-        Vector3 targetForward = combatTarget.transform.forward;
-        targetForward.y = 0f;
-        bool enemyWatchingFlanker = targetToFlanker.sqrMagnitude > 0.01f &&
-                                    targetForward.sqrMagnitude > 0.01f &&
-                                    Vector3.Dot(targetForward.normalized,
-                                        targetToFlanker.normalized) >= 0.25f;
-        return nearestAlly >= 5.5f && enemyWatchingFlanker;
-    }
-
-    private bool TryBuildSmokeCutPoint(
-        Vector3 protectedPoint,
-        Vector3 threatPosition,
-        out Vector3 target)
-    {
-        Vector3 towardThreat = threatPosition - protectedPoint;
-        towardThreat.y = 0f;
-        if (towardThreat.sqrMagnitude < 0.01f)
-        {
-            target = default;
-            return false;
-        }
-
-        float cutDistance = Mathf.Clamp(
-            towardThreat.magnitude * 0.42f,
-            2.2f,
-            Mathf.Min(4.5f, smokeRadius * 1.3f));
-        target = protectedPoint + towardThreat.normalized * cutDistance;
-        target.y = transform.position.y;
-
-        Vector3 fromThrower = target - transform.position;
-        fromThrower.y = 0f;
-        if (fromThrower.sqrMagnitude < 2.25f ||
-            fromThrower.sqrMagnitude > smokeThrowRange * smokeThrowRange ||
-            TacticalSmokeCloud.HasCloudNear(target, smokeRadius * 1.35f))
-        {
-            return false;
-        }
-
-        AStarPathfinder3D pathfinder = AStarPathfinder3D.Instance;
-        return pathfinder == null || pathfinder.IsInsideGrid(target, smokeRadius * 0.35f);
-    }
-
     private bool TryFindOpenFiringThreat(
         Vector3 protectedPoint,
         float range,
@@ -594,35 +418,6 @@ public sealed class AgentRoleAbilities : MonoBehaviour
         }
 
         return threat != null;
-    }
-
-    private bool IsWithinAbilitySupportRange(Vector3 point)
-    {
-        return FlatDistance(transform.position, point) <=
-               smokeThrowRange + smokeRadius;
-    }
-
-    public static bool IsEscapeSmokeNeeded(
-        float normalizedHealth,
-        float secondsSinceDamage,
-        float healthThreshold = 0.42f,
-        float recentDamageWindow = 3f)
-    {
-        return normalizedHealth <= healthThreshold ||
-               secondsSinceDamage <= recentDamageWindow;
-    }
-
-    private void ThrowSmoke(Vector3 target)
-    {
-        Vector3 origin = transform.position + Vector3.up * 0.9f;
-        SmokeGrenadeProjectile.Throw(origin, target, stats.team,
-            smokeRadius, smokeDuration);
-        nextSmokeTime = Time.time + smokeCooldown;
-        abilityMessageUntil = Time.time + 1.25f;
-        healthBar?.SetAbilityStatus(
-            "SMOKE OUT",
-            0f,
-            TacticalSmokeCloud.GetSmokeColor(stats.team));
     }
 
     private bool ShouldDeployTurret(out Vector3 watchPosition)

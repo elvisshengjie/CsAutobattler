@@ -120,14 +120,6 @@ public sealed class AgentRoleTests
     }
 
     [Test]
-    public void EscapeSmoke_RequiresLowHealthOrRecentDamage()
-    {
-        Assert.That(AgentRoleAbilities.IsEscapeSmokeNeeded(0.8f, 10f), Is.False);
-        Assert.That(AgentRoleAbilities.IsEscapeSmokeNeeded(0.35f, 10f), Is.True);
-        Assert.That(AgentRoleAbilities.IsEscapeSmokeNeeded(0.8f, 1f), Is.True);
-    }
-
-    [Test]
     public void Turret_UsesLimitedRangeAndForwardFiringArc()
     {
         GameObject turretObject = new GameObject("Turret Arc Test");

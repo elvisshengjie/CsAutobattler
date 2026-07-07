@@ -123,10 +123,14 @@ public sealed class TacticalSmokeCloud : MonoBehaviour
         new List<TacticalSmokeCloud>();
     private static Material redSmokeMaterial;
     private static Material blueSmokeMaterial;
+    private static Material whiteSmokeMaterial;
 
     private float radius;
     private float expiresAt;
     private TeamType team;
+    private readonly List<Transform> visualPuffs = new List<Transform>();
+    private readonly List<Vector3> puffPositions = new List<Vector3>();
+    private readonly List<Vector3> puffScales = new List<Vector3>();
 
     public float Radius => radius;
     public TeamType Team => team;
@@ -167,6 +171,8 @@ public sealed class TacticalSmokeCloud : MonoBehaviour
 
     private void Update()
     {
+        AnimateVisuals();
+
         RoundManager round = RoundManager.Instance;
         if (Time.time >= expiresAt ||
             (round != null && (round.CurrentState == RoundState.RoundEnd ||
@@ -234,8 +240,8 @@ public sealed class TacticalSmokeCloud : MonoBehaviour
     public static Color GetSmokeColor(TeamType ownerTeam)
     {
         return ownerTeam == TeamType.Red
-            ? new Color(0.82f, 0.08f, 0.08f, 0.58f)
-            : new Color(0.06f, 0.25f, 0.92f, 0.58f);
+            ? new Color(0.78f, 0.5f, 0.54f, 0.26f)
+            : new Color(0.5f, 0.62f, 0.82f, 0.26f);
     }
 
     private void CreateVisuals()
@@ -248,17 +254,21 @@ public sealed class TacticalSmokeCloud : MonoBehaviour
             new Vector3(0.15f, 1.25f, -0.38f),
             new Vector3(-0.2f, 1.35f, 0.36f),
             new Vector3(0.5f, 1.15f, -0.25f),
-            new Vector3(-0.5f, 1.1f, 0.22f)
+            new Vector3(-0.5f, 1.1f, 0.22f),
+            new Vector3(0.12f, 1.55f, 0.08f),
+            new Vector3(-0.28f, 0.62f, 0.42f),
+            new Vector3(0.34f, 0.68f, -0.44f)
         };
 
-        Material material = GetSmokeMaterial(team);
+        Material teamMaterial = GetSmokeMaterial(team);
+        Material whiteMaterial = GetWhiteSmokeMaterial();
         for (int i = 0; i < offsets.Length; i++)
         {
             GameObject puff = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             puff.name = "Smoke Puff";
             puff.transform.SetParent(transform, false);
             puff.transform.localPosition = offsets[i] * radius * 0.42f;
-            float scale = radius * (i == 0 ? 1.15f : 0.9f);
+            float scale = radius * (i == 0 ? 1.15f : 0.82f + (i % 3) * 0.06f);
             puff.transform.localScale = new Vector3(scale, scale * 0.72f, scale);
             Collider collider = puff.GetComponent<Collider>();
             if (collider != null)
@@ -268,9 +278,39 @@ public sealed class TacticalSmokeCloud : MonoBehaviour
             }
 
             Renderer renderer = puff.GetComponent<Renderer>();
-            renderer.sharedMaterial = material;
+            // A few neutral wisps break up the team tint and make the cloud read
+            // as layered smoke rather than a single solid red/blue volume.
+            renderer.sharedMaterial = i == 2 || i == 5 || i == 8
+                ? whiteMaterial
+                : teamMaterial;
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
+
+            visualPuffs.Add(puff.transform);
+            puffPositions.Add(puff.transform.localPosition);
+            puffScales.Add(puff.transform.localScale);
+        }
+    }
+
+    private void AnimateVisuals()
+    {
+        float time = Time.time;
+        for (int i = 0; i < visualPuffs.Count; i++)
+        {
+            Transform puff = visualPuffs[i];
+            if (puff == null)
+            {
+                continue;
+            }
+
+            float phase = i * 1.73f;
+            Vector3 drift = new Vector3(
+                Mathf.Sin(time * 0.34f + phase),
+                Mathf.Sin(time * 0.46f + phase * 0.7f) * 0.65f,
+                Mathf.Cos(time * 0.29f + phase)) * radius * 0.055f;
+            float breathing = 1f + Mathf.Sin(time * 0.4f + phase) * 0.035f;
+            puff.localPosition = puffPositions[i] + drift;
+            puff.localScale = puffScales[i] * breathing;
         }
     }
 
@@ -284,16 +324,37 @@ public sealed class TacticalSmokeCloud : MonoBehaviour
             return material;
         }
 
+        material = CreateSmokeMaterial(
+            ownerTeam + " Smoke Material",
+            GetSmokeColor(ownerTeam));
+        return material;
+    }
+
+    private static Material GetWhiteSmokeMaterial()
+    {
+        if (whiteSmokeMaterial != null)
+        {
+            return whiteSmokeMaterial;
+        }
+
+        whiteSmokeMaterial = CreateSmokeMaterial(
+            "White Smoke Material",
+            new Color(0.94f, 0.96f, 0.98f, 0.16f));
+        return whiteSmokeMaterial;
+    }
+
+    private static Material CreateSmokeMaterial(string materialName, Color color)
+    {
         Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
         if (shader == null)
         {
             shader = Shader.Find("Standard");
         }
 
-        material = new Material(shader)
+        Material material = new Material(shader)
         {
-            name = ownerTeam + " Smoke Material",
-            color = GetSmokeColor(ownerTeam),
+            name = materialName,
+            color = color,
             renderQueue = 3000
         };
         material.SetFloat("_Surface", 1f);
