@@ -13,10 +13,10 @@ public static class RedTeamStatsPanelBuilder
         "Tools/CS Auto Battler/Assign Default Red Agent Portrait Data";
     private const string PanelName = "RedTeamStatsPanel";
     private const string TemporaryPanelName = "RedTeamStatsPanel__Building";
-    private const int SlotCount = 5;
+    private const int SlotCount = 8;
     private const float SlotWidth = RedTeamStatsSlotUI.DisplayWidth;
     private const float SlotHeight = RedTeamStatsSlotUI.DisplayHeight;
-    private const float SlotSpacing = 10f;
+    private const float SlotSpacing = 5f;
 
     private static readonly Color[] DefaultFallbackPortraitColors =
     {
@@ -24,7 +24,10 @@ public static class RedTeamStatsPanelBuilder
         new Color(0.85f, 0.25f, 0.08f, 1f),
         new Color(0.42f, 0.22f, 0.12f, 1f),
         new Color(0.48f, 0.08f, 0.22f, 1f),
-        new Color(0.64f, 0.28f, 0.34f, 1f)
+        new Color(0.64f, 0.28f, 0.34f, 1f),
+        new Color(0.30f, 0.12f, 0.46f, 1f),
+        new Color(0.72f, 0.18f, 0.24f, 1f),
+        new Color(0.38f, 0.16f, 0.10f, 1f)
     };
 
     [MenuItem(AssignPortraitDataMenuPath, false, 2009)]
@@ -175,7 +178,7 @@ public static class RedTeamStatsPanelBuilder
             Undo.CollapseUndoOperations(undoGroup);
 
             Debug.Log(
-                "Built RedTeamStatsPanel with exactly five slots. No minimap or Legacy2D objects were changed.");
+                "Built RedTeamStatsPanel with exactly eight slots. No minimap or Legacy2D objects were changed.");
         }
         catch (Exception exception)
         {
@@ -358,7 +361,7 @@ public static class RedTeamStatsPanelBuilder
         panelRect.anchorMin = new Vector2(0.5f, 0f);
         panelRect.anchorMax = new Vector2(0.5f, 0f);
         panelRect.pivot = new Vector2(0.5f, 0f);
-        panelRect.anchoredPosition = new Vector2(0f, 24f);
+        panelRect.anchoredPosition = new Vector2(0f, 14f);
         panelRect.sizeDelta = new Vector2(panelWidth, SlotHeight);
         panelRect.localRotation = Quaternion.identity;
         panelRect.localScale = Vector3.one;
