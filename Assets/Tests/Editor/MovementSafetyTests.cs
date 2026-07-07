@@ -182,6 +182,22 @@ public class MovementSafetyTests
     }
 
     [Test]
+    public void ExactObjectiveMovement_BypassesTacticalSlotReservation()
+    {
+        AgentMotor motor = CreateAgent("Exact Objective Agent", Vector3.zero);
+        Vector3 objective = new Vector3(8f, 0f, 0f);
+        PositionReservationManager manager = PositionReservationManager.EnsureInstance();
+
+        motor.MoveTo(objective);
+        Assert.That(manager.TryGetReservedSlot(motor, out _, out _), Is.True);
+
+        motor.MoveToExactObjective(objective);
+
+        Assert.That(manager.TryGetReservedSlot(motor, out _, out _), Is.False);
+        Assert.That(FlatDistance(motor.Destination, objective), Is.LessThan(0.01f));
+    }
+
+    [Test]
     public void SmallImmediateTargetChange_KeepsStableAcceptedTarget()
     {
         AgentMotor motor = CreateAgent("Stable Agent", Vector3.zero);

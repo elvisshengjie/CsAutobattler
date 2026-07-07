@@ -12,7 +12,7 @@ public class AgentStats : MonoBehaviour
     public TeamType team;
 
     [Header("Health")]
-    public float maxHealth = 100f;
+    public float maxHealth = 200f;
 
     [Header("Movement")]
     public float moveSpeed = 2f;

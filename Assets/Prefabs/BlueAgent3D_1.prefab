@@ -189,7 +189,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentStats
   team: 0
-  maxHealth: 100
+  maxHealth: 200
   moveSpeed: 3
   attackRange: 3
   damage: 10

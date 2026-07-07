@@ -997,7 +997,8 @@ public sealed class DefenderAgentAI : MonoBehaviour
                 // The normal 0.65 movement tolerance can stop the agent outside
                 // that radius, so approach this objective with a strict tolerance.
                 currentState = DefenderCombatState.RetakingBombSite;
-                if (!MoveTo(order.destination, 0.08f))
+                motor.MoveToExactObjective(order.destination);
+                if (motor.HasReachedRequestedDestination(order.destination, 0.08f))
                 {
                     motor.Stop();
                     motor.FacePosition(order.watchPosition);

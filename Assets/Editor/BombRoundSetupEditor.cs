@@ -46,7 +46,7 @@ public static class BombRoundSetupEditor
         BombController bombPrefab = CreateOrLoadBombPrefab();
 
         Undo.RecordObject(roundManager, "Configure Bomb Round Timers");
-        roundManager.plantDuration = 4f;
+        roundManager.plantDuration = 8f;
         roundManager.defuseDuration = 4f;
 
         Undo.RecordObject(objectiveManager, "Configure Objective Manager");

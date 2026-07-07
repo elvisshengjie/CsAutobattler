@@ -40,10 +40,10 @@ public class RoundManager : MonoBehaviour
 
     [Header("Timers")]
     public float preparationDuration = 5f;
-    public float roundDuration = 90f;
-    public float plantDuration = 4f;
+    public float roundDuration = 180f;
+    public float plantDuration = 8f;
     public float defuseDuration = 5f;
-    public float bombDuration = 30f;
+    public float bombDuration = 60f;
 
     [Header("Runtime (Read Only)")]
     [SerializeField] private RoundState currentState = RoundState.Preparation;

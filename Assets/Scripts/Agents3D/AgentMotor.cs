@@ -94,6 +94,7 @@ public class AgentMotor : MonoBehaviour
     private bool hasDestination;
     private bool hasPendingDestination;
     private bool hasReservedSlot;
+    private bool exactObjectiveMovement;
     private bool recoveringLocally;
     private bool hasResolvedRequest;
     private bool clearanceEscapeActive;
@@ -162,7 +163,11 @@ public class AgentMotor : MonoBehaviour
              Time.time >= recoveryResumeTime))
         {
             recoveringLocally = false;
-            ApplyValidatedDestination(requestedDestination, true);
+            ApplyValidatedDestination(
+                requestedDestination,
+                true,
+                false,
+                exactObjectiveMovement);
         }
 
         if (!recoveringLocally && hasPendingDestination &&
@@ -173,7 +178,8 @@ public class AgentMotor : MonoBehaviour
             ApplyValidatedDestination(next, false);
         }
 
-        if (!recoveringLocally && !hasReservedSlot && hasDestination &&
+        if (!recoveringLocally && !exactObjectiveMovement &&
+            !hasReservedSlot && hasDestination &&
             Time.time >= nextSlotRetryTime)
         {
             ApplyValidatedDestination(requestedDestination, true);
@@ -213,12 +219,20 @@ public class AgentMotor : MonoBehaviour
                     !HasReachedDestination(targetArrivalDistance + 0.1f))
                 {
                     currentTargetValid = false;
-                    ApplyValidatedDestination(requestedDestination, true, true);
+                    ApplyValidatedDestination(
+                        requestedDestination,
+                        true,
+                        true,
+                        exactObjectiveMovement);
                 }
             }
             else
             {
-                ApplyValidatedDestination(requestedDestination, true, true);
+                ApplyValidatedDestination(
+                    requestedDestination,
+                    true,
+                    true,
+                    exactObjectiveMovement);
             }
             nextPathRefreshTime = Time.time + pathRefreshTime;
         }
@@ -241,7 +255,9 @@ public class AgentMotor : MonoBehaviour
 
     public void MoveTo(Vector3 newDestination)
     {
-        if (!hasDestination)
+        bool wasExactObjective = exactObjectiveMovement;
+        exactObjectiveMovement = false;
+        if (!hasDestination || wasExactObjective)
         {
             ApplyValidatedDestination(newDestination, false);
             return;
@@ -277,9 +293,30 @@ public class AgentMotor : MonoBehaviour
 
     public void ForceMoveTo(Vector3 newDestination)
     {
+        exactObjectiveMovement = false;
         recoveringLocally = false;
         hasPendingDestination = false;
         ApplyValidatedDestination(newDestination, true);
+    }
+
+    /// <summary>
+    /// Moves to an interaction point without shifting it into a formation slot.
+    /// Use this for exact-range objectives such as bomb defusing.
+    /// </summary>
+    public void MoveToExactObjective(Vector3 newDestination)
+    {
+        bool modeChanged = !exactObjectiveMovement;
+        float change = hasDestination
+            ? FlatDistance(requestedDestination, newDestination)
+            : Mathf.Infinity;
+        exactObjectiveMovement = true;
+        recoveringLocally = false;
+        hasPendingDestination = false;
+        if (!hasDestination || modeChanged || change > 0.1f ||
+            !currentTargetValid || isStuck)
+        {
+            ApplyValidatedDestination(newDestination, true, false, true);
+        }
     }
 
     public bool HasReachedDestination(float tolerance)
@@ -319,6 +356,7 @@ public class AgentMotor : MonoBehaviour
 
     public void Stop()
     {
+        exactObjectiveMovement = false;
         hasDestination = false;
         hasPendingDestination = false;
         recoveringLocally = false;
@@ -353,8 +391,16 @@ public class AgentMotor : MonoBehaviour
     private void ApplyValidatedDestination(
         Vector3 requested,
         bool forced,
-        bool forceSlotReassignment = false)
+        bool forceSlotReassignment = false,
+        bool bypassTacticalReservation = false)
     {
+        if (bypassTacticalReservation)
+        {
+            PositionReservationManager.Instance?.Release(this);
+            hasReservedSlot = false;
+            currentSlotKind = TacticalSlotKind.Center;
+        }
+
         AStarPathfinder3D pathfinder = AStarPathfinder3D.Instance;
         Vector3 resolved = requested;
         List<Vector3> resolvedPath = null;
@@ -397,8 +443,9 @@ public class AgentMotor : MonoBehaviour
 
         Vector3 validatedTarget = resolved;
 
-        PositionReservationManager reservationManager =
-            PositionReservationManager.EnsureInstance();
+        PositionReservationManager reservationManager = bypassTacticalReservation
+            ? null
+            : PositionReservationManager.EnsureInstance();
         Vector3 reserved = resolved;
         TacticalSlotKind reservedKind = TacticalSlotKind.Center;
         bool slotReserved = reservationManager != null &&
@@ -532,7 +579,11 @@ public class AgentMotor : MonoBehaviour
         if (recoveryAttempts == 1)
         {
             Vector3 previousSlot = destination;
-            ApplyValidatedDestination(requestedDestination, true, true);
+            ApplyValidatedDestination(
+                requestedDestination,
+                true,
+                true,
+                exactObjectiveMovement);
             if (hasDestination && FlatDistance(previousSlot, destination) > 0.1f)
             {
                 Debug.Log("Reassigned tactical slot after prolonged blockage");
@@ -636,7 +687,11 @@ public class AgentMotor : MonoBehaviour
         recoveryAttempts = 0;
         recoveringLocally = false;
         Debug.Log("Emergency nearest valid position used");
-        ApplyValidatedDestination(requestedDestination, true);
+        ApplyValidatedDestination(
+            requestedDestination,
+            true,
+            false,
+            exactObjectiveMovement);
     }
 
     private void FollowPath()

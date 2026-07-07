@@ -957,7 +957,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentStats
   team: 1
-  maxHealth: 50
+  maxHealth: 100
   moveSpeed: 3
   attackRange: 10
   damage: 10
@@ -1310,7 +1310,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentStats
   team: 0
-  maxHealth: 50
+  maxHealth: 100
   moveSpeed: 3
   attackRange: 10
   damage: 10
@@ -1803,7 +1803,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentStats
   team: 1
-  maxHealth: 50
+  maxHealth: 100
   moveSpeed: 3
   attackRange: 10
   damage: 10
@@ -3082,7 +3082,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentStats
   team: 1
-  maxHealth: 50
+  maxHealth: 100
   moveSpeed: 3
   attackRange: 10
   damage: 10
@@ -4524,10 +4524,10 @@ MonoBehaviour:
   randomizeTeamRoles: 0
   swapStartingSidesByRole: 1
   preparationDuration: 5
-  roundDuration: 90
-  plantDuration: 4
+  roundDuration: 180
+  plantDuration: 8
   defuseDuration: 5
-  bombDuration: 30
+  bombDuration: 60
   currentState: 0
   preparationTimeRemaining: 0
   roundTimeRemaining: 0
@@ -4766,7 +4766,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentStats
   team: 0
-  maxHealth: 50
+  maxHealth: 100
   moveSpeed: 3
   attackRange: 10
   damage: 10
@@ -5947,7 +5947,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentStats
   team: 1
-  maxHealth: 50
+  maxHealth: 100
   moveSpeed: 3
   attackRange: 10
   damage: 10
@@ -6603,7 +6603,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentStats
   team: 0
-  maxHealth: 50
+  maxHealth: 100
   moveSpeed: 3
   attackRange: 10
   damage: 10
@@ -7176,7 +7176,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentStats
   team: 0
-  maxHealth: 50
+  maxHealth: 100
   moveSpeed: 3
   attackRange: 10
   damage: 10
@@ -8437,7 +8437,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentStats
   team: 0
-  maxHealth: 50
+  maxHealth: 100
   moveSpeed: 3
   attackRange: 10
   damage: 10
@@ -9353,7 +9353,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AgentStats
   team: 1
-  maxHealth: 50
+  maxHealth: 100
   moveSpeed: 3
   attackRange: 10
   damage: 10
