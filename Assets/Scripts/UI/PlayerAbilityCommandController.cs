@@ -643,13 +643,13 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
 
     private void OnGUI()
     {
-        const float width = 450f;
-        float height = selectedAgent != null ? 166f : 120f;
+        const float width = 390f;
+        float height = selectedAgent != null ? 156f : 110f;
         Rect panel;
         if (!HudLayoutUtility.TryGetGuiRect("ManualAbilityPreview", out panel))
         {
             panel = new Rect(
-                430f,
+                18f,
                 18f,
                 width,
                 height);

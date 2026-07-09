@@ -36,6 +36,18 @@ public class ObjectiveTimerUI : MonoBehaviour
         DrawRoundTimer(round);
 
         string message = GetMessage(round, objective);
+        if (HudLayoutUtility.TryGetScaledTextFontSize(
+            "ObjectiveProgressPreview",
+            "Label",
+            out int previewFontSize))
+        {
+            textStyle.fontSize = previewFontSize;
+        }
+        else
+        {
+            textStyle.fontSize = fontSize;
+        }
+
         Rect panel;
         if (!HudLayoutUtility.TryGetGuiRect("ObjectiveProgressPreview", out panel))
         {
