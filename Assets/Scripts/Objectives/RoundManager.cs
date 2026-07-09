@@ -284,8 +284,11 @@ public class RoundManager : MonoBehaviour
                 // overwritten by the Rigidbody on the next physics update.
                 body.position = poses[i].position;
                 body.rotation = poses[i].rotation;
-                body.linearVelocity = Vector3.zero;
-                body.angularVelocity = Vector3.zero;
+                if (!body.isKinematic)
+                {
+                    body.linearVelocity = Vector3.zero;
+                    body.angularVelocity = Vector3.zero;
+                }
             }
             else
             {

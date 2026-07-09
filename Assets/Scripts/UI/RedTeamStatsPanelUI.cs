@@ -4,22 +4,19 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
+[ExecuteAlways]
 public sealed class RedTeamStatsPanelUI : MonoBehaviour
 {
     private const int RequiredSlotCount = 5;
     private const string RedAgentNamePrefix = "RedAgent3D_";
-
     [SerializeField] private RedTeamStatsSlotUI[] slots = new RedTeamStatsSlotUI[RequiredSlotCount];
     [SerializeField, Min(0.05f)] private float refreshInterval = 0.2f;
 
     private float nextRefreshTime;
 
-    private void Start()
+    private void OnEnable()
     {
-        ApplyExpandedLayout();
-        AssignRedTeamAgents();
-        RefreshSlots();
-        nextRefreshTime = Time.unscaledTime + refreshInterval;
+        InitializePanel();
     }
 
     private void ApplyExpandedLayout()
@@ -43,13 +40,28 @@ public sealed class RedTeamStatsPanelUI : MonoBehaviour
 
     private void Update()
     {
+        if (!Application.isPlaying)
+        {
+            return;
+        }
+
         if (Time.unscaledTime < nextRefreshTime)
         {
             return;
         }
 
-        nextRefreshTime = Time.unscaledTime + refreshInterval;
+        CacheSlotsIfNeeded();
+        AssignRedTeamAgents();
         RefreshSlots();
+        nextRefreshTime = Time.unscaledTime + refreshInterval;
+    }
+
+    private void OnValidate()
+    {
+        if (!Application.isPlaying && isActiveAndEnabled)
+        {
+            InitializePanel();
+        }
     }
 
     public void SetSlots(RedTeamStatsSlotUI[] assignedSlots)
@@ -67,6 +79,8 @@ public sealed class RedTeamStatsPanelUI : MonoBehaviour
 
     private void AssignRedTeamAgents()
     {
+        CacheSlotsIfNeeded();
+
         Scene activeScene = SceneManager.GetActiveScene();
         AgentStats[] allAgents = FindObjectsByType<AgentStats>(FindObjectsInactive.Include);
 
@@ -104,6 +118,46 @@ public sealed class RedTeamStatsPanelUI : MonoBehaviour
             }
 
             slots[slotIndex].SetAgent(matchingAgent);
+        }
+    }
+
+    private void InitializePanel()
+    {
+        ApplyExpandedLayout();
+        CacheSlotsIfNeeded();
+        AssignRedTeamAgents();
+        RefreshSlots();
+        nextRefreshTime = Time.unscaledTime + refreshInterval;
+    }
+
+    private void CacheSlotsIfNeeded()
+    {
+        bool missingSlot = slots == null || slots.Length != RequiredSlotCount;
+        if (!missingSlot)
+        {
+            for (int i = 0; i < slots.Length; i++)
+            {
+                if (slots[i] == null)
+                {
+                    missingSlot = true;
+                    break;
+                }
+            }
+        }
+
+        if (!missingSlot)
+        {
+            return;
+        }
+
+        RedTeamStatsSlotUI[] foundSlots = GetComponentsInChildren<RedTeamStatsSlotUI>(true);
+        Array.Sort(foundSlots, (left, right) =>
+            string.Compare(left.name, right.name, StringComparison.Ordinal));
+
+        int count = Mathf.Min(RequiredSlotCount, foundSlots.Length);
+        for (int i = 0; i < count; i++)
+        {
+            slots[i] = foundSlots[i];
         }
     }
 

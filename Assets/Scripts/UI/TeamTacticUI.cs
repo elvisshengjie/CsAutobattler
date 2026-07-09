@@ -119,7 +119,7 @@ public sealed class TeamTacticUI : MonoBehaviour
             new Color(0.055f, 0.07f, 0.095f, 0.99f));
         initialTacticWindow = window;
         SetRect(window.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f),
-            new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1080f, 590f),
+            new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(980f, 520f),
             new Vector2(0.5f, 0.5f));
         AddOutline(window, AccentColor, new Vector2(2f, -2f));
 
@@ -129,21 +129,14 @@ public sealed class TeamTacticUI : MonoBehaviour
             new Vector2(0f, -48f), new Vector2(960f, 55f), new Vector2(0.5f, 0.5f));
         title.color = AccentColor;
 
-        Text subtitle = CreateText("Subtitle", window.transform,
-            "The attacking team waits here until you choose its baseline plan.",
-            17, FontStyle.Normal, TextAnchor.MiddleCenter);
-        SetRect(subtitle.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-            new Vector2(0f, -88f), new Vector2(960f, 34f), new Vector2(0.5f, 0.5f));
-        subtitle.color = new Color(0.72f, 0.78f, 0.84f, 1f);
-
         InitialTeamTactic[] tactics = (InitialTeamTactic[])Enum.GetValues(
             typeof(InitialTeamTactic));
         Vector2[] positions =
         {
-            new Vector2(-255f, 105f),
-            new Vector2(255f, 105f),
-            new Vector2(-255f, -125f),
-            new Vector2(255f, -125f)
+            new Vector2(-225f, 80f),
+            new Vector2(225f, 80f),
+            new Vector2(-225f, -120f),
+            new Vector2(225f, -120f)
         };
 
         for (int i = 0; i < tactics.Length; i++)
@@ -158,7 +151,7 @@ public sealed class TeamTacticUI : MonoBehaviour
                 18);
             SetRect(button.GetComponent<RectTransform>(),
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                positions[i], new Vector2(470f, 195f), new Vector2(0.5f, 0.5f));
+                positions[i], new Vector2(410f, 165f), new Vector2(0.5f, 0.5f));
             button.onClick.AddListener(() => tacticManager.SelectInitialTactic(captured));
         }
 
@@ -417,12 +410,15 @@ public sealed class TeamTacticUI : MonoBehaviour
             new Color(0.045f, 0.06f, 0.08f, 0.97f));
         SetRect(currentTacticPanel.GetComponent<RectTransform>(),
             new Vector2(1f, 1f), new Vector2(1f, 1f),
-            new Vector2(-20f, -20f), new Vector2(340f, 92f), new Vector2(1f, 1f));
+            new Vector2(-14f, -14f), new Vector2(220f, 74f), new Vector2(1f, 1f));
+        HudLayoutUtility.TryCopyPreviewRect(
+            "InitialTacticPreview",
+            currentTacticPanel.GetComponent<RectTransform>());
         AddOutline(currentTacticPanel, AccentColor, new Vector2(-2f, -2f));
 
         currentTacticText = CreateText("CurrentTacticText", currentTacticPanel.transform,
-            string.Empty, 18, FontStyle.Normal, TextAnchor.MiddleLeft);
-        StretchToParent(currentTacticText.rectTransform, 18f, 18f, 10f, 10f);
+            string.Empty, 16, FontStyle.Normal, TextAnchor.MiddleLeft);
+        StretchToParent(currentTacticText.rectTransform, 14f, 14f, 8f, 8f);
     }
 
     private void BuildMidRoundPanel(Transform parent)

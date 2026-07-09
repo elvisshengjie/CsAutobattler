@@ -1520,8 +1520,11 @@ public sealed class AgentRoleAbilities : MonoBehaviour
         Rigidbody body = GetComponent<Rigidbody>();
         if (body != null)
         {
-            body.linearVelocity = Vector3.zero;
-            body.angularVelocity = Vector3.zero;
+            if (!body.isKinematic)
+            {
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+            }
             body.position = blinkPosition;
         }
 

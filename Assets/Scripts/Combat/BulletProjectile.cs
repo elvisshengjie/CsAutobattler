@@ -39,6 +39,7 @@ public class BulletProjectile : MonoBehaviour
         }
 
         rb.useGravity = false;
+        rb.isKinematic = false;
         rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         rb.interpolation = RigidbodyInterpolation.Interpolate;
 
@@ -162,7 +163,10 @@ public class BulletProjectile : MonoBehaviour
 
         // Any solid wall or enemy collision consumes the projectile.
         initialized = false;
-        rb.linearVelocity = Vector3.zero;
+        if (rb != null && !rb.isKinematic)
+        {
+            rb.linearVelocity = Vector3.zero;
+        }
         Destroy(gameObject);
         return true;
     }

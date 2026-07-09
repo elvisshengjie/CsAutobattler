@@ -643,15 +643,23 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
 
     private void OnGUI()
     {
-        const float width = 360f;
-        float height = selectedAgent != null ? 132f : 92f;
-        Rect panel = new Rect(Screen.width - width - 18f, 18f, width, height);
+        const float width = 450f;
+        float height = selectedAgent != null ? 166f : 120f;
+        Rect panel;
+        if (!HudLayoutUtility.TryGetGuiRect("ManualAbilityPreview", out panel))
+        {
+            panel = new Rect(
+                430f,
+                18f,
+                width,
+                height);
+        }
         GUI.Box(panel, GUIContent.none);
 
         GUIStyle title = new GUIStyle(GUI.skin.label)
         {
-            alignment = TextAnchor.UpperRight,
-            fontSize = 20,
+            alignment = TextAnchor.UpperLeft,
+            fontSize = 23,
             fontStyle = FontStyle.Bold,
             normal = { textColor = remainingUses > 0
                 ? new Color(1f, 0.35f, 0.25f)
@@ -664,8 +672,8 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
 
         GUIStyle body = new GUIStyle(GUI.skin.label)
         {
-            alignment = TextAnchor.UpperRight,
-            fontSize = 14,
+            alignment = TextAnchor.UpperLeft,
+            fontSize = 17,
             wordWrap = true,
             normal = { textColor = Color.white }
         };

@@ -41,25 +41,26 @@ public class DebugVisualManager : MonoBehaviour
         panel.transform.SetParent(canvas.transform, false);
         
         RectTransform rect = panel.GetComponent<RectTransform>();
-        rect.anchorMin = new Vector2(0, 1);
-        rect.anchorMax = new Vector2(0, 1);
-        rect.pivot = new Vector2(0, 1);
-        rect.anchoredPosition = new Vector2(10, -10);
-        rect.sizeDelta = new Vector2(220, 140); 
+        rect.anchorMin = new Vector2(1, 1);
+        rect.anchorMax = new Vector2(1, 1);
+        rect.pivot = new Vector2(1, 1);
+        rect.anchoredPosition = new Vector2(-245, -8);
+        rect.sizeDelta = new Vector2(150, 104); 
+        HudLayoutUtility.TryCopyPreviewRect("DebugTogglePreview", rect);
         
         Image bg = panel.GetComponent<Image>();
         bg.color = new Color(0.1f, 0.1f, 0.1f, 0.9f);
 
         VerticalLayoutGroup layout = panel.GetComponent<VerticalLayoutGroup>();
-        layout.padding = new RectOffset(10, 10, 10, 10);
-        layout.spacing = 15;
+        layout.padding = new RectOffset(8, 8, 8, 8);
+        layout.spacing = 7;
         layout.childControlWidth = false;  
         layout.childControlHeight = false; 
 
-        AddToggle(panel.transform, "Show AI States", ShowActions, v => ShowActions = v);
-        AddToggle(panel.transform, "Show Path Lines", ShowPaths, v => ShowPaths = v);
-        AddToggle(panel.transform, "Show Target Markers", ShowTargets, v => ShowTargets = v);
-        AddToggle(panel.transform, "Show Heatmap", ShowHeatmap, v => ShowHeatmap = v);
+        AddToggle(panel.transform, "AI States", ShowActions, v => ShowActions = v);
+        AddToggle(panel.transform, "Path Lines", ShowPaths, v => ShowPaths = v);
+        AddToggle(panel.transform, "Target Markers", ShowTargets, v => ShowTargets = v);
+        AddToggle(panel.transform, "Heatmap", ShowHeatmap, v => ShowHeatmap = v);
     }
 
     private void AddToggle(Transform parent, string labelText, bool defaultValue, UnityEngine.Events.UnityAction<bool> onValueChanged)
@@ -71,7 +72,7 @@ public class DebugVisualManager : MonoBehaviour
         toggleObj.transform.SetParent(parent, false);
         
         RectTransform toggleRect = toggleObj.GetComponent<RectTransform>();
-        toggleRect.sizeDelta = new Vector2(20, 20); 
+        toggleRect.sizeDelta = new Vector2(16, 16); 
 
         Image bgImage = toggleObj.GetComponent<Image>();
         bgImage.color = new Color(0.2f, 0.2f, 0.2f, 1f); 
@@ -87,7 +88,7 @@ public class DebugVisualManager : MonoBehaviour
         checkImage.color = new Color(0.2f, 0.86f, 0.96f, 1f); 
         
         RectTransform checkRect = checkObj.GetComponent<RectTransform>();
-        checkRect.sizeDelta = new Vector2(12, 12);
+        checkRect.sizeDelta = new Vector2(10, 10);
         checkRect.anchoredPosition = Vector2.zero;
         
         toggle.graphic = checkImage; 
@@ -100,11 +101,11 @@ public class DebugVisualManager : MonoBehaviour
         text.font = font;
         text.text = labelText;
         text.color = Color.white;
-        text.fontSize = 14;
+        text.fontSize = 12;
         text.alignment = TextAnchor.MiddleLeft;
 
         RectTransform textRect = labelObj.GetComponent<RectTransform>();
-        textRect.anchoredPosition = new Vector2(100, 0); 
-        textRect.sizeDelta = new Vector2(160, 20);
+        textRect.anchoredPosition = new Vector2(66, 0); 
+        textRect.sizeDelta = new Vector2(108, 18);
     }
 }

@@ -6,11 +6,11 @@ using UnityEngine;
 public class ObjectiveTimerUI : MonoBehaviour
 {
     [Header("Layout")]
-    public float width = 300f;
-    public float height = 40f;
+    public float width = 420f;
+    public float height = 82f;
     public float rightMargin = 16f;
-    public float bottomMargin = 82f;
-    public int fontSize = 14;
+    public float bottomMargin = 44f;
+    public int fontSize = 19;
 
     private GUIStyle panelStyle;
     private GUIStyle backgroundStyle;
@@ -36,24 +36,25 @@ public class ObjectiveTimerUI : MonoBehaviour
         DrawRoundTimer(round);
 
         string message = GetMessage(round, objective);
-        if (!string.IsNullOrEmpty(message))
+        Rect panel;
+        if (!HudLayoutUtility.TryGetGuiRect("ObjectiveProgressPreview", out panel))
         {
-        float contentWidth = textStyle.CalcSize(new GUIContent(message)).x + 30f;
-        float fittedWidth = Mathf.Clamp(
-            contentWidth,
-            170f,
-            Mathf.Min(width, Screen.width - rightMargin * 2f));
-        Rect panel = new Rect(
-            Screen.width - fittedWidth - rightMargin,
-            Screen.height - height - bottomMargin,
-            fittedWidth,
-            height);
+            float contentWidth = textStyle.CalcSize(new GUIContent(message)).x + 30f;
+            float fittedWidth = Mathf.Clamp(
+                contentWidth,
+                260f,
+                Mathf.Min(width, Screen.width - rightMargin * 2f));
+            panel = new Rect(
+                Screen.width - fittedWidth - rightMargin,
+                Screen.height - height - bottomMargin,
+                fittedWidth,
+                height);
+        }
         GUI.Box(panel, GUIContent.none, panelStyle);
         GUI.Box(new Rect(panel.x + 3f, panel.y + 3f, panel.width - 6f, panel.height - 6f),
             GUIContent.none,
             backgroundStyle);
         GUI.Label(panel, message, textStyle);
-        }
 
         if (ShouldShowEnemyDefuse(round, objective))
         {
@@ -83,10 +84,14 @@ public class ObjectiveTimerUI : MonoBehaviour
 
         int totalSeconds = Mathf.Max(0, Mathf.CeilToInt(seconds));
         string time = $"{totalSeconds / 60:00}:{totalSeconds % 60:00}";
-        const float timerWidth = 240f;
-        const float timerHeight = 54f;
-        Rect panel = new Rect((Screen.width - timerWidth) * 0.5f, 16f,
-            timerWidth, timerHeight);
+        Rect panel;
+        if (!HudLayoutUtility.TryGetGuiRect("RoundTimerPreview", out panel))
+        {
+            const float timerWidth = 330f;
+            const float timerHeight = 72f;
+            panel = new Rect((Screen.width - timerWidth) * 0.5f, 16f,
+                timerWidth, timerHeight);
+        }
         GUI.Box(panel, GUIContent.none, panelStyle);
         GUI.Box(new Rect(panel.x + 3f, panel.y + 3f, panel.width - 6f,
             panel.height - 6f), GUIContent.none, backgroundStyle);
@@ -156,7 +161,7 @@ public class ObjectiveTimerUI : MonoBehaviour
             return $"BOMB EXPLODES  |  {DisplaySeconds(round.BombTimeRemaining)}s";
         }
 
-        return string.Empty;
+        return "OBJECTIVE READY";
     }
 
     private static int DisplaySeconds(float seconds)
@@ -211,7 +216,7 @@ public class ObjectiveTimerUI : MonoBehaviour
         roundTimerStyle = new GUIStyle(textStyle)
         {
             alignment = TextAnchor.MiddleCenter,
-            fontSize = 18,
+            fontSize = 24,
             normal = { textColor = new Color(0.2f, 0.86f, 0.96f, 1f) }
         };
         progressBackgroundTexture = CreateTexture("DefuseProgressBackground",

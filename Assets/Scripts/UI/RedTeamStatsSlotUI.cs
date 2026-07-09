@@ -98,8 +98,10 @@ public sealed class RedTeamStatsSlotUI : MonoBehaviour
             }
             else
             {
-                float currentHealth = Mathf.Max(0f, healthSystem.CurrentHealth);
-                float maxHealth = Mathf.Max(0f, agent.maxHealth);
+                float maxHealth = GetDisplayMaximumHealth(agent);
+                float currentHealth = Application.isPlaying
+                    ? Mathf.Max(0f, healthSystem.CurrentHealth)
+                    : maxHealth;
                 hpText.text = "HP: " + FormatHealth(currentHealth) + "/" + FormatHealth(maxHealth);
             }
         }
@@ -218,5 +220,16 @@ public sealed class RedTeamStatsSlotUI : MonoBehaviour
     private static string FormatHealth(float value)
     {
         return value.ToString("0.#");
+    }
+
+    private static float GetDisplayMaximumHealth(AgentStats stats)
+    {
+        if (stats == null)
+        {
+            return 0f;
+        }
+
+        WeaponLoadout loadout = stats.GetComponent<WeaponLoadout>();
+        return Mathf.Max(0f, loadout != null ? loadout.AgentHealth : stats.maxHealth);
     }
 }

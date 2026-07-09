@@ -15,7 +15,7 @@ public sealed class EnemyTeamStatsPanelUI : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void CreateRuntimePanel()
     {
-        if (FindFirstObjectByType<EnemyTeamStatsPanelUI>() != null) return;
+        if (FindAnyObjectByType<EnemyTeamStatsPanelUI>() != null) return;
 
         Canvas canvas = null;
         foreach (Canvas candidate in FindObjectsByType<Canvas>(FindObjectsInactive.Include))
@@ -33,10 +33,11 @@ public sealed class EnemyTeamStatsPanelUI : MonoBehaviour
         RectTransform rect = panelObject.GetComponent<RectTransform>();
         rect.anchorMin = rect.anchorMax = new Vector2(0f, 0.5f);
         rect.pivot = new Vector2(0f, 0.5f);
-        rect.anchoredPosition = new Vector2(18f, 30f);
+        rect.anchoredPosition = new Vector2(18f, 110f);
         rect.sizeDelta = new Vector2(
             RedTeamStatsSlotUI.DisplayWidth,
             SlotCount * RedTeamStatsSlotUI.DisplayHeight + (SlotCount - 1) * Spacing);
+        HudLayoutUtility.TryCopyPreviewRect("EnemyFlashcardsPreview", rect);
 
         VerticalLayoutGroup layout = panelObject.GetComponent<VerticalLayoutGroup>();
         layout.spacing = Spacing;
@@ -65,7 +66,7 @@ public sealed class EnemyTeamStatsPanelUI : MonoBehaviour
 
     private void AssignEnemyAgents()
     {
-        TeamTacticManager tacticManager = FindFirstObjectByType<TeamTacticManager>();
+        TeamTacticManager tacticManager = FindAnyObjectByType<TeamTacticManager>();
         TeamType controlledTeam = tacticManager != null ? tacticManager.ControlledTeam : TeamType.Red;
         TeamType enemyTeam = controlledTeam == TeamType.Red ? TeamType.Blue : TeamType.Red;
 

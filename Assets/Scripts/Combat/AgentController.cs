@@ -109,10 +109,7 @@ public class AgentController : MonoBehaviour
 
     private GameObject FindClosestEnemy()
     {
-        AgentStats[] allAgents = FindObjectsByType<AgentStats>(
-            FindObjectsInactive.Exclude,
-            FindObjectsSortMode.None
-        );
+        AgentStats[] allAgents = FindObjectsByType<AgentStats>(FindObjectsInactive.Exclude);
 
         GameObject closestEnemy = null;
         float closestDistance = Mathf.Infinity;

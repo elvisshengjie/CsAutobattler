@@ -50,7 +50,7 @@ public sealed class WeaponLoadout : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void AttachToAgents()
     {
-        RoundManager roundManager = FindFirstObjectByType<RoundManager>();
+        RoundManager roundManager = FindAnyObjectByType<RoundManager>();
         foreach (AgentStats agent in FindObjectsByType<AgentStats>(FindObjectsInactive.Include))
         {
             WeaponLoadout loadout = agent.GetComponent<WeaponLoadout>();

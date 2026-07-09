@@ -17,6 +17,7 @@ public static class RedTeamStatsPanelBuilder
     private const float SlotWidth = RedTeamStatsSlotUI.DisplayWidth;
     private const float SlotHeight = RedTeamStatsSlotUI.DisplayHeight;
     private const float SlotSpacing = 12f;
+    private const float BottomPanelXOffset = 24f;
     private static readonly Vector2 HudReferenceResolution = new Vector2(1600f, 900f);
 
     private static readonly Color[] DefaultFallbackPortraitColors =
@@ -359,7 +360,7 @@ public static class RedTeamStatsPanelBuilder
         panelRect.anchorMin = new Vector2(0.5f, 0f);
         panelRect.anchorMax = new Vector2(0.5f, 0f);
         panelRect.pivot = new Vector2(0.5f, 0f);
-        panelRect.anchoredPosition = new Vector2(0f, 24f);
+        panelRect.anchoredPosition = new Vector2(BottomPanelXOffset, 24f);
         panelRect.sizeDelta = new Vector2(panelWidth, SlotHeight);
         panelRect.localRotation = Quaternion.identity;
         panelRect.localScale = Vector3.one;
