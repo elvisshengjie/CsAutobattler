@@ -68,9 +68,13 @@ public sealed class HudEditModePreview : MonoBehaviour
             new Vector2(18f, -18f), new Vector2(390f, 110f), new Vector2(0f, 1f));
 
         CreateText("Title", panel.transform,
-            $"MANUAL ABILITIES LEFT: {ManualAbilityUses}/{ManualAbilityUses}",
-            23, FontStyle.Bold, WarningColor, TextAnchor.MiddleLeft,
-            new Vector2(12f, -8f), new Vector2(-12f, -36f));
+            "MANUAL ABILITIES",
+            22, FontStyle.Bold, WarningColor, TextAnchor.MiddleLeft,
+            new Vector2(12f, -8f), new Vector2(-76f, -36f));
+        CreateText("Count", panel.transform,
+            $"{ManualAbilityUses}/{ManualAbilityUses}",
+            23, FontStyle.Bold, WarningColor, TextAnchor.MiddleRight,
+            new Vector2(-70f, -8f), new Vector2(-12f, -36f));
         CreateText("Hint", panel.transform,
             "Left-click a player to command their role ability",
             17, FontStyle.Bold, TextColor, TextAnchor.UpperLeft,

@@ -32,6 +32,9 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
     private string currentHint = "Left-click one of your players";
     private string feedback = string.Empty;
     private float feedbackUntil;
+    private Vector3 feedbackWorldPosition;
+    private bool hasFeedbackWorldPosition;
+    private bool feedbackIsWarning;
     private int remainingUses = MaximumUsesPerRound;
 
     public int RemainingUses => remainingUses;
@@ -198,6 +201,8 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
             return;
         }
 
+        Vector3 abilityFeedbackPosition = pointerWorldPosition;
+        bool hasAbilityFeedbackPosition = hasPointerWorldPosition;
         bool used = false;
         switch (selectedRole.SelectedRole)
         {
@@ -224,20 +229,35 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
                 HealthSystem targetHealth = target != null
                     ? target.GetComponent<HealthSystem>()
                     : null;
+                if (target != null)
+                {
+                    abilityFeedbackPosition = target.transform.position + Vector3.up * 0.9f;
+                    hasAbilityFeedbackPosition = true;
+                }
+
                 used = selectedAbilities.TryManualHeal(targetHealth);
                 break;
         }
 
         if (!used)
         {
-            SetFeedback(currentHint, 1.4f);
+            SetFeedback(
+                currentHint,
+                1.4f,
+                abilityFeedbackPosition,
+                hasAbilityFeedbackPosition,
+                true);
             return;
         }
 
         remainingUses = Mathf.Max(0, remainingUses - 1);
         int left = remainingUses;
         CancelSelection();
-        SetFeedback($"Ability commanded - {left} use{(left == 1 ? "" : "s")} left", 2f);
+        SetFeedback(
+            $"Ability commanded - {left} use{(left == 1 ? "" : "s")} left",
+            2f,
+            abilityFeedbackPosition,
+            hasAbilityFeedbackPosition);
     }
 
     private void UpdatePreview()
@@ -635,10 +655,68 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
         selectionRing = null;
     }
 
-    private void SetFeedback(string message, float duration)
+    private void SetFeedback(string message, float duration, bool warning = false)
+    {
+        SetFeedback(message, duration, default, false, warning);
+    }
+
+    private void SetFeedback(
+        string message,
+        float duration,
+        Vector3 worldPosition,
+        bool hasWorldPosition,
+        bool warning = false)
     {
         feedback = message;
         feedbackUntil = Time.time + duration;
+        feedbackWorldPosition = worldPosition;
+        hasFeedbackWorldPosition = hasWorldPosition;
+        feedbackIsWarning = warning;
+    }
+
+    private bool FeedbackShouldUseWarningColor()
+    {
+        return feedbackIsWarning ||
+               feedback.IndexOf(
+                   "cooldown",
+                   System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+               feedback.IndexOf(
+                   "not armed",
+                   System.StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    private bool TryGetAnchoredFeedbackToast(
+        float toastWidth,
+        float toastHeight,
+        out Rect toast)
+    {
+        toast = default;
+        if (!hasFeedbackWorldPosition)
+        {
+            return false;
+        }
+
+        Camera camera = targetCamera != null ? targetCamera : Camera.main;
+        if (camera == null)
+        {
+            return false;
+        }
+
+        Vector3 screen = camera.WorldToScreenPoint(feedbackWorldPosition);
+        if (screen.z <= 0f)
+        {
+            return false;
+        }
+
+        const float edgePadding = 8f;
+        float x = screen.x - toastWidth * 0.5f;
+        float y = Screen.height - screen.y - toastHeight - 18f;
+        float maxX = Mathf.Max(edgePadding, Screen.width - toastWidth - edgePadding);
+        float maxY = Mathf.Max(edgePadding, Screen.height - toastHeight - edgePadding);
+        x = Mathf.Clamp(x, edgePadding, maxX);
+        y = Mathf.Clamp(y, edgePadding, maxY);
+        toast = new Rect(x, y, toastWidth, toastHeight);
+        return true;
     }
 
     private void OnGUI()
@@ -656,19 +734,39 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
         }
         GUI.Box(panel, GUIContent.none);
 
+        Color usesColor = remainingUses > 0
+            ? new Color(1f, 0.35f, 0.25f)
+            : new Color(0.65f, 0.65f, 0.65f);
         GUIStyle title = new GUIStyle(GUI.skin.label)
         {
             alignment = TextAnchor.UpperLeft,
-            fontSize = 23,
+            fontSize = 22,
             fontStyle = FontStyle.Bold,
-            normal = { textColor = remainingUses > 0
-                ? new Color(1f, 0.35f, 0.25f)
-                : new Color(0.65f, 0.65f, 0.65f) }
+            normal = { textColor = usesColor }
         };
+        GUIStyle count = new GUIStyle(title)
+        {
+            alignment = TextAnchor.UpperRight,
+            fontSize = 23
+        };
+        const float horizontalPadding = 12f;
+        const float countWidth = 58f;
+        const float titleGap = 6f;
+        float titleWidth = Mathf.Max(
+            0f,
+            panel.width - horizontalPadding * 2f - countWidth - titleGap);
         GUI.Label(
-            new Rect(panel.x + 12f, panel.y + 8f, panel.width - 24f, 28f),
-            $"MANUAL ABILITIES LEFT: {remainingUses}/{MaximumUsesPerRound}",
+            new Rect(panel.x + horizontalPadding, panel.y + 8f, titleWidth, 28f),
+            "MANUAL ABILITIES",
             title);
+        GUI.Label(
+            new Rect(
+                panel.x + panel.width - horizontalPadding - countWidth,
+                panel.y + 8f,
+                countWidth,
+                28f),
+            $"{remainingUses}/{MaximumUsesPerRound}",
+            count);
 
         GUIStyle body = new GUIStyle(GUI.skin.label)
         {
@@ -692,28 +790,42 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
 
         if (Time.time < feedbackUntil && !string.IsNullOrEmpty(feedback))
         {
-            const float toastWidth = 520f;
-            Rect toast = new Rect(
-                (Screen.width - toastWidth) * 0.5f,
-                18f,
-                toastWidth,
-                48f);
-            GUI.Box(toast, GUIContent.none);
             GUIStyle toastStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleCenter,
                 fontSize = 18,
                 fontStyle = FontStyle.Bold,
-                normal = { textColor = feedback.IndexOf(
-                        "cooldown",
-                        System.StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    feedback.IndexOf(
-                        "not armed",
-                        System.StringComparison.OrdinalIgnoreCase) >= 0
+                wordWrap = true,
+                normal = { textColor = FeedbackShouldUseWarningColor()
                         ? new Color(1f, 0.78f, 0.2f)
                         : Color.white }
             };
-            GUI.Label(toast, feedback, toastStyle);
+
+            GUIContent toastContent = new GUIContent(feedback);
+            bool preferAnchoredToast = hasFeedbackWorldPosition;
+            float toastWidth = preferAnchoredToast
+                ? Mathf.Clamp(toastStyle.CalcSize(toastContent).x + 28f, 190f, 360f)
+                : 520f;
+            float toastHeight = preferAnchoredToast
+                ? Mathf.Clamp(
+                    toastStyle.CalcHeight(toastContent, toastWidth - 16f) + 12f,
+                    42f,
+                    72f)
+                : 48f;
+            if (!TryGetAnchoredFeedbackToast(toastWidth, toastHeight, out Rect toast))
+            {
+                toast = new Rect(
+                    (Screen.width - toastWidth) * 0.5f,
+                    18f,
+                    toastWidth,
+                    toastHeight);
+            }
+
+            GUI.Box(toast, GUIContent.none);
+            GUI.Label(
+                new Rect(toast.x + 8f, toast.y + 4f, toast.width - 16f, toast.height - 8f),
+                feedback,
+                toastStyle);
         }
     }
 
