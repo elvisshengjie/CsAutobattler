@@ -448,7 +448,7 @@ public sealed class SmokeGrenadeProjectile : MonoBehaviour
 }
 
 /// <summary>
-/// Stationary, destructible, limited-range sentry with a fixed firing cone.
+/// Stationary, destructible, limited-range sentry with an optional firing cone.
 /// </summary>
 public sealed class DeployableTurret : MonoBehaviour
 {
@@ -456,7 +456,7 @@ public sealed class DeployableTurret : MonoBehaviour
     [SerializeField] private float maximumHealth = 120f;
     [SerializeField] private float currentHealth;
     [SerializeField] private float range = 14f;
-    [SerializeField, Range(10f, 160f)] private float fieldOfView = 75f;
+    [SerializeField, Range(10f, 360f)] private float fieldOfView = 360f;
     [SerializeField] private float damage = 8f;
     [SerializeField] private float fireCooldown = 0.7f;
     [SerializeField] private float projectileSpeed = 22f;
@@ -485,7 +485,7 @@ public sealed class DeployableTurret : MonoBehaviour
         maximumHealth = Mathf.Max(1f, health);
         currentHealth = maximumHealth;
         range = Mathf.Max(1f, attackRange);
-        fieldOfView = Mathf.Clamp(firingArc, 10f, 160f);
+        fieldOfView = Mathf.Clamp(firingArc, 10f, 360f);
         CreateVisuals();
         UpdateStatusText();
     }

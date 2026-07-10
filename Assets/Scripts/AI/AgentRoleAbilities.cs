@@ -17,7 +17,7 @@ public sealed class AgentRoleAbilities : MonoBehaviour
     [SerializeField, Range(-0.25f, 0.75f)] private float flankDotThreshold = 0.35f;
 
     [Header("Support Heal")]
-    [SerializeField] private float healRange = 6f;
+    [SerializeField] private float healRange = 15f;
     [SerializeField] private float healAmount = 28f;
     [SerializeField] private float healChannelDuration = 1.6f;
     [SerializeField] private float healCooldown = 8f;
@@ -27,7 +27,7 @@ public sealed class AgentRoleAbilities : MonoBehaviour
     [SerializeField] private float turretInstallDuration = 2.6f;
     [SerializeField] private float turretHealth = 30f;
     [SerializeField] private float turretRange = 14f;
-    [SerializeField, Range(20f, 140f)] private float turretFiringArc = 75f;
+    [SerializeField, Range(20f, 360f)] private float turretFiringArc = 360f;
     [SerializeField] private float turretThreatRange = 20f;
     [SerializeField] private float turretObjectiveRange = 11f;
 
@@ -80,6 +80,7 @@ public sealed class AgentRoleAbilities : MonoBehaviour
     private float lastDamagedAt = Mathf.NegativeInfinity;
     private bool shadowBlinkOpeningStarted;
     private bool isInstallingTurret;
+    private bool currentTurretInstallationIsManual;
     private bool playerCommandSelected;
     private float turretInstallStartedAt;
     private float turretInstallEndsAt;
@@ -94,6 +95,8 @@ public sealed class AgentRoleAbilities : MonoBehaviour
         : AgentRoleType.Assaulter;
     public Vector3 WallPreviewSize => wallSize;
     public bool IsReservedForPlayerCommand => playerCommandSelected;
+    public event System.Action<AgentRoleAbilities> ManualTurretInstallationCompleted;
+    public event System.Action<AgentRoleAbilities> ManualTurretInstallationCancelled;
     public float ManualCooldownRemaining
     {
         get
@@ -384,7 +387,7 @@ public sealed class AgentRoleAbilities : MonoBehaviour
             return false;
         }
 
-        BeginTurretInstallation(requestedPosition, rotation);
+        BeginTurretInstallation(requestedPosition, rotation, true);
         return true;
     }
 
@@ -1048,9 +1051,13 @@ public sealed class AgentRoleAbilities : MonoBehaviour
         return true;
     }
 
-    private void BeginTurretInstallation(Vector3 position, Quaternion rotation)
+    private void BeginTurretInstallation(
+        Vector3 position,
+        Quaternion rotation,
+        bool manualCommand = false)
     {
         isInstallingTurret = true;
+        currentTurretInstallationIsManual = manualCommand;
         turretInstallStartedAt = Time.time;
         turretInstallEndsAt = Time.time + turretInstallDuration;
         turretInstallStart = transform.position;
@@ -1110,6 +1117,11 @@ public sealed class AgentRoleAbilities : MonoBehaviour
             "TURRET ONLINE",
             0f,
             AgentRoleAbilities.GetWallColor(stats.team));
+        if (currentTurretInstallationIsManual)
+        {
+            currentTurretInstallationIsManual = false;
+            ManualTurretInstallationCompleted?.Invoke(this);
+        }
     }
 
     private void CancelTurretInstallation(bool useShortCooldown)
@@ -1121,9 +1133,16 @@ public sealed class AgentRoleAbilities : MonoBehaviour
 
         isInstallingTurret = false;
         healthBar?.ClearAbilityStatus();
+        bool cancelledManualInstallation = currentTurretInstallationIsManual;
+        currentTurretInstallationIsManual = false;
         if (useShortCooldown)
         {
             nextTurretTime = Time.time + 2f;
+        }
+
+        if (cancelledManualInstallation)
+        {
+            ManualTurretInstallationCancelled?.Invoke(this);
         }
     }
 

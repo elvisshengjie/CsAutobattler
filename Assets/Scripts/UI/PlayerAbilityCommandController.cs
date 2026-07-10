@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -36,6 +37,9 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
     private bool hasFeedbackWorldPosition;
     private bool feedbackIsWarning;
     private int remainingUses = MaximumUsesPerRound;
+    private readonly Dictionary<AgentRoleAbilities, Vector3>
+        pendingManualTurretChargePositions =
+            new Dictionary<AgentRoleAbilities, Vector3>();
 
     public int RemainingUses => remainingUses;
     public int MaximumUses => MaximumUsesPerRound;
@@ -203,6 +207,8 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
 
         Vector3 abilityFeedbackPosition = pointerWorldPosition;
         bool hasAbilityFeedbackPosition = hasPointerWorldPosition;
+        AgentRoleAbilities abilityToTrack = selectedAbilities;
+        AgentRoleType confirmedRole = selectedRole.SelectedRole;
         bool used = false;
         switch (selectedRole.SelectedRole)
         {
@@ -251,13 +257,15 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
         }
 
         remainingUses = Mathf.Max(0, remainingUses - 1);
-        int left = remainingUses;
+        if (confirmedRole == AgentRoleType.Assaulter)
+        {
+            RegisterPendingManualTurretCharge(
+                abilityToTrack,
+                abilityFeedbackPosition,
+                hasAbilityFeedbackPosition);
+        }
+
         CancelSelection();
-        SetFeedback(
-            $"Ability commanded - {left} use{(left == 1 ? "" : "s")} left",
-            2f,
-            abilityFeedbackPosition,
-            hasAbilityFeedbackPosition);
     }
 
     private void UpdatePreview()
@@ -660,6 +668,81 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
         SetFeedback(message, duration, default, false, warning);
     }
 
+    private void RegisterPendingManualTurretCharge(
+        AgentRoleAbilities abilities,
+        Vector3 worldPosition,
+        bool hasWorldPosition)
+    {
+        if (abilities == null)
+        {
+            return;
+        }
+
+        bool alreadyPending =
+            pendingManualTurretChargePositions.ContainsKey(abilities);
+        pendingManualTurretChargePositions[abilities] = hasWorldPosition
+            ? worldPosition
+            : abilities.transform.position + Vector3.up * 0.9f;
+        if (alreadyPending)
+        {
+            return;
+        }
+
+        abilities.ManualTurretInstallationCompleted +=
+            OnManualTurretInstallationCompleted;
+        abilities.ManualTurretInstallationCancelled +=
+            OnManualTurretInstallationCancelled;
+    }
+
+    private void OnManualTurretInstallationCompleted(AgentRoleAbilities abilities)
+    {
+        ReleasePendingManualTurretCharge(abilities, false);
+    }
+
+    private void OnManualTurretInstallationCancelled(AgentRoleAbilities abilities)
+    {
+        if (!ReleasePendingManualTurretCharge(abilities, true))
+        {
+            return;
+        }
+    }
+
+    private bool ReleasePendingManualTurretCharge(
+        AgentRoleAbilities abilities,
+        bool refundUse)
+    {
+        if (abilities == null ||
+            !pendingManualTurretChargePositions.TryGetValue(
+                abilities,
+                out Vector3 worldPosition))
+        {
+            return false;
+        }
+
+        pendingManualTurretChargePositions.Remove(abilities);
+        abilities.ManualTurretInstallationCompleted -=
+            OnManualTurretInstallationCompleted;
+        abilities.ManualTurretInstallationCancelled -=
+            OnManualTurretInstallationCancelled;
+        if (!refundUse)
+        {
+            return true;
+        }
+
+        remainingUses = Mathf.Min(MaximumUsesPerRound, remainingUses + 1);
+        return true;
+    }
+
+    private void ClearPendingManualTurretCharges()
+    {
+        List<AgentRoleAbilities> pendingAbilities =
+            new List<AgentRoleAbilities>(pendingManualTurretChargePositions.Keys);
+        foreach (AgentRoleAbilities abilities in pendingAbilities)
+        {
+            ReleasePendingManualTurretCharge(abilities, false);
+        }
+    }
+
     private void SetFeedback(
         string message,
         float duration,
@@ -837,6 +920,7 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
         }
 
         selectedAbilities?.SetPlayerCommandSelected(false);
+        ClearPendingManualTurretCharges();
         DestroyPreview();
         Destroy(validPreviewMaterial);
         Destroy(invalidPreviewMaterial);

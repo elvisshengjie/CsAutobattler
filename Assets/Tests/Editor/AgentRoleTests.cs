@@ -137,6 +137,45 @@ public sealed class AgentRoleTests
     }
 
     [Test]
+    public void SupportManualHeal_ReachesFifteenMeters()
+    {
+        GameObject support = new GameObject("Support Range Test Healer");
+        GameObject ally = new GameObject("Support Range Test Ally");
+        try
+        {
+            AgentStats supportStats = support.AddComponent<AgentStats>();
+            supportStats.team = TeamType.Red;
+            support.AddComponent<HealthSystem>();
+            AgentRole supportRole = support.AddComponent<AgentRole>();
+            supportRole.SetRole(AgentRoleType.Support);
+            AgentRoleAbilities abilities = support.AddComponent<AgentRoleAbilities>();
+            typeof(AgentRoleAbilities)
+                .GetField("nextHealTime", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?.SetValue(abilities, 0f);
+
+            AgentStats allyStats = ally.AddComponent<AgentStats>();
+            allyStats.team = TeamType.Red;
+            HealthSystem allyHealth = ally.AddComponent<HealthSystem>();
+            allyHealth.TakeDamage(10f);
+
+            ally.transform.position = new Vector3(14.5f, 0f, 0f);
+            Assert.That(abilities.CanManuallyHeal(allyHealth, out string nearReason),
+                Is.True,
+                nearReason);
+
+            ally.transform.position = new Vector3(15.6f, 0f, 0f);
+            Assert.That(abilities.CanManuallyHeal(allyHealth, out string farReason),
+                Is.False);
+            Assert.That(farReason, Does.Contain("15"));
+        }
+        finally
+        {
+            Object.DestroyImmediate(support);
+            Object.DestroyImmediate(ally);
+        }
+    }
+
+    [Test]
     public void SmokeCloud_BlocksOnlyLinesThatCrossItsRadius()
     {
         Assert.That(
@@ -180,6 +219,70 @@ public sealed class AgentRoleTests
         finally
         {
             Object.DestroyImmediate(turretObject);
+        }
+    }
+
+    [Test]
+    public void Turret_CanUseFullCircleFiringArc()
+    {
+        GameObject turretObject = new GameObject("Turret Full Circle Test");
+        try
+        {
+            DeployableTurret turret = turretObject.AddComponent<DeployableTurret>();
+            turret.Initialize(TeamType.Red, 120f, 14f, 360f);
+
+            Assert.That(turret.IsInsideFiringArc(Vector3.forward * 10f), Is.True);
+            Assert.That(turret.IsInsideFiringArc(Vector3.right * 10f), Is.True);
+            Assert.That(turret.IsInsideFiringArc(Vector3.back * 10f), Is.True);
+            Assert.That(turret.IsInsideFiringArc(Vector3.back * 15f), Is.False);
+        }
+        finally
+        {
+            Object.DestroyImmediate(turretObject);
+        }
+    }
+
+    [Test]
+    public void ManualTurretInstall_CancelledBeforeCompletionRaisesRefundEvent()
+    {
+        GameObject agent = new GameObject("Manual Turret Cancel Test Agent");
+        try
+        {
+            AgentStats stats = agent.AddComponent<AgentStats>();
+            stats.team = TeamType.Red;
+            agent.AddComponent<HealthSystem>();
+            AgentRole role = agent.AddComponent<AgentRole>();
+            role.SetRole(AgentRoleType.Assaulter);
+            AgentRoleAbilities abilities = agent.AddComponent<AgentRoleAbilities>();
+            typeof(AgentRoleAbilities)
+                .GetField("nextTurretTime", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?.SetValue(abilities, 0f);
+
+            bool cancelled = false;
+            abilities.ManualTurretInstallationCancelled += _ => cancelled = true;
+
+            Assert.That(abilities.TryManualInstallTurret(new Vector3(2f, 0f, 0f)),
+                Is.True);
+            typeof(AgentRoleAbilities)
+                .GetField("lastDamagedAt", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?.SetValue(abilities, Time.time + 1f);
+            typeof(AgentRoleAbilities)
+                .GetMethod(
+                    "UpdateTurretInstallation",
+                    BindingFlags.Instance | BindingFlags.NonPublic)
+                ?.Invoke(abilities, null);
+
+            Assert.That(cancelled, Is.True);
+        }
+        finally
+        {
+            foreach (DeployableTurret turret in
+                     Object.FindObjectsByType<DeployableTurret>(
+                         FindObjectsInactive.Include))
+            {
+                Object.DestroyImmediate(turret.gameObject);
+            }
+            Object.DestroyImmediate(agent);
         }
     }
 
