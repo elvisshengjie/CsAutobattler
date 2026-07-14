@@ -1,9 +1,69 @@
+using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 
 public sealed class AgentRoleTests
 {
+    [Test]
+    public void MidRoundTactics_AreExactlyFourShortCommands()
+    {
+        MidRoundTactic[] tactics =
+            (MidRoundTactic[])System.Enum.GetValues(typeof(MidRoundTactic));
+
+        Assert.That(tactics, Has.Length.EqualTo(4));
+        Assert.That(TeamTacticDefinitions.GetName(MidRoundTactic.Regroup),
+            Is.EqualTo("REGROUP"));
+        Assert.That(TeamTacticDefinitions.GetName(MidRoundTactic.Plant),
+            Is.EqualTo("PLANT"));
+        Assert.That(TeamTacticDefinitions.GetName(MidRoundTactic.DefendBomb),
+            Is.EqualTo("DEFEND"));
+        Assert.That(TeamTacticDefinitions.GetName(MidRoundTactic.Retreat),
+            Is.EqualTo("RETREAT"));
+    }
+
+    [Test]
+    public void MidRoundTactics_RunInClickOrder()
+    {
+        GameObject managerObject = new GameObject("Tactic Queue Test");
+        try
+        {
+            TeamTacticManager manager = managerObject.AddComponent<TeamTacticManager>();
+            manager.SelectInitialTactic(InitialTeamTactic.FastExecute);
+            manager.ToggleMidRoundTactic(MidRoundTactic.Regroup);
+            manager.ToggleMidRoundTactic(MidRoundTactic.Plant);
+
+            List<MidRoundTactic> commands =
+                new List<MidRoundTactic>(manager.GetActiveMidRoundTactics());
+            Assert.That(commands, Is.EqualTo(new[]
+            {
+                MidRoundTactic.Regroup,
+                MidRoundTactic.Plant
+            }));
+            Assert.That(manager.TryGetCurrentMidRoundTactic(out MidRoundTactic current),
+                Is.True);
+            Assert.That(current, Is.EqualTo(MidRoundTactic.Regroup));
+
+            manager.CompleteCurrentMidRoundTactic(MidRoundTactic.Regroup);
+            Assert.That(manager.TryGetCurrentMidRoundTactic(out current), Is.True);
+            Assert.That(current, Is.EqualTo(MidRoundTactic.Plant));
+        }
+        finally
+        {
+            Object.DestroyImmediate(managerObject);
+        }
+    }
+
+    [Test]
+    public void BombDefense_AssignsDifferentAnglesAroundBomb()
+    {
+        HashSet<Vector3> offsets = new HashSet<Vector3>();
+        for (int i = 0; i < 5; i++)
+            offsets.Add(TeamTacticExecutor.GetBombDefenseOffset(i, 5, 4f));
+
+        Assert.That(offsets, Has.Count.EqualTo(5));
+    }
+
     [Test]
     public void FlankerHasStrongestSideRearPreference()
     {

@@ -29,6 +29,7 @@ public sealed class TeamTacticManager : MonoBehaviour
     public bool LoadoutsConfirmed => loadoutsConfirmed;
     public TeamType ControlledTeam => controlledTeam;
     public int PlanRevision { get; private set; }
+    public int QueuedMidRoundTacticCount => activeTactics.Count;
     public bool IsInitialSelectionBlockingInput =>
         roundManager != null && roundManager.CurrentState == RoundState.Preparation &&
         roundManager.attackingTeam == controlledTeam &&
@@ -62,10 +63,7 @@ public sealed class TeamTacticManager : MonoBehaviour
 
         Instance = this;
         activeTacticSet.Clear();
-        foreach (MidRoundTactic tactic in activeTactics)
-        {
-            activeTacticSet.Add(tactic);
-        }
+        activeTactics.RemoveAll(tactic => !activeTacticSet.Add(tactic));
 
         if (GetComponent<TeamTacticExecutor>() == null)
         {
@@ -134,12 +132,16 @@ public sealed class TeamTacticManager : MonoBehaviour
             return;
         }
 
-        if (!activeTacticSet.Add(tactic))
+        if (activeTacticSet.Remove(tactic))
         {
-            activeTacticSet.Remove(tactic);
+            activeTactics.Remove(tactic);
+        }
+        else
+        {
+            activeTacticSet.Add(tactic);
+            activeTactics.Add(tactic);
         }
 
-        SyncSerializedTactics();
         PlanRevision++;
         TacticsChanged?.Invoke();
         Debug.Log(
@@ -159,7 +161,39 @@ public sealed class TeamTacticManager : MonoBehaviour
 
     public IReadOnlyCollection<MidRoundTactic> GetActiveMidRoundTactics()
     {
-        return activeTacticSet;
+        return activeTactics;
+    }
+
+    public bool TryGetCurrentMidRoundTactic(out MidRoundTactic tactic)
+    {
+        if (activeTactics.Count > 0)
+        {
+            tactic = activeTactics[0];
+            return true;
+        }
+
+        tactic = default;
+        return false;
+    }
+
+    public int GetMidRoundTacticOrder(MidRoundTactic tactic)
+    {
+        return activeTactics.IndexOf(tactic);
+    }
+
+    public void CompleteCurrentMidRoundTactic(MidRoundTactic tactic)
+    {
+        if (activeTactics.Count == 0 || activeTactics[0] != tactic)
+        {
+            return;
+        }
+
+        activeTactics.RemoveAt(0);
+        activeTacticSet.Remove(tactic);
+        PlanRevision++;
+        TacticsChanged?.Invoke();
+        Debug.Log("Mid-round tactic completed: " +
+                  TeamTacticDefinitions.GetName(tactic));
     }
 
     public bool RequiresInitialSelection(RoundManager candidateRoundManager)
@@ -291,10 +325,4 @@ public sealed class TeamTacticManager : MonoBehaviour
         TacticsChanged?.Invoke();
     }
 
-    private void SyncSerializedTactics()
-    {
-        activeTactics.Clear();
-        activeTactics.AddRange(activeTacticSet);
-        activeTactics.Sort();
-    }
 }

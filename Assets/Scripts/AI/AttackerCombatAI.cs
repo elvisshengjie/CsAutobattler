@@ -645,9 +645,8 @@ public sealed class AttackerCombatAI : MonoBehaviour
         return (role != null && (role.SelectedRole == AgentRoleType.Support ||
                                  role.SelectedRole == AgentRoleType.Defender)) ||
                tacticManager != null &&
-               (tacticManager.IsMidRoundTacticActive(MidRoundTactic.GuerrillaAmbush) ||
-                tacticManager.IsMidRoundTacticActive(MidRoundTactic.PostPlantLockdown) ||
-                tacticManager.IsMidRoundTacticActive(MidRoundTactic.ProbeAndPlant));
+               (tacticManager.IsMidRoundTacticActive(MidRoundTactic.DefendBomb) ||
+                tacticManager.IsMidRoundTacticActive(MidRoundTactic.Plant));
     }
 
     private Vector3 GetObjectivePosition()

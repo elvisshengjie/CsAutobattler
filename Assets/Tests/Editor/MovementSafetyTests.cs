@@ -494,32 +494,6 @@ public class MovementSafetyTests
     }
 
     [Test]
-    public void GuerrillaSpread_AssignsWidelySeparatedDirections()
-    {
-        const int teamCount = 5;
-        const float radius = 14f;
-        List<Vector3> offsets = new List<Vector3>();
-        for (int index = 0; index < teamCount; index++)
-        {
-            offsets.Add(TeamTacticExecutor.GetGuerrillaSpreadOffset(
-                index,
-                teamCount,
-                radius));
-        }
-
-        for (int left = 0; left < offsets.Count; left++)
-        {
-            Assert.That(offsets[left].magnitude, Is.EqualTo(radius).Within(0.01f));
-            for (int right = left + 1; right < offsets.Count; right++)
-            {
-                Assert.That(
-                    FlatDistance(offsets[left], offsets[right]),
-                    Is.GreaterThan(8f));
-            }
-        }
-    }
-
-    [Test]
     public void PostPlantPositions_RespectInsideAndOutsideSiteCommands()
     {
         Bounds site = new Bounds(Vector3.zero, new Vector3(10f, 1f, 8f));

@@ -1372,7 +1372,7 @@ public class AgentMotor : MonoBehaviour
         {
             objectiveDebug = stats.team == round.defendingTeam
                 ? "RetakeAndDefuse"
-                : "PostPlantLockdown";
+                : "DefendBomb";
         }
         else
         {

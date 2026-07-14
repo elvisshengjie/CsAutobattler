@@ -10,11 +10,10 @@ public enum InitialTeamTactic
 
 public enum MidRoundTactic
 {
-    GuerrillaAmbush,
-    WolfpackRegroup,
-    CutOffRotation,
-    PostPlantLockdown,
-    ProbeAndPlant
+    Regroup,
+    Plant,
+    DefendBomb,
+    Retreat
 }
 
 public enum TeamTacticRole
@@ -65,11 +64,10 @@ public static class TeamTacticDefinitions
     {
         return tactic switch
         {
-            MidRoundTactic.GuerrillaAmbush => "Guerrilla Ambush",
-            MidRoundTactic.WolfpackRegroup => "Wolfpack Regroup",
-            MidRoundTactic.CutOffRotation => "Cut Off Rotation",
-            MidRoundTactic.PostPlantLockdown => "Post-Plant Lockdown",
-            MidRoundTactic.ProbeAndPlant => "Probe and Plant",
+            MidRoundTactic.Regroup => "REGROUP",
+            MidRoundTactic.Plant => "PLANT",
+            MidRoundTactic.DefendBomb => "DEFEND",
+            MidRoundTactic.Retreat => "RETREAT",
             _ => tactic.ToString()
         };
     }
@@ -78,16 +76,10 @@ public static class TeamTacticDefinitions
     {
         return tactic switch
         {
-            MidRoundTactic.GuerrillaAmbush =>
-                "Spread as far as possible and hunt isolated defenders.",
-            MidRoundTactic.WolfpackRegroup =>
-                "Gather around the bomb carrier and fight as one pack.",
-            MidRoundTactic.CutOffRotation =>
-                "After the plant, hold cover outside the site and stop rotations.",
-            MidRoundTactic.PostPlantLockdown =>
-                "After the plant, defend the bomb from inside the planted site.",
-            MidRoundTactic.ProbeAndPlant =>
-                "Cover the bomb carrier while they commit fully to the plant.",
+            MidRoundTactic.Regroup => "Gather on carrier.",
+            MidRoundTactic.Plant => "Escort and plant.",
+            MidRoundTactic.DefendBomb => "Surround the bomb.",
+            MidRoundTactic.Retreat => "Fall back safe.",
             _ => string.Empty
         };
     }

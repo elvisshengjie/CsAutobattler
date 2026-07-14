@@ -380,9 +380,6 @@ public class ObjectiveManager : MonoBehaviour
             Debug.Log("Bomb carrier inside plant zone");
         }
 
-        carefulPlant |= TeamTacticManager.Instance != null &&
-                        TeamTacticManager.Instance.IsMidRoundTacticActive(
-                            MidRoundTactic.ProbeAndPlant);
         if (!IsPlantWindowSafeEnough(agent, immediateThreat, carefulPlant))
         {
             return false;

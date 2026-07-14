@@ -45,13 +45,21 @@ public class AgentBrain : MonoBehaviour
         TeamTacticExecutor tacticExecutor = TeamTacticManager.Instance != null
             ? TeamTacticManager.Instance.GetComponent<TeamTacticExecutor>()
             : null;
+        bool midRoundOverride = tacticExecutor != null &&
+                                tacticExecutor.HasActiveMidRoundCommand;
+        bool suppressCombatTargets = tacticExecutor != null &&
+                                     tacticExecutor.ShouldSuppressCombatTargets;
         CurrentTarget = tacticExecutor != null
             ? tacticExecutor.SelectCombatTarget(
                 gameObject,
                 sensors,
                 normallyDetectedTarget)
             : normallyDetectedTarget;
-        if (role != null)
+        if (suppressCombatTargets)
+        {
+            CurrentTarget = null;
+        }
+        else if (role != null)
         {
             CurrentTarget = role.SelectPreferredTarget(CurrentTarget, sensors);
         }
@@ -62,7 +70,7 @@ public class AgentBrain : MonoBehaviour
             TryShootWithoutInterruptingMovement(CurrentTarget);
         }
 
-        if (ObjectiveManager.Instance != null &&
+        if (!midRoundOverride && ObjectiveManager.Instance != null &&
             ObjectiveManager.Instance.TryStartPriorityPlant(gameObject, CurrentTarget))
         {
             return;
@@ -83,12 +91,13 @@ public class AgentBrain : MonoBehaviour
             attackerCombatAI = GetComponent<AttackerCombatAI>();
         }
 
-        if (attackerCombatAI != null && attackerCombatAI.TryExecute(CurrentTarget))
+        if (!midRoundOverride && attackerCombatAI != null &&
+            attackerCombatAI.TryExecute(CurrentTarget))
         {
             return;
         }
 
-        if (CurrentTarget != null)
+        if (!midRoundOverride && CurrentTarget != null)
         {
             float distance = FlatDistance(transform.position, CurrentTarget.transform.position);
 

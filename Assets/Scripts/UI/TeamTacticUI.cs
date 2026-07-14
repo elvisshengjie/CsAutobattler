@@ -427,7 +427,7 @@ public sealed class TeamTacticUI : MonoBehaviour
             new Color(0.035f, 0.045f, 0.06f, 0.93f));
         SetRect(midRoundPanel.GetComponent<RectTransform>(),
             new Vector2(1f, 1f), new Vector2(1f, 1f),
-            new Vector2(-20f, -126f), new Vector2(360f, 615f), new Vector2(1f, 1f));
+            new Vector2(-20f, -126f), new Vector2(300f, 430f), new Vector2(1f, 1f));
 
         Text heading = CreateText("Heading", midRoundPanel.transform,
             "MID-ROUND TACTICS", 20, FontStyle.Bold, TextAnchor.MiddleLeft);
@@ -436,7 +436,7 @@ public sealed class TeamTacticUI : MonoBehaviour
         heading.color = AccentColor;
 
         Text hint = CreateText("Hint", midRoundPanel.transform,
-            "Toggle any combination • click again to cancel", 13,
+            "Clicks run in order. Click again to cancel.", 13,
             FontStyle.Normal, TextAnchor.MiddleLeft);
         SetRect(hint.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f),
             new Vector2(0f, -61f), new Vector2(-28f, 28f), new Vector2(0.5f, 0.5f));
@@ -449,12 +449,12 @@ public sealed class TeamTacticUI : MonoBehaviour
             Button button = CreateTacticButton(
                 TeamTacticDefinitions.GetName(captured),
                 midRoundPanel.transform,
-                GetMidRoundLabel(captured, false),
-                14);
+                GetMidRoundLabel(captured),
+                16);
             SetRect(button.GetComponent<RectTransform>(),
                 new Vector2(0f, 1f), new Vector2(1f, 1f),
-                new Vector2(0f, -112f - i * 101f),
-                new Vector2(-28f, 88f), new Vector2(0.5f, 0.5f));
+                new Vector2(0f, -106f - i * 74f),
+                new Vector2(-28f, 58f), new Vector2(0.5f, 0.5f));
             button.onClick.AddListener(() => tacticManager.ToggleMidRoundTactic(captured));
             midRoundButtons[captured] = button;
             midRoundLabels[captured] = button.GetComponentInChildren<Text>();
@@ -527,8 +527,19 @@ public sealed class TeamTacticUI : MonoBehaviour
 
         if (selected)
         {
-            currentTacticText.text = "<b>INITIAL TACTIC:</b>\n" +
-                                     $"<color=#33DBF5>{TeamTacticDefinitions.GetName(tacticManager.GetSelectedInitialTactic())}</color>";
+            if (tacticManager.TryGetCurrentMidRoundTactic(out _))
+            {
+                List<string> commands = new List<string>();
+                foreach (MidRoundTactic command in tacticManager.GetActiveMidRoundTactics())
+                    commands.Add(TeamTacticDefinitions.GetName(command));
+                currentTacticText.text = "<b>MID-ROUND:</b>\n" +
+                    $"<color=#33DBF5>{string.Join(" > ", commands)}</color>";
+            }
+            else
+            {
+                currentTacticText.text = "<b>INITIAL TACTIC:</b>\n" +
+                    $"<color=#33DBF5>{TeamTacticDefinitions.GetName(tacticManager.GetSelectedInitialTactic())}</color>";
+            }
         }
 
         int duplicateCount = 0;
@@ -574,9 +585,7 @@ public sealed class TeamTacticUI : MonoBehaviour
             outline.effectColor = active ? AccentColor : new Color(0.28f, 0.33f, 0.39f, 1f);
             outline.effectDistance = active ? new Vector2(2f, -2f) : new Vector2(1f, -1f);
 
-            bool queued = active && pair.Key == MidRoundTactic.PostPlantLockdown &&
-                          roundManager.CurrentState != RoundState.BombPlanted;
-            midRoundLabels[pair.Key].text = GetMidRoundLabel(pair.Key, queued);
+            midRoundLabels[pair.Key].text = GetMidRoundLabel(pair.Key);
         }
     }
 
@@ -601,13 +610,9 @@ public sealed class TeamTacticUI : MonoBehaviour
         return weapon.damage.ToString("0.#");
     }
 
-    private string GetMidRoundLabel(MidRoundTactic tactic, bool queued)
+    private string GetMidRoundLabel(MidRoundTactic tactic)
     {
-        string status = queued
-            ? "\n<color=#FFD166><b>QUEUED UNTIL PLANT</b></color>"
-            : string.Empty;
-        return $"<b>{TeamTacticDefinitions.GetName(tactic)}</b>\n" +
-               TeamTacticDefinitions.GetShortDescription(tactic) + status;
+        return $"<b>{TeamTacticDefinitions.GetName(tactic)}</b>";
     }
 
     private void OnInitialTacticSelected(InitialTeamTactic tactic)
