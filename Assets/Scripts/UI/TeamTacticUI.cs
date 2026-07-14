@@ -14,6 +14,7 @@ public sealed class TeamTacticUI : MonoBehaviour
     private static readonly Color ActiveColor = new Color(0.08f, 0.48f, 0.60f, 0.98f);
     private static readonly Color AccentColor = new Color(0.20f, 0.86f, 0.96f, 1f);
     private static readonly Color TextColor = new Color(0.94f, 0.97f, 1f, 1f);
+    private static Sprite circleButtonSprite;
 
     private TeamTacticManager tacticManager;
     private RoundManager roundManager;
@@ -39,6 +40,10 @@ public sealed class TeamTacticUI : MonoBehaviour
         new Dictionary<MidRoundTactic, Button>();
     private readonly Dictionary<MidRoundTactic, Text> midRoundLabels =
         new Dictionary<MidRoundTactic, Text>();
+    private readonly Dictionary<PlantSitePreference, Button> plantPreferenceButtons =
+        new Dictionary<PlantSitePreference, Button>();
+    private GameObject plantInfoPanel;
+    private Text plantInfoText;
 
     private void Awake()
     {
@@ -452,13 +457,139 @@ public sealed class TeamTacticUI : MonoBehaviour
                 GetMidRoundLabel(captured),
                 16);
             SetRect(button.GetComponent<RectTransform>(),
-                new Vector2(0f, 1f), new Vector2(1f, 1f),
-                new Vector2(0f, -106f - i * 74f),
-                new Vector2(-28f, 58f), new Vector2(0.5f, 0.5f));
+                new Vector2(0f, 1f),
+                captured == MidRoundTactic.Plant ? new Vector2(0f, 1f) : new Vector2(1f, 1f),
+                captured == MidRoundTactic.Plant
+                    ? new Vector2(55f, -106f - i * 74f)
+                    : new Vector2(0f, -106f - i * 74f),
+                captured == MidRoundTactic.Plant
+                    ? new Vector2(82f, 58f)
+                    : new Vector2(-28f, 58f),
+                new Vector2(0.5f, 0.5f));
             button.onClick.AddListener(() => tacticManager.ToggleMidRoundTactic(captured));
             midRoundButtons[captured] = button;
             midRoundLabels[captured] = button.GetComponentInChildren<Text>();
+            if (captured == MidRoundTactic.Plant)
+            {
+                Text plantLabel = midRoundLabels[captured];
+                plantLabel.alignment = TextAnchor.MiddleCenter;
+                StretchToParent(plantLabel.rectTransform, 3f, 3f, 3f, 3f);
+            }
         }
+
+        BuildPlantPreferenceControls();
+    }
+
+    private void BuildPlantPreferenceControls()
+    {
+        const float plantRowY = -180f;
+        PlantSitePreference[] preferences =
+            (PlantSitePreference[])Enum.GetValues(typeof(PlantSitePreference));
+        for (int i = 0; i < preferences.Length; i++)
+        {
+            PlantSitePreference captured = preferences[i];
+            Button button = CreateTacticButton(
+                "PlantPreference_" + captured,
+                midRoundPanel.transform,
+                captured == PlantSitePreference.Auto ? "AUTO" : captured.ToString(),
+                captured == PlantSitePreference.Auto ? 11 : 14);
+            SetRect(button.GetComponent<RectTransform>(),
+                new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(123f + i * 42f, plantRowY),
+                new Vector2(40f, 58f), new Vector2(0.5f, 0.5f));
+            Text label = button.GetComponentInChildren<Text>();
+            label.alignment = TextAnchor.MiddleCenter;
+            StretchToParent(label.rectTransform, 1f, 1f, 1f, 1f);
+            button.onClick.AddListener(() =>
+                tacticManager.SetPlantSitePreference(captured));
+            plantPreferenceButtons[captured] = button;
+        }
+
+        Button infoButton = CreateTacticButton(
+            "PlantPreferenceInfo",
+            midRoundPanel.transform,
+            "!",
+            17);
+        SetRect(infoButton.GetComponent<RectTransform>(),
+            new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(249f, plantRowY),
+            new Vector2(30f, 30f), new Vector2(0.5f, 0.5f));
+        Text infoLabel = infoButton.GetComponentInChildren<Text>();
+        infoLabel.alignment = TextAnchor.MiddleCenter;
+        StretchToParent(infoLabel.rectTransform);
+        Image circleImage = infoButton.GetComponent<Image>();
+        circleImage.sprite = GetCircleButtonSprite();
+        circleImage.preserveAspect = true;
+        infoButton.onClick.AddListener(() =>
+            plantInfoPanel.SetActive(!plantInfoPanel.activeSelf));
+
+        plantInfoPanel = CreatePanel(
+            "PlantPreferenceHelp",
+            midRoundPanel.transform,
+            new Color(0.045f, 0.06f, 0.08f, 0.99f));
+        SetRect(plantInfoPanel.GetComponent<RectTransform>(),
+            new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(-10f, -130f), new Vector2(360f, 156f),
+            new Vector2(1f, 1f));
+        AddOutline(plantInfoPanel, AccentColor, new Vector2(-2f, -2f));
+        plantInfoText = CreateText(
+            "PlantPreferenceHelpText",
+            plantInfoPanel.transform,
+            string.Empty,
+            13,
+            FontStyle.Normal,
+            TextAnchor.MiddleLeft);
+        StretchToParent(plantInfoText.rectTransform, 16f, 16f, 12f, 12f);
+        plantInfoPanel.SetActive(false);
+    }
+
+    private static Sprite GetCircleButtonSprite()
+    {
+        if (circleButtonSprite != null) return circleButtonSprite;
+
+        const int size = 32;
+        Texture2D texture = new Texture2D(
+            size,
+            size,
+            TextureFormat.RGBA32,
+            false)
+        {
+            name = "RuntimeCircleButton",
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp,
+            hideFlags = HideFlags.HideAndDontSave
+        };
+        Color32[] pixels = new Color32[size * size];
+        float center = (size - 1) * 0.5f;
+        float radius = size * 0.48f;
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float distance = Vector2.Distance(
+                    new Vector2(x, y),
+                    new Vector2(center, center));
+                float alpha = Mathf.Clamp01(radius - distance + 0.75f);
+                pixels[y * size + x] = new Color32(
+                    255,
+                    255,
+                    255,
+                    (byte)Mathf.RoundToInt(alpha * 255f));
+            }
+        }
+        texture.SetPixels32(pixels);
+        texture.Apply(false, false);
+
+        circleButtonSprite = Sprite.Create(
+            texture,
+            new Rect(0f, 0f, size, size),
+            new Vector2(0.5f, 0.5f),
+            size,
+            0,
+            SpriteMeshType.FullRect);
+        circleButtonSprite.name = "RuntimeCircleButtonSprite";
+        circleButtonSprite.hideFlags = HideFlags.HideAndDontSave;
+        return circleButtonSprite;
     }
 
     private Button CreateTacticButton(
@@ -531,7 +662,13 @@ public sealed class TeamTacticUI : MonoBehaviour
             {
                 List<string> commands = new List<string>();
                 foreach (MidRoundTactic command in tacticManager.GetActiveMidRoundTactics())
-                    commands.Add(TeamTacticDefinitions.GetName(command));
+                {
+                    string name = TeamTacticDefinitions.GetName(command);
+                    if (command == MidRoundTactic.Plant &&
+                        tacticManager.QueuedPlantSitePreference != PlantSitePreference.Auto)
+                        name += "[" + tacticManager.QueuedPlantSitePreference + "]";
+                    commands.Add(name);
+                }
                 currentTacticText.text = "<b>MID-ROUND:</b>\n" +
                     $"<color=#33DBF5>{string.Join(" > ", commands)}</color>";
             }
@@ -586,6 +723,29 @@ public sealed class TeamTacticUI : MonoBehaviour
             outline.effectDistance = active ? new Vector2(2f, -2f) : new Vector2(1f, -1f);
 
             midRoundLabels[pair.Key].text = GetMidRoundLabel(pair.Key);
+        }
+
+        foreach (KeyValuePair<PlantSitePreference, Button> pair in plantPreferenceButtons)
+        {
+            bool selectedPreference =
+                pair.Key == tacticManager.SelectedPlantSitePreference;
+            Image image = pair.Value.GetComponent<Image>();
+            Outline outline = pair.Value.GetComponent<Outline>();
+            image.color = selectedPreference ? ActiveColor : InactiveColor;
+            outline.effectColor = selectedPreference
+                ? AccentColor
+                : new Color(0.28f, 0.33f, 0.39f, 1f);
+        }
+
+        if (plantInfoText != null)
+        {
+            plantInfoText.text =
+                "<b>PLANT SITE PREFERENCE</b>\n" +
+                "A/B is advice, not an order. AI still weighs route safety, " +
+                "enemy pressure, teammate support, carrier distance and round time." +
+                (string.IsNullOrEmpty(tacticManager.PlantDecisionSummary)
+                    ? string.Empty
+                    : "\n<color=#33DBF5>" + tacticManager.PlantDecisionSummary + "</color>");
         }
     }
 

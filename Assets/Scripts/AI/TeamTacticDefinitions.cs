@@ -16,6 +16,13 @@ public enum MidRoundTactic
     Retreat
 }
 
+public enum PlantSitePreference
+{
+    Auto,
+    A,
+    B
+}
+
 public enum TeamTacticRole
 {
     Entry,

@@ -19,6 +19,9 @@ public sealed class TeamTacticManager : MonoBehaviour
     [SerializeField] private bool rolesConfirmed;
     [SerializeField] private bool loadoutsConfirmed;
     [SerializeField] private List<MidRoundTactic> activeTactics = new List<MidRoundTactic>();
+    [SerializeField] private PlantSitePreference selectedPlantSitePreference;
+    [SerializeField] private PlantSitePreference queuedPlantSitePreference;
+    [SerializeField] private string plantDecisionSummary;
 
     private readonly HashSet<MidRoundTactic> activeTacticSet =
         new HashSet<MidRoundTactic>();
@@ -30,6 +33,9 @@ public sealed class TeamTacticManager : MonoBehaviour
     public TeamType ControlledTeam => controlledTeam;
     public int PlanRevision { get; private set; }
     public int QueuedMidRoundTacticCount => activeTactics.Count;
+    public PlantSitePreference SelectedPlantSitePreference => selectedPlantSitePreference;
+    public PlantSitePreference QueuedPlantSitePreference => queuedPlantSitePreference;
+    public string PlantDecisionSummary => plantDecisionSummary;
     public bool IsInitialSelectionBlockingInput =>
         roundManager != null && roundManager.CurrentState == RoundState.Preparation &&
         roundManager.attackingTeam == controlledTeam &&
@@ -135,11 +141,21 @@ public sealed class TeamTacticManager : MonoBehaviour
         if (activeTacticSet.Remove(tactic))
         {
             activeTactics.Remove(tactic);
+            if (tactic == MidRoundTactic.Plant)
+            {
+                queuedPlantSitePreference = PlantSitePreference.Auto;
+                plantDecisionSummary = string.Empty;
+            }
         }
         else
         {
             activeTacticSet.Add(tactic);
             activeTactics.Add(tactic);
+            if (tactic == MidRoundTactic.Plant)
+            {
+                queuedPlantSitePreference = selectedPlantSitePreference;
+                plantDecisionSummary = string.Empty;
+            }
         }
 
         PlanRevision++;
@@ -162,6 +178,31 @@ public sealed class TeamTacticManager : MonoBehaviour
     public IReadOnlyCollection<MidRoundTactic> GetActiveMidRoundTactics()
     {
         return activeTactics;
+    }
+
+    public void SetPlantSitePreference(PlantSitePreference preference)
+    {
+        if (selectedPlantSitePreference == preference &&
+            (!activeTacticSet.Contains(MidRoundTactic.Plant) ||
+             queuedPlantSitePreference == preference))
+        {
+            return;
+        }
+
+        selectedPlantSitePreference = preference;
+        if (activeTacticSet.Contains(MidRoundTactic.Plant))
+            queuedPlantSitePreference = preference;
+        plantDecisionSummary = string.Empty;
+        PlanRevision++;
+        TacticsChanged?.Invoke();
+    }
+
+    public void SetPlantDecisionSummary(string summary)
+    {
+        summary ??= string.Empty;
+        if (plantDecisionSummary == summary) return;
+        plantDecisionSummary = summary;
+        TacticsChanged?.Invoke();
     }
 
     public bool TryGetCurrentMidRoundTactic(out MidRoundTactic tactic)
@@ -190,6 +231,8 @@ public sealed class TeamTacticManager : MonoBehaviour
 
         activeTactics.RemoveAt(0);
         activeTacticSet.Remove(tactic);
+        if (tactic == MidRoundTactic.Plant)
+            queuedPlantSitePreference = PlantSitePreference.Auto;
         PlanRevision++;
         TacticsChanged?.Invoke();
         Debug.Log("Mid-round tactic completed: " +
@@ -225,6 +268,9 @@ public sealed class TeamTacticManager : MonoBehaviour
         loadoutsConfirmed = false;
         activeTacticSet.Clear();
         activeTactics.Clear();
+        selectedPlantSitePreference = PlantSitePreference.Auto;
+        queuedPlantSitePreference = PlantSitePreference.Auto;
+        plantDecisionSummary = string.Empty;
         PlanRevision++;
         RoundTacticsReset?.Invoke();
         TacticsChanged?.Invoke();

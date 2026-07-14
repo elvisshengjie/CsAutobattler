@@ -31,6 +31,7 @@ public sealed class AgentRoleTests
             TeamTacticManager manager = managerObject.AddComponent<TeamTacticManager>();
             manager.SelectInitialTactic(InitialTeamTactic.FastExecute);
             manager.ToggleMidRoundTactic(MidRoundTactic.Regroup);
+            manager.SetPlantSitePreference(PlantSitePreference.B);
             manager.ToggleMidRoundTactic(MidRoundTactic.Plant);
 
             List<MidRoundTactic> commands =
@@ -43,6 +44,8 @@ public sealed class AgentRoleTests
             Assert.That(manager.TryGetCurrentMidRoundTactic(out MidRoundTactic current),
                 Is.True);
             Assert.That(current, Is.EqualTo(MidRoundTactic.Regroup));
+            Assert.That(manager.QueuedPlantSitePreference,
+                Is.EqualTo(PlantSitePreference.B));
 
             manager.CompleteCurrentMidRoundTactic(MidRoundTactic.Regroup);
             Assert.That(manager.TryGetCurrentMidRoundTactic(out current), Is.True);
@@ -62,6 +65,17 @@ public sealed class AgentRoleTests
             offsets.Add(TeamTacticExecutor.GetBombDefenseOffset(i, 5, 4f));
 
         Assert.That(offsets, Has.Count.EqualTo(5));
+    }
+
+    [Test]
+    public void PlantPreference_IsABonusRatherThanAForcedSite()
+    {
+        Assert.That(TeamTacticExecutor.GetPlantPreferenceBonus(
+            PlantSitePreference.A, BombSiteId.A), Is.GreaterThan(0f));
+        Assert.That(TeamTacticExecutor.GetPlantPreferenceBonus(
+            PlantSitePreference.A, BombSiteId.B), Is.EqualTo(0f));
+        Assert.That(TeamTacticExecutor.GetPlantPreferenceBonus(
+            PlantSitePreference.Auto, BombSiteId.A), Is.EqualTo(0f));
     }
 
     [Test]

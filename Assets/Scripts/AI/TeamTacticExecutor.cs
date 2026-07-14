@@ -108,6 +108,9 @@ public sealed class TeamTacticExecutor : MonoBehaviour
     private readonly HashSet<HealthSystem> observedAttackerHealth =
         new HashSet<HealthSystem>();
     private Transform attackerSafeZone;
+    private BombSite scoredPlantSite;
+    private float nextPlantSiteEvaluationTime;
+    private int plantSiteEvaluationRevision = -1;
 
     public BombSite TargetSite => targetSite;
     public bool SilentAttackTriggered => silentAttackTriggered;
@@ -600,7 +603,7 @@ public sealed class TeamTacticExecutor : MonoBehaviour
             return true;
         }
 
-        SelectNearestPlantSite(bombCarrier.transform.position);
+        SelectBestPlantSite(bombCarrier);
         if (targetSite == null)
         {
             motor.Stop();
@@ -713,27 +716,115 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         }
     }
 
-    private void SelectNearestPlantSite(Vector3 carrierPosition)
+    private void SelectBestPlantSite(AgentStats bombCarrier)
     {
-        if (objectiveManager == null) return;
-        BombSite nearest = null;
-        float nearestDistance = float.PositiveInfinity;
+        if (objectiveManager == null || bombCarrier == null) return;
+        if (scoredPlantSite != null &&
+            plantSiteEvaluationRevision == tacticManager.PlanRevision &&
+            Time.time < nextPlantSiteEvaluationTime)
+        {
+            targetSite = scoredPlantSite;
+            return;
+        }
+
+        PlantSitePreference preference = tacticManager.QueuedPlantSitePreference;
+        BombSite bestSite = null;
+        float bestScore = float.NegativeInfinity;
         BombSite[] sites = { objectiveManager.siteA, objectiveManager.siteB };
         foreach (BombSite site in sites)
         {
             if (site == null) continue;
-            float distance = FlatDistance(carrierPosition, site.PlantPosition);
-            if (distance >= nearestDistance) continue;
-            nearest = site;
-            nearestDistance = distance;
+            float score = ScorePlantSite(site, bombCarrier, preference);
+            if (site == scoredPlantSite) score += 1.5f;
+            if (score <= bestScore) continue;
+            bestSite = site;
+            bestScore = score;
         }
 
-        if (nearest == null || nearest == targetSite) return;
-        targetSite = nearest;
-        fakeSite = nearest == objectiveManager.siteA
+        if (bestSite == null) return;
+        scoredPlantSite = bestSite;
+        plantSiteEvaluationRevision = tacticManager.PlanRevision;
+        nextPlantSiteEvaluationTime = Time.time + 1.25f;
+        targetSite = bestSite;
+        fakeSite = bestSite == objectiveManager.siteA
             ? objectiveManager.siteB
             : objectiveManager.siteA;
         objectiveManager.SetSelectedAttackSite(targetSite);
+
+        string summary = preference == PlantSitePreference.Auto
+            ? $"AUTO -> AI chose {bestSite.siteId}"
+            : preference.ToString() == bestSite.siteId.ToString()
+                ? $"Suggested {preference} -> AI chose {bestSite.siteId}"
+                : $"Suggested {preference} -> AI chose {bestSite.siteId}: safer route";
+        tacticManager.SetPlantDecisionSummary(summary);
+    }
+
+    private float ScorePlantSite(
+        BombSite site,
+        AgentStats bombCarrier,
+        PlantSitePreference preference)
+    {
+        Vector3 carrierPosition = bombCarrier.transform.position;
+        float directDistance = FlatDistance(carrierPosition, site.PlantPosition);
+        float score = -directDistance * 0.45f;
+
+        AStarPathfinder3D pathfinder = AStarPathfinder3D.Instance;
+        if (pathfinder != null)
+        {
+            List<Vector3> path = pathfinder.FindPath(carrierPosition, site.PlantPosition);
+            if (path == null || path.Count == 0)
+            {
+                score -= 100f;
+            }
+            else
+            {
+                score -= GetPathLength(path) * 0.18f;
+                score += CalculatePathSafety(path) * 10f;
+            }
+        }
+
+        int defenders = CountLivingNear(
+            livingDefenders,
+            site.PlantPosition,
+            siteThreatRadius * 1.2f);
+        int support = CountLivingNear(
+            livingAttackers,
+            site.PlantPosition,
+            siteThreatRadius * 1.35f);
+        score -= defenders * 7f;
+        score += support * 2.25f;
+
+        int nearbyCover = 0;
+        foreach (Transform cover in coverPoints)
+        {
+            if (cover != null &&
+                FlatDistance(cover.position, site.PlantPosition) <= 9f)
+                nearbyCover++;
+        }
+        score += Mathf.Min(4, nearbyCover) * 0.75f;
+
+        if (roundManager != null && roundManager.RoundTimeRemaining <= 25f)
+            score -= directDistance * 0.25f;
+
+        return score + GetPlantPreferenceBonus(preference, site.siteId);
+    }
+
+    public static float GetPlantPreferenceBonus(
+        PlantSitePreference preference,
+        BombSiteId site,
+        float bonus = 8f)
+    {
+        bool matches = preference == PlantSitePreference.A && site == BombSiteId.A ||
+                       preference == PlantSitePreference.B && site == BombSiteId.B;
+        return matches ? Mathf.Max(0f, bonus) : 0f;
+    }
+
+    private static float GetPathLength(List<Vector3> path)
+    {
+        float length = 0f;
+        for (int i = 1; i < path.Count; i++)
+            length += FlatDistance(path[i - 1], path[i]);
+        return length;
     }
 
     private bool IsRegroupComplete()
@@ -2838,6 +2929,9 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         feintSelectedExposureOrigins.Clear();
         ClearSplitRoutePlan();
         focusFireTarget = null;
+        scoredPlantSite = null;
+        nextPlantSiteEvaluationTime = 0f;
+        plantSiteEvaluationRevision = -1;
         observedPlanRevision = -1;
         foreach (AgentMotor motor in FindObjectsByType<AgentMotor>(FindObjectsInactive.Exclude))
         {
