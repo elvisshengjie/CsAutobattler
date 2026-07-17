@@ -59,7 +59,9 @@ public class AgentBrain : MonoBehaviour
         {
             CurrentTarget = null;
         }
-        else if (role != null)
+        else if (role != null &&
+                 (ObjectiveManager.Instance == null ||
+                  ObjectiveManager.Instance.ActiveDefuser != CurrentTarget))
         {
             CurrentTarget = role.SelectPreferredTarget(CurrentTarget, sensors);
         }

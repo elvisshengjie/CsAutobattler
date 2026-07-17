@@ -234,11 +234,12 @@ public sealed class TeamTacticExecutor : MonoBehaviour
             return normallyDetectedTarget;
         }
 
-        GameObject defuser = objectiveManager != null
-            ? objectiveManager.ActiveDefuser
-            : null;
-        if (defuser != null && sensors.CanDetect(defuser))
+        GameObject defuser = GetActiveDefuseThreat();
+        if (defuser != null)
         {
+            // Starting a defuse is an objective event the post-plant team can react
+            // to even when its current hold angles do not see the bomb. Shooting
+            // still requires line of sight in AgentBrain/WeaponSystem.
             focusFireTarget = defuser;
             return defuser;
         }
@@ -857,11 +858,38 @@ public sealed class TeamTacticExecutor : MonoBehaviour
             return true;
         }
 
+        GameObject defuser = GetActiveDefuseThreat();
+        if (defuser != null)
+        {
+            // Abandon the spread hold immediately and collapse on the stationary
+            // defuser. This lets hidden post-plant positions reacquire a firing
+            // angle before the defuse completes.
+            motor.SpeedMultiplier = 1.25f;
+            return MoveOrHold(
+                agent,
+                motor,
+                defuser.transform.position,
+                defuser.transform.position,
+                false);
+        }
+
         Vector3 bombPosition = objectiveManager != null && objectiveManager.ActiveBomb != null
             ? objectiveManager.ActiveBomb.transform.position
             : targetSite.PlantPosition;
         Vector3 destination = GetSiteInteriorHoldPosition(agent, bombPosition);
         return MoveOrHold(agent, motor, destination, GetDefenderCenter(), false);
+    }
+
+    private GameObject GetActiveDefuseThreat()
+    {
+        if (roundManager == null || objectiveManager == null ||
+            roundManager.CurrentState != RoundState.BombPlanted)
+        {
+            return null;
+        }
+
+        GameObject defuser = objectiveManager.ActiveDefuser;
+        return IsLivingEnemy(defuser) ? defuser : null;
     }
 
     private bool ExecuteRetreat(GameObject agent, AgentMotor motor)
