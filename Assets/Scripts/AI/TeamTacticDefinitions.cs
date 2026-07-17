@@ -20,7 +20,8 @@ public enum PlantSitePreference
 {
     Auto,
     A,
-    B
+    B,
+    C
 }
 
 public enum TeamTacticRole

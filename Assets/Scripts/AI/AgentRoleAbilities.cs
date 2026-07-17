@@ -2071,8 +2071,7 @@ public sealed class AgentRoleAbilities : MonoBehaviour
     {
         BombSite best = null;
         float bestDistance = Mathf.Infinity;
-        BombSite[] sites = { objective.siteA, objective.siteB };
-        foreach (BombSite site in sites)
+        foreach (BombSite site in objective.GetSites())
         {
             if (site == null)
             {

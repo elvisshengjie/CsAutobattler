@@ -50,7 +50,9 @@ public class AgentDebugVisual : MonoBehaviour
         // Setup Target Marker
         targetMarker = GameObject.CreatePrimitive(PrimitiveType.Quad);
         targetMarker.name = "TargetMarker";
-        targetMarker.transform.SetParent(null); 
+        // Keep the marker under its owning agent so team-vision visibility also
+        // hides debug destinations that would otherwise leak an unseen enemy.
+        targetMarker.transform.SetParent(transform, true);
         targetMarker.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
         targetMarker.transform.localScale = new Vector3(0.5f, 0.5f, 1f);
         Destroy(targetMarker.GetComponent<Collider>());

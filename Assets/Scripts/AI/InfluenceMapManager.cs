@@ -181,8 +181,8 @@ public sealed class InfluenceMapManager : MonoBehaviour
         if (objective == null) return;
         if (objective.ActiveBomb != null)
             AddRadial(InfluenceLayerType.Objective, objective.ActiveBomb.transform.position, 2f, 18f);
-        if (objective.siteA != null) AddRadial(InfluenceLayerType.Objective, objective.siteA.PlantPosition, 1f, 18f);
-        if (objective.siteB != null) AddRadial(InfluenceLayerType.Objective, objective.siteB.PlantPosition, 1f, 18f);
+        foreach (BombSite site in objective.GetSites())
+            AddRadial(InfluenceLayerType.Objective, site.PlantPosition, 1f, 18f);
     }
 
     private void AddCover()

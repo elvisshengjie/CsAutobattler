@@ -4,7 +4,8 @@ using UnityEngine;
 public enum BombSiteId
 {
     A,
-    B
+    B,
+    C
 }
 
 [RequireComponent(typeof(BoxCollider))]

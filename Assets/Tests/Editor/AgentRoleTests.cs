@@ -75,6 +75,10 @@ public sealed class AgentRoleTests
         Assert.That(TeamTacticExecutor.GetPlantPreferenceBonus(
             PlantSitePreference.A, BombSiteId.B), Is.EqualTo(0f));
         Assert.That(TeamTacticExecutor.GetPlantPreferenceBonus(
+            PlantSitePreference.C, BombSiteId.C), Is.GreaterThan(0f));
+        Assert.That(TeamTacticExecutor.GetPlantPreferenceBonus(
+            PlantSitePreference.C, BombSiteId.A), Is.EqualTo(0f));
+        Assert.That(TeamTacticExecutor.GetPlantPreferenceBonus(
             PlantSitePreference.Auto, BombSiteId.A), Is.EqualTo(0f));
     }
 

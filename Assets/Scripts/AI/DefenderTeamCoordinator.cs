@@ -176,6 +176,7 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
     private ObjectiveManager objectiveManager;
     private readonly SiteAlert alertA = new SiteAlert();
     private readonly SiteAlert alertB = new SiteAlert();
+    private readonly SiteAlert alertC = new SiteAlert();
     private readonly Dictionary<GameObject, DefenderRole> roles =
         new Dictionary<GameObject, DefenderRole>();
     private readonly Dictionary<GameObject, BombSite> homeSites =
@@ -222,6 +223,7 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
                                        bombTimerRiskThreshold;
     public DefenderSiteAlertState AlertA => alertA.state;
     public DefenderSiteAlertState AlertB => alertB.state;
+    public DefenderSiteAlertState AlertC => alertC.state;
     public BombKnowledgeState BombKnowledge => bombKnowledgeState;
     public bool PlantedSiteKnown => bombKnowledgeState == BombKnowledgeState.PlantedKnownSite &&
                                     knownPlantedSite != null;
@@ -788,6 +790,7 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
         recentEncirclementThreats.Clear();
         CollectRecentEncirclementThreats(alertA, center);
         CollectRecentEncirclementThreats(alertB, center);
+        CollectRecentEncirclementThreats(alertC, center);
         return recentEncirclementThreats.Count;
     }
 
@@ -976,6 +979,11 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
             ref newest);
         FindNewestRecentSighting(
             alertB,
+            preferredTarget,
+            ref target,
+            ref newest);
+        FindNewestRecentSighting(
+            alertC,
             preferredTarget,
             ref target,
             ref newest);
@@ -1240,9 +1248,9 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
         BombSite homeSite = GetHomeSite(defender);
         DefenderRole role = GetRole(defender);
         SiteAlert activeAlert = GetStrongestActiveAlert();
-        bool bothSitesUnderAttack = alertA.state == DefenderSiteAlertState.UnderAttack &&
-                                    alertB.state == DefenderSiteAlertState.UnderAttack;
-        if (bothSitesUnderAttack && role != DefenderRole.Rotator &&
+        bool multipleSitesUnderAttack = CountAlertsInState(
+            DefenderSiteAlertState.UnderAttack) > 1;
+        if (multipleSitesUnderAttack && role != DefenderRole.Rotator &&
             HasRecentContact(GetAlert(homeSite)))
         {
             activeAlert = GetAlert(homeSite);
@@ -1301,7 +1309,13 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
         BombSite assignedSite = investigateSuspicion ? activeAlert.site : homeSite;
         if (assignedSite == null)
         {
-            assignedSite = objectiveManager != null ? objectiveManager.siteA : null;
+            assignedSite = objectiveManager != null
+                ? GetNearestSite(defender.transform.position)
+                : null;
+        }
+        if (assignedSite == null)
+        {
+            return false;
         }
 
         Vector3 watch = activeAlert != null &&
@@ -1328,8 +1342,8 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
 
         BombSite home = GetHomeSite(defender);
         SiteAlert homeAlert = GetAlert(home);
-        SiteAlert attacked = home == alertA.site ? alertB : alertA;
-        return attacked.site != null &&
+        SiteAlert attacked = GetStrongestActiveAlert(home);
+        return attacked != null && attacked.site != null &&
                attacked.state == DefenderSiteAlertState.UnderAttack &&
                !HasRecentContact(homeAlert) &&
                Time.time >= confirmedAlertTime + rotationDelay;
@@ -2026,7 +2040,7 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
 
         BombSite best = null;
         float bestScore = Mathf.NegativeInfinity;
-        SiteAlert[] candidates = { alertA, alertB };
+        SiteAlert[] candidates = GetAlerts();
         foreach (SiteAlert candidate in candidates)
         {
             if (candidate.site == null || checkedBombSites.Contains(candidate.site.siteId))
@@ -2120,27 +2134,20 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
 
     private BombSite GetUncheckedSite()
     {
-        if (alertA.site != null && !checkedBombSites.Contains(BombSiteId.A))
+        foreach (SiteAlert alert in GetAlerts())
         {
-            return alertA.site;
+            if (alert.site != null && !checkedBombSites.Contains(alert.site.siteId))
+                return alert.site;
         }
-
-        return alertB.site != null && !checkedBombSites.Contains(BombSiteId.B)
-            ? alertB.site
-            : null;
+        return null;
     }
 
     private bool OnlyOneSiteUnchecked()
     {
         int count = 0;
-        if (alertA.site != null && !checkedBombSites.Contains(BombSiteId.A))
-        {
-            count++;
-        }
-        if (alertB.site != null && !checkedBombSites.Contains(BombSiteId.B))
-        {
-            count++;
-        }
+        foreach (SiteAlert alert in GetAlerts())
+            if (alert.site != null && !checkedBombSites.Contains(alert.site.siteId))
+                count++;
         return count == 1;
     }
 
@@ -2153,7 +2160,7 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
         }
 
         movement.Normalize();
-        SiteAlert[] candidates = { alertA, alertB };
+        SiteAlert[] candidates = GetAlerts();
         foreach (SiteAlert candidate in candidates)
         {
             if (candidate.site == null)
@@ -2186,11 +2193,8 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
             confirmedAlertTime = Time.time;
             rotationLogged.Clear();
             Debug.Log(alert.site.siteId + " site under attack.");
-            BombSiteId opposite = alert.site.siteId == BombSiteId.A
-                ? BombSiteId.B
-                : BombSiteId.A;
             Debug.Log(
-                $"Site {alert.site.siteId} under attack, {opposite} defenders rotating");
+                $"Site {alert.site.siteId} under attack, other site defenders rotating");
         }
     }
 
@@ -2198,8 +2202,10 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
     {
         ExpireAlert(alertA);
         ExpireAlert(alertB);
+        ExpireAlert(alertC);
         alertA.suspicionScore = Mathf.Max(0f, alertA.suspicionScore - 0.1f);
         alertB.suspicionScore = Mathf.Max(0f, alertB.suspicionScore - 0.1f);
+        alertC.suspicionScore = Mathf.Max(0f, alertC.suspicionScore - 0.1f);
         for (int i = visionDebugLines.Count - 1; i >= 0; i--)
         {
             if (Time.time > visionDebugLines[i].expiresAt)
@@ -2298,25 +2304,27 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
 
         roles.Clear();
         homeSites.Clear();
+        BombSite[] availableSites = objectiveManager != null
+            ? objectiveManager.GetSites()
+            : Array.Empty<BombSite>();
+        if (availableSites.Length == 0)
+        {
+            return;
+        }
+
         for (int i = 0; i < defenders.Count; i++)
         {
             AgentStats defender = defenders[i];
-            if (i == 4)
+            if (i == defenders.Count - 1 && defenders.Count > availableSites.Length)
             {
                 roles[defender.gameObject] = DefenderRole.Rotator;
-                homeSites[defender.gameObject] = FlatDistance(
-                    defender.transform.position,
-                    alertA.site.PlantPosition) <= FlatDistance(
-                    defender.transform.position,
-                    alertB.site.PlantPosition)
-                    ? alertA.site
-                    : alertB.site;
+                homeSites[defender.gameObject] = GetNearestSite(
+                    defender.transform.position);
                 continue;
             }
 
-            bool siteAAgent = i % 4 < 2;
-            homeSites[defender.gameObject] = siteAAgent ? alertA.site : alertB.site;
-            roles[defender.gameObject] = i % 2 == 0
+            homeSites[defender.gameObject] = availableSites[i % availableSites.Length];
+            roles[defender.gameObject] = i < availableSites.Length
                 ? DefenderRole.SiteAnchor
                 : DefenderRole.Support;
         }
@@ -2744,40 +2752,62 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
 
     private SiteAlert GetStrongestActiveAlert()
     {
-        if (alertA.state > alertB.state)
-        {
-            return alertA;
-        }
+        return GetStrongestActiveAlert(null);
+    }
 
-        if (alertB.state > alertA.state)
+    private SiteAlert GetStrongestActiveAlert(BombSite excludedSite)
+    {
+        SiteAlert strongest = null;
+        foreach (SiteAlert candidate in GetAlerts())
         {
-            return alertB;
+            if (candidate.site == null || candidate.site == excludedSite)
+                continue;
+            if (strongest == null || candidate.state > strongest.state ||
+                candidate.state == strongest.state &&
+                candidate.lastAttackTime > strongest.lastAttackTime)
+                strongest = candidate;
         }
-
-        return alertA.lastAttackTime >= alertB.lastAttackTime ? alertA : alertB;
+        return strongest;
     }
 
     private SiteAlert GetAlert(BombSite site)
     {
-        return site != null && site.siteId == BombSiteId.B ? alertB : alertA;
+        if (site == null) return null;
+        return site.siteId switch
+        {
+            BombSiteId.B => alertB,
+            BombSiteId.C => alertC,
+            _ => alertA
+        };
     }
 
     private BombSite GetNearestSite(Vector3 position)
     {
-        if (alertA.site == null)
+        BombSite nearest = null;
+        float nearestDistance = Mathf.Infinity;
+        foreach (SiteAlert alert in GetAlerts())
         {
-            return alertB.site;
+            if (alert.site == null) continue;
+            float distance = FlatDistance(position, alert.site.PlantPosition);
+            if (distance >= nearestDistance) continue;
+            nearest = alert.site;
+            nearestDistance = distance;
         }
+        return nearest;
+    }
 
-        if (alertB.site == null)
-        {
-            return alertA.site;
-        }
+    private SiteAlert[] GetAlerts()
+    {
+        return new[] { alertA, alertB, alertC };
+    }
 
-        return FlatDistance(position, alertA.site.PlantPosition) <=
-               FlatDistance(position, alertB.site.PlantPosition)
-            ? alertA.site
-            : alertB.site;
+    private int CountAlertsInState(DefenderSiteAlertState state)
+    {
+        int count = 0;
+        foreach (SiteAlert alert in GetAlerts())
+            if (alert.site != null && alert.state == state)
+                count++;
+        return count;
     }
 
     private BombSite GetHomeSite(GameObject defender)
@@ -2851,6 +2881,7 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
         {
             alertA.site = objectiveManager.siteA;
             alertB.site = objectiveManager.siteB;
+            alertC.site = objectiveManager.siteC;
         }
     }
 
@@ -2860,8 +2891,10 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
         {
             alertA.state = DefenderSiteAlertState.None;
             alertB.state = DefenderSiteAlertState.None;
+            alertC.state = DefenderSiteAlertState.None;
             alertA.sightings.Clear();
             alertB.sightings.Clear();
+            alertC.sightings.Clear();
             designatedDefuser = null;
             defusePositionOwner = null;
             retakeLogged = false;
@@ -2879,6 +2912,7 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
             postPlantOrders.Clear();
             alertA.suspicionScore = 0f;
             alertB.suspicionScore = 0f;
+            alertC.suspicionScore = 0f;
             rotationLogged.Clear();
             ClearEncirclementPlan();
             RefreshDefenderTeam(true);
@@ -2898,8 +2932,10 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
 
         DrawAlertGizmo(alertA);
         DrawAlertGizmo(alertB);
+        DrawAlertGizmo(alertC);
         DrawSuspicionGizmo(alertA);
         DrawSuspicionGizmo(alertB);
+        DrawSuspicionGizmo(alertC);
         if (PlantedSiteKnown)
         {
             Gizmos.color = Color.magenta;

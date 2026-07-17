@@ -1,5 +1,5 @@
 ﻿<Solution>
   <Project Path="Assembly-CSharp.csproj" />
-  <Project Path="CsAutobattler.EmptyEditModeSupport.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />
+  <Project Path="CsAutobattler.EmptyEditModeSupport.csproj" />
 </Solution>

@@ -15,6 +15,7 @@ public class ObjectiveManager : MonoBehaviour
     public BombController bombPrefab;
     public BombSite siteA;
     public BombSite siteB;
+    public BombSite siteC;
 
     [Header("Plant Rules")]
     public float allowedMovementWhilePlanting = 0.15f;
@@ -237,17 +238,14 @@ public class ObjectiveManager : MonoBehaviour
 
     private void SelectRoundTactics()
     {
-        if (siteA == null && siteB == null)
+        BombSite[] sites = GetSites();
+        if (sites.Length == 0)
         {
             selectedAttackSite = null;
             return;
         }
 
-        selectedAttackSite = siteA == null
-            ? siteB
-            : siteB == null
-                ? siteA
-                : Random.value < 0.5f ? siteA : siteB;
+        selectedAttackSite = sites[Random.Range(0, sites.Length)];
         tacticalRotationDegrees = randomizeTacticalPositions
             ? Random.Range(0f, 360f)
             : 0f;
@@ -258,7 +256,7 @@ public class ObjectiveManager : MonoBehaviour
 
     public void SetSelectedAttackSite(BombSite site)
     {
-        if (site == null || (site != siteA && site != siteB))
+        if (site == null || Array.IndexOf(GetSites(), site) < 0)
         {
             return;
         }
@@ -270,18 +268,17 @@ public class ObjectiveManager : MonoBehaviour
     private BombSite GetDefendedSite(GameObject agent)
     {
         int index = GetTeamSlotIndex(agent, roundManager.defendingTeam, out _);
-        if (siteA == null)
-        {
-            return siteB;
-        }
+        BombSite[] sites = GetSites();
+        return sites.Length == 0 ? null : sites[index % sites.Length];
+    }
 
-        if (siteB == null)
-        {
-            return siteA;
-        }
-
-        // Alternating slots guarantees both sites receive defenders.
-        return index % 2 == 0 ? siteA : siteB;
+    public BombSite[] GetSites()
+    {
+        List<BombSite> sites = new List<BombSite>(3);
+        if (siteA != null) sites.Add(siteA);
+        if (siteB != null) sites.Add(siteB);
+        if (siteC != null) sites.Add(siteC);
+        return sites.ToArray();
     }
 
     private Vector3 GetClaimedPosition(
@@ -830,14 +827,12 @@ public class ObjectiveManager : MonoBehaviour
 
     public BombSite FindSiteContaining(GameObject agent)
     {
-        if (siteA != null && siteA.Contains(agent))
+        foreach (BombSite site in GetSites())
         {
-            return siteA;
-        }
-
-        if (siteB != null && siteB.Contains(agent))
-        {
-            return siteB;
+            if (site.Contains(agent))
+            {
+                return site;
+            }
         }
 
         return null;
@@ -1076,9 +1071,13 @@ public class ObjectiveManager : MonoBehaviour
             {
                 siteA = site;
             }
-            else
+            else if (site.siteId == BombSiteId.B)
             {
                 siteB = site;
+            }
+            else
+            {
+                siteC = site;
             }
         }
     }

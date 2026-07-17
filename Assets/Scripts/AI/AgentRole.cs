@@ -186,9 +186,20 @@ public sealed class AgentRole : MonoBehaviour
         ObjectiveManager objective = ObjectiveManager.Instance;
         Vector3 goal;
         if (objective != null && objective.ActiveBomb != null) goal = objective.ActiveBomb.transform.position;
-        else if (objective != null && objective.siteA != null && objective.siteB != null)
-            goal = FlatDistance(transform.position, objective.siteA.PlantPosition) < FlatDistance(transform.position, objective.siteB.PlantPosition)
-                ? objective.siteA.PlantPosition : objective.siteB.PlantPosition;
+        else if (objective != null)
+        {
+            BombSite nearest = null;
+            float nearestDistance = float.PositiveInfinity;
+            foreach (BombSite site in objective.GetSites())
+            {
+                float distance = FlatDistance(transform.position, site.PlantPosition);
+                if (distance >= nearestDistance) continue;
+                nearest = site;
+                nearestDistance = distance;
+            }
+            if (nearest == null) return false;
+            goal = nearest.PlantPosition;
+        }
         else return false;
         motor.MoveTo(RefineDestination(goal, goal));
         return true;

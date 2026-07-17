@@ -15,6 +15,12 @@ public class AStarPathfinder3D : MonoBehaviour
     public float obstacleCheckRadius = 0.45f;
     public float minimumAgentClearance = 0.65f;
 
+    [Header("Optional Multi-Level Surfaces")]
+    [Tooltip("When set, grid nodes are projected onto authored walkable surfaces. Empty preserves flat-map behaviour.")]
+    public LayerMask walkableSurfaceMask;
+    public float surfaceProbeHeight = 10f;
+    public float maximumNeighborHeightDelta = 0.75f;
+
     [Header("Debug")]
     public bool drawGrid = true;
     public float gizmoHeight = 0.05f;
@@ -56,10 +62,29 @@ public class AStarPathfinder3D : MonoBehaviour
                     z * cellSize + cellSize / 2f
                 );
 
-                bool blocked = Physics.CheckSphere(
+                bool hasSurface = true;
+                if (walkableSurfaceMask.value != 0)
+                {
+                    Vector3 probeOrigin = worldPosition +
+                                          Vector3.up * Mathf.Max(2f, surfaceProbeHeight);
+                    hasSurface = Physics.Raycast(
+                        probeOrigin,
+                        Vector3.down,
+                        out RaycastHit surfaceHit,
+                        Mathf.Max(4f, surfaceProbeHeight * 2f),
+                        walkableSurfaceMask,
+                        QueryTriggerInteraction.Ignore);
+                    if (hasSurface)
+                    {
+                        worldPosition.y = surfaceHit.point.y;
+                    }
+                }
+
+                bool blocked = !hasSurface || Physics.CheckSphere(
                     worldPosition + Vector3.up * 0.5f,
                     Mathf.Max(obstacleCheckRadius, minimumAgentClearance),
-                    obstacleMask
+                    obstacleMask,
+                    QueryTriggerInteraction.Ignore
                 );
 
                 bool walkable = !blocked;
@@ -569,7 +594,15 @@ public class AStarPathfinder3D : MonoBehaviour
                     }
                 }
 
-                neighbors.Add(grid[checkX, checkZ]);
+                PathNode neighbor = grid[checkX, checkZ];
+                if (walkableSurfaceMask.value != 0 &&
+                    Mathf.Abs(neighbor.worldPosition.y - node.worldPosition.y) >
+                    Mathf.Max(0.1f, maximumNeighborHeightDelta))
+                {
+                    continue;
+                }
+
+                neighbors.Add(neighbor);
             }
         }
 

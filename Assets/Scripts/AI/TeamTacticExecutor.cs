@@ -731,7 +731,7 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         PlantSitePreference preference = tacticManager.QueuedPlantSitePreference;
         BombSite bestSite = null;
         float bestScore = float.NegativeInfinity;
-        BombSite[] sites = { objectiveManager.siteA, objectiveManager.siteB };
+        BombSite[] sites = objectiveManager.GetSites();
         foreach (BombSite site in sites)
         {
             if (site == null) continue;
@@ -747,9 +747,7 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         plantSiteEvaluationRevision = tacticManager.PlanRevision;
         nextPlantSiteEvaluationTime = Time.time + 1.25f;
         targetSite = bestSite;
-        fakeSite = bestSite == objectiveManager.siteA
-            ? objectiveManager.siteB
-            : objectiveManager.siteA;
+        fakeSite = GetAlternativeSite(bestSite);
         objectiveManager.SetSelectedAttackSite(targetSite);
 
         string summary = preference == PlantSitePreference.Auto
@@ -816,7 +814,8 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         float bonus = 8f)
     {
         bool matches = preference == PlantSitePreference.A && site == BombSiteId.A ||
-                       preference == PlantSitePreference.B && site == BombSiteId.B;
+                       preference == PlantSitePreference.B && site == BombSiteId.B ||
+                       preference == PlantSitePreference.C && site == BombSiteId.C;
         return matches ? Mathf.Max(0f, bonus) : 0f;
     }
 
@@ -1532,7 +1531,7 @@ public sealed class TeamTacticExecutor : MonoBehaviour
             FindObjectsByType<TacticStagingPoint>(FindObjectsInactive.Exclude);
         foreach (TacticStagingPoint point in stagingPoints)
         {
-            if (point == null || point.site != BombSiteId.B ||
+            if (point == null || fakeSite == null || point.site != fakeSite.siteId ||
                 point.purpose != TacticStagingPurpose.FeintRealGroup)
             {
                 continue;
@@ -2860,36 +2859,52 @@ public sealed class TeamTacticExecutor : MonoBehaviour
             return;
         }
 
-        if (tacticManager.GetSelectedInitialTactic() ==
-            InitialTeamTactic.FeintAndRotate &&
-            objectiveManager.siteA != null && objectiveManager.siteB != null)
+        BombSite[] sites = objectiveManager.GetSites();
+        if (sites.Length == 0)
         {
-            fakeSite = objectiveManager.siteA;
-            targetSite = objectiveManager.siteB;
-            objectiveManager.SetSelectedAttackSite(targetSite);
-            Debug.Log("Feint and Rotate setup: Site A is the fake; Site B is the real plant target.");
+            targetSite = null;
+            fakeSite = null;
             return;
         }
 
-        if (objectiveManager.siteA == null)
+        targetSite = sites[UnityEngine.Random.Range(0, sites.Length)];
+        fakeSite = GetAlternativeSite(targetSite);
+        objectiveManager.SetSelectedAttackSite(targetSite);
+
+        if (tacticManager.GetSelectedInitialTactic() ==
+            InitialTeamTactic.FeintAndRotate && fakeSite != null)
         {
-            targetSite = objectiveManager.siteB;
+            Debug.Log(
+                $"Feint and Rotate setup: Site {fakeSite.siteId} is the fake; " +
+                $"Site {targetSite.siteId} is the real plant target.");
         }
-        else if (objectiveManager.siteB == null)
+    }
+
+    private BombSite GetAlternativeSite(BombSite realSite)
+    {
+        if (objectiveManager == null || realSite == null)
         {
-            targetSite = objectiveManager.siteA;
-        }
-        else
-        {
-            targetSite = UnityEngine.Random.value < 0.5f
-                ? objectiveManager.siteA
-                : objectiveManager.siteB;
+            return null;
         }
 
-        fakeSite = targetSite == objectiveManager.siteA
-            ? objectiveManager.siteB
-            : objectiveManager.siteA;
-        objectiveManager.SetSelectedAttackSite(targetSite);
+        BombSite alternative = null;
+        float greatestSeparation = float.NegativeInfinity;
+        foreach (BombSite site in objectiveManager.GetSites())
+        {
+            if (site == null || site == realSite)
+            {
+                continue;
+            }
+
+            float separation = FlatDistance(site.PlantPosition, realSite.PlantPosition);
+            if (separation > greatestSeparation)
+            {
+                greatestSeparation = separation;
+                alternative = site;
+            }
+        }
+
+        return alternative;
     }
 
     private void ResolveReferences()

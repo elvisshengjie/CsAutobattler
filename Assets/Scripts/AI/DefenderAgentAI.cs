@@ -1179,22 +1179,20 @@ public sealed class DefenderAgentAI : MonoBehaviour
             return coordinator.GetObjectivePositionFor(gameObject);
         }
 
-        BombSite siteA = objectiveManager != null ? objectiveManager.siteA : null;
-        BombSite siteB = objectiveManager != null ? objectiveManager.siteB : null;
-        if (siteA == null)
+        BombSite nearest = null;
+        float nearestDistance = float.PositiveInfinity;
+        if (objectiveManager != null)
         {
-            return siteB != null ? siteB.PlantPosition : transform.position;
+            foreach (BombSite site in objectiveManager.GetSites())
+            {
+                float distance = FlatDistance(transform.position, site.PlantPosition);
+                if (distance >= nearestDistance) continue;
+                nearest = site;
+                nearestDistance = distance;
+            }
         }
 
-        if (siteB == null)
-        {
-            return siteA.PlantPosition;
-        }
-
-        return FlatDistance(transform.position, siteA.PlantPosition) <=
-               FlatDistance(transform.position, siteB.PlantPosition)
-            ? siteA.PlantPosition
-            : siteB.PlantPosition;
+        return nearest != null ? nearest.PlantPosition : transform.position;
     }
 
     private void OnDamaged(HealthSystem damagedHealth, float amount, GameObject attacker)

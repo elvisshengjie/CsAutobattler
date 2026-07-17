@@ -16,6 +16,13 @@ public class AgentMotor : MonoBehaviour
     [HideInInspector] public float separationRadius = 0.8f;
     [HideInInspector] public float separationStrength = 2f;
 
+    [Header("Optional Multi-Level Surfaces")]
+    [Tooltip("When non-empty, the agent follows ramps and platforms on these layers. Leave empty for flat maps.")]
+    [SerializeField] private LayerMask walkableSurfaceMask;
+    [SerializeField] private float surfaceProbeHeight = 6f;
+    [SerializeField] private float surfaceProbeDistance = 12f;
+    [SerializeField] private float maximumSurfaceStep = 0.6f;
+
     [Header("Agent Size and Clearance")]
     [SerializeField] private float agentRadius = 0.4f;
     [FormerlySerializedAs("obstacleClearance")]
@@ -116,6 +123,7 @@ public class AgentMotor : MonoBehaviour
     public TacticalSlotKind CurrentSlotKind => currentSlotKind;
     public float SpeedMultiplier { get; set; } = 1f;
     private float movementPlaneY;
+    private float surfaceOffset = 1f;
 
     private float ClearanceRadius => agentRadius + minObstacleClearance;
 
@@ -124,6 +132,7 @@ public class AgentMotor : MonoBehaviour
         stats = GetComponent<AgentStats>();
         body = GetComponent<Rigidbody>();
         movementPlaneY = body != null ? body.position.y : transform.position.y;
+        RefreshSurfaceOffset();
         Collider agentCollider = GetComponent<Collider>();
         if (agentCollider != null)
         {
@@ -244,9 +253,10 @@ public class AgentMotor : MonoBehaviour
 
     private void FixedUpdate()
     {
-        // Navigation is planar. Correct any vertical drift before it can leave an
-        // agent underneath the floor and make the floor render over the agent.
-        if (body != null && !Mathf.Approximately(body.position.y, movementPlaneY))
+        // Flat maps retain the original fixed movement plane. Multi-level maps
+        // update height from their authored walkable surfaces in FollowPath.
+        if (body != null && walkableSurfaceMask.value == 0 &&
+            !Mathf.Approximately(body.position.y, movementPlaneY))
         {
             Vector3 correctedPosition = body.position;
             correctedPosition.y = movementPlaneY;
@@ -299,6 +309,17 @@ public class AgentMotor : MonoBehaviour
         recoveringLocally = false;
         hasPendingDestination = false;
         ApplyValidatedDestination(newDestination, true);
+    }
+
+    /// <summary>
+    /// Enables ramp and platform traversal for scenes that author dedicated
+    /// walkable surfaces. Flat scenes keep the mask empty and preserve the
+    /// original fixed-height movement.
+    /// </summary>
+    public void ConfigureWalkableSurfaceMask(LayerMask surfaceMask)
+    {
+        walkableSurfaceMask = surfaceMask;
+        RefreshSurfaceOffset();
     }
 
     /// <summary>
@@ -687,6 +708,10 @@ public class AgentMotor : MonoBehaviour
         }
 
         safePosition.y = body.position.y;
+        if (TryGetSurfaceY(safePosition, out float safeSurfaceY))
+        {
+            safePosition.y = safeSurfaceY;
+        }
         body.position = safePosition;
         transform.position = safePosition;
         lastPosition = safePosition;
@@ -788,8 +813,76 @@ public class AgentMotor : MonoBehaviour
             rotationSpeed * Time.fixedDeltaTime));
 
         Vector3 newPosition = currentPosition + safeDirection * stepDistance;
-        newPosition.y = movementPlaneY;
+        if (TryGetSurfaceY(newPosition, out float surfaceY))
+        {
+            newPosition.y = surfaceY;
+        }
+        else
+        {
+            newPosition.y = walkableSurfaceMask.value == 0
+                ? movementPlaneY
+                : currentPosition.y;
+        }
         body.MovePosition(newPosition);
+    }
+
+    private void RefreshSurfaceOffset()
+    {
+        surfaceProbeHeight = Mathf.Max(1f, surfaceProbeHeight);
+        surfaceProbeDistance = Mathf.Max(surfaceProbeHeight + 1f, surfaceProbeDistance);
+        maximumSurfaceStep = Mathf.Max(0.1f, maximumSurfaceStep);
+        if (walkableSurfaceMask.value == 0)
+        {
+            surfaceOffset = 1f;
+            return;
+        }
+
+        Vector3 position = body != null ? body.position : transform.position;
+        Vector3 origin = position + Vector3.up * surfaceProbeHeight;
+        if (Physics.Raycast(
+                origin,
+                Vector3.down,
+                out RaycastHit hit,
+                surfaceProbeDistance,
+                walkableSurfaceMask,
+                QueryTriggerInteraction.Ignore))
+        {
+            surfaceOffset = Mathf.Max(0.1f, position.y - hit.point.y);
+        }
+    }
+
+    private bool TryGetSurfaceY(Vector3 position, out float surfaceY)
+    {
+        surfaceY = position.y;
+        if (walkableSurfaceMask.value == 0)
+        {
+            return false;
+        }
+
+        float currentY = body != null ? body.position.y : transform.position.y;
+        Vector3 origin = new Vector3(
+            position.x,
+            currentY + surfaceProbeHeight,
+            position.z);
+        if (!Physics.Raycast(
+                origin,
+                Vector3.down,
+                out RaycastHit hit,
+                surfaceProbeDistance,
+                walkableSurfaceMask,
+                QueryTriggerInteraction.Ignore))
+        {
+            return false;
+        }
+
+        float desiredY = hit.point.y + surfaceOffset;
+        if (Mathf.Abs(desiredY - currentY) > maximumSurfaceStep)
+        {
+            return false;
+        }
+
+        surfaceY = desiredY;
+        return true;
     }
 
     private Vector3 GetCollisionSafeDirection(
