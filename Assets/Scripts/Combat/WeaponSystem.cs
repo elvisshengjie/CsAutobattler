@@ -3,6 +3,8 @@ using UnityEngine;
 
 public class WeaponSystem : MonoBehaviour
 {
+    private const int ShotAudioSourceCount = 4;
+
     [Header("Projectile")]
     public GameObject projectilePrefab;
     public Vector3 muzzleOffset = new Vector3(0f, 0.8f, 0.6f);
@@ -19,6 +21,11 @@ public class WeaponSystem : MonoBehaviour
 
     private int currentAmmo;
     private bool isReloading = false;
+    private AudioSource[] shotAudioSources;
+    private int[] shotAudioGenerations;
+    private int nextShotAudioSource;
+    private int lastShotVariant = -1;
+    private WeaponType lastAudioWeaponType = (WeaponType)(-1);
 
     public bool IsReady => Time.time >= nextAttackTime && !isReloading;
     public bool IsReloading => isReloading;
@@ -31,6 +38,7 @@ public class WeaponSystem : MonoBehaviour
         animator = GetComponentInChildren<Animator>();
         loadout = WeaponLoadout.Get(gameObject);
         currentAmmo = loadout.magazineSize;
+        CreateShotAudioSources();
     }
 
     public void TryAttack(GameObject target)
@@ -125,10 +133,115 @@ public class WeaponSystem : MonoBehaviour
 
     private void FireVolley(GameObject target)
     {
+        PlayShotSound();
+
         int projectileCount = Mathf.Max(1, loadout.ProjectilesPerShot);
         for (int projectileIndex = 0; projectileIndex < projectileCount; projectileIndex++)
         {
             FireProjectile(target, projectileCount > 1);
+        }
+    }
+
+    private void CreateShotAudioSources()
+    {
+        shotAudioSources = new AudioSource[ShotAudioSourceCount];
+        shotAudioGenerations = new int[ShotAudioSourceCount];
+
+        for (int index = 0; index < ShotAudioSourceCount; index++)
+        {
+            GameObject sourceObject = new GameObject("Weapon Shot Audio " + (index + 1));
+            sourceObject.transform.SetParent(transform, false);
+
+            AudioSource source = sourceObject.AddComponent<AudioSource>();
+            source.playOnAwake = false;
+            source.loop = false;
+            source.spatialBlend = 1f;
+            source.dopplerLevel = 0f;
+            source.rolloffMode = AudioRolloffMode.Logarithmic;
+            source.minDistance = 3f;
+            source.maxDistance = 35f;
+            shotAudioSources[index] = source;
+        }
+    }
+
+    private void PlayShotSound()
+    {
+        WeaponAudioLibrary library = WeaponAudioLibrary.Instance;
+        if (library == null || loadout == null)
+        {
+            return;
+        }
+
+        WeaponType weaponType = loadout.SelectedWeapon;
+        AudioClip[] clips = library.GetShotClips(weaponType);
+        if (clips == null || clips.Length == 0)
+        {
+            return;
+        }
+
+        if (shotAudioSources == null || shotAudioSources.Length == 0)
+        {
+            CreateShotAudioSources();
+        }
+
+        if (lastAudioWeaponType != weaponType)
+        {
+            lastAudioWeaponType = weaponType;
+            lastShotVariant = -1;
+        }
+
+        int variant = Random.Range(0, clips.Length);
+        if (clips.Length > 1 && variant == lastShotVariant)
+        {
+            variant = (variant + Random.Range(1, clips.Length)) % clips.Length;
+        }
+
+        lastShotVariant = variant;
+        AudioClip clip = clips[variant];
+        if (clip == null)
+        {
+            return;
+        }
+
+        int sourceIndex = nextShotAudioSource;
+        nextShotAudioSource = (nextShotAudioSource + 1) % shotAudioSources.Length;
+        AudioSource source = shotAudioSources[sourceIndex];
+        int generation = ++shotAudioGenerations[sourceIndex];
+
+        source.Stop();
+        source.clip = clip;
+        source.volume = WeaponAudioLibrary.GetVolume(weaponType) * Random.Range(0.96f, 1.04f);
+        source.pitch = WeaponAudioLibrary.GetBasePitch(weaponType) * Random.Range(0.98f, 1.02f);
+        source.Play();
+
+        float maximumDuration = WeaponAudioLibrary.GetMaximumDuration(weaponType);
+        if (maximumDuration > 0f)
+        {
+            StartCoroutine(FadeAndStopShot(sourceIndex, generation, maximumDuration));
+        }
+    }
+
+    private IEnumerator FadeAndStopShot(int sourceIndex, int generation, float duration)
+    {
+        const float fadeDuration = 0.06f;
+        AudioSource source = shotAudioSources[sourceIndex];
+        float startingVolume = source.volume;
+
+        yield return new WaitForSeconds(Mathf.Max(0f, duration - fadeDuration));
+
+        float elapsed = 0f;
+        while (elapsed < fadeDuration &&
+               shotAudioGenerations[sourceIndex] == generation)
+        {
+            elapsed += Time.deltaTime;
+            source.volume = startingVolume * (1f - Mathf.Clamp01(elapsed / fadeDuration));
+            yield return null;
+        }
+
+        if (shotAudioGenerations[sourceIndex] == generation)
+        {
+            source.Stop();
+            source.volume = startingVolume;
         }
     }
 

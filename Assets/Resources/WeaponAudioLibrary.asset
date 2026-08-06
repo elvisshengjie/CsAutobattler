@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d7c1089e9a3c4e16992fb6b2f21adc37, type: 3}
+  m_Name: WeaponAudioLibrary
+  m_EditorClassIdentifier: Assembly-CSharp::WeaponAudioLibrary
+  rifleShots:
+  - {fileID: 8300000, guid: 29341f9a8d10a2c4289fc89e3037f56b, type: 3}
+  - {fileID: 8300000, guid: aa922eaf7e49a274ba3a3e34e27fd6c3, type: 3}
+  - {fileID: 8300000, guid: 79a0dbc91e9198e4c8a1891c0e420594, type: 3}
+  smgShots:
+  - {fileID: 8300000, guid: 0bd2e541709b1424c8a5c095c60775ae, type: 3}
+  - {fileID: 8300000, guid: 5a01f1c3c64398d4da758b967fdfe420, type: 3}
+  - {fileID: 8300000, guid: ae77c1b9e5526a441bab1ecac5cbcb67, type: 3}
+  sniperShots:
+  - {fileID: 8300000, guid: 16186a974c690014eb91fad889837418, type: 3}
+  shotgunShots:
+  - {fileID: 8300000, guid: b6ed79797d3fa4a488637a44559d1a32, type: 3}
+  - {fileID: 8300000, guid: 56cbcb4c53887a84290e090365c3ce4f, type: 3}
