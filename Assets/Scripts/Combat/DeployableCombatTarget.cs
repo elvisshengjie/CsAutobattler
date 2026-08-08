@@ -452,6 +452,8 @@ public sealed class SmokeGrenadeProjectile : MonoBehaviour
 /// </summary>
 public sealed class DeployableTurret : MonoBehaviour
 {
+    private const int ShotAudioSourceCount = 2;
+
     [SerializeField] private TeamType team;
     [SerializeField] private float maximumHealth = 120f;
     [SerializeField] private float currentHealth;
@@ -466,6 +468,9 @@ public sealed class DeployableTurret : MonoBehaviour
     private GameObject target;
     private Transform barrel;
     private TextMesh statusText;
+    private AudioSource deploymentAudioSource;
+    private AudioSource[] shotAudioSources;
+    private int nextShotAudioSource;
     private bool destroyed;
     private static Material redMaterial;
     private static Material blueMaterial;
@@ -487,6 +492,8 @@ public sealed class DeployableTurret : MonoBehaviour
         range = Mathf.Max(1f, attackRange);
         fieldOfView = Mathf.Clamp(firingArc, 10f, 360f);
         CreateVisuals();
+        CreateAudioSources();
+        PlayDeploymentSound();
         UpdateStatusText();
     }
 
@@ -636,6 +643,58 @@ public sealed class DeployableTurret : MonoBehaviour
         BulletProjectile projectile = projectileObject.AddComponent<BulletProjectile>();
         projectile.Initialize(direction.normalized, damage, team, gameObject,
             projectileSpeed, range, 1f);
+        PlayShotSound();
+    }
+
+    private void CreateAudioSources()
+    {
+        deploymentAudioSource = gameObject.AddComponent<AudioSource>();
+        ConfigureSpatialAudioSource(deploymentAudioSource);
+
+        shotAudioSources = new AudioSource[ShotAudioSourceCount];
+        for (int index = 0; index < ShotAudioSourceCount; index++)
+        {
+            AudioSource source = gameObject.AddComponent<AudioSource>();
+            ConfigureSpatialAudioSource(source);
+            shotAudioSources[index] = source;
+        }
+    }
+
+    private void PlayDeploymentSound()
+    {
+        AudioClip clip = WeaponAudioLibrary.Instance?.TurretDeployment;
+        if (clip == null || deploymentAudioSource == null)
+        {
+            return;
+        }
+
+        deploymentAudioSource.pitch = 1f;
+        deploymentAudioSource.PlayOneShot(clip, 0.9f);
+    }
+
+    private void PlayShotSound()
+    {
+        AudioClip clip = WeaponAudioLibrary.Instance?.TurretShot;
+        if (clip == null || shotAudioSources == null || shotAudioSources.Length == 0)
+        {
+            return;
+        }
+
+        AudioSource source = shotAudioSources[nextShotAudioSource];
+        nextShotAudioSource = (nextShotAudioSource + 1) % shotAudioSources.Length;
+        source.pitch = Random.Range(0.97f, 1.03f);
+        source.PlayOneShot(clip, Random.Range(0.82f, 0.9f));
+    }
+
+    private static void ConfigureSpatialAudioSource(AudioSource source)
+    {
+        source.playOnAwake = false;
+        source.loop = false;
+        source.spatialBlend = 1f;
+        source.dopplerLevel = 0f;
+        source.rolloffMode = AudioRolloffMode.Logarithmic;
+        source.minDistance = 3f;
+        source.maxDistance = 32f;
     }
 
     private Vector3 GetMuzzlePosition()

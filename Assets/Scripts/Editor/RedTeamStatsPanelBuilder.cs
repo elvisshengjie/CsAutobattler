@@ -18,7 +18,7 @@ public static class RedTeamStatsPanelBuilder
     private const float SlotHeight = RedTeamStatsSlotUI.DisplayHeight;
     private const float SlotSpacing = 12f;
     private const float BottomPanelXOffset = 24f;
-    private static readonly Vector2 HudReferenceResolution = new Vector2(1600f, 900f);
+    private static readonly Vector2 HudReferenceResolution = new Vector2(1920f, 1080f);
 
     private static readonly Color[] DefaultFallbackPortraitColors =
     {
@@ -237,6 +237,7 @@ public static class RedTeamStatsPanelBuilder
 
         canvas = canvasObject.GetComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.pixelPerfect = true;
 
         CanvasScaler scaler = canvasObject.GetComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;

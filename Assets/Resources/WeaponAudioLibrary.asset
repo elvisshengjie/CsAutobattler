@@ -25,3 +25,5 @@ MonoBehaviour:
   shotgunShots:
   - {fileID: 8300000, guid: b6ed79797d3fa4a488637a44559d1a32, type: 3}
   - {fileID: 8300000, guid: 56cbcb4c53887a84290e090365c3ce4f, type: 3}
+  turretShot: {fileID: 8300000, guid: 5cacfc74952753c40a9f3cb7c1a80b99, type: 3}
+  turretDeployment: {fileID: 8300000, guid: db1a97cb1776e1f40854be6462672687, type: 3}
