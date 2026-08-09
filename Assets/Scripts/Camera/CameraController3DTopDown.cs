@@ -109,7 +109,10 @@ public class CameraController3DTopDown : MonoBehaviour
 
         if (cam.orthographic)
         {
-            cam.orthographicSize -= zoomDirection * zoomSpeed * Time.deltaTime * 10f;
+            // Camera navigation remains responsive while tactical slow motion
+            // reduces simulation time.
+            cam.orthographicSize -=
+                zoomDirection * zoomSpeed * Time.unscaledDeltaTime * 10f;
             cam.orthographicSize = Mathf.Clamp(cam.orthographicSize, minZoom, maxZoom);
         }
         else

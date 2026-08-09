@@ -18,6 +18,7 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
     private AgentRole selectedRole;
     private AgentRoleAbilities selectedAbilities;
     private RoundManager roundManager;
+    private TacticalSlowMotionController tacticalSlowMotion;
     private Camera targetCamera;
     private GameObject previewRoot;
     private LineRenderer supportLine;
@@ -59,6 +60,7 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
     {
         targetCamera = Camera.main;
         BindRoundManager();
+        BindTacticalSlowMotion();
     }
 
     private void Start()
@@ -70,7 +72,15 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
     private void Update()
     {
         BindRoundManager();
+        BindTacticalSlowMotion();
         targetCamera ??= Camera.main;
+        if (selectedAgent != null && tacticalSlowMotion != null &&
+            !tacticalSlowMotion.IsActive)
+        {
+            CancelSelection();
+            SetFeedback("Hold SPACE to issue an ability command", 1.25f);
+        }
+
         if (!SelectionIsUsable())
         {
             CancelSelection();
@@ -158,6 +168,12 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
         if (remainingUses <= 0)
         {
             SetFeedback("No manual ability uses left this round", 1.8f);
+            return;
+        }
+
+        if (tacticalSlowMotion != null && !tacticalSlowMotion.IsActive)
+        {
+            SetFeedback("Hold SPACE to enter tactical command mode", 1.5f);
             return;
         }
 
@@ -707,6 +723,13 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
         }
     }
 
+    private void BindTacticalSlowMotion()
+    {
+        tacticalSlowMotion = TacticalSlowMotionController.Instance != null
+            ? TacticalSlowMotionController.Instance
+            : FindAnyObjectByType<TacticalSlowMotionController>();
+    }
+
     private bool ReleasePendingManualTurretCharge(
         AgentRoleAbilities abilities,
         bool refundUse)
@@ -751,7 +774,7 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
         bool warning = false)
     {
         feedback = message;
-        feedbackUntil = Time.time + duration;
+        feedbackUntil = Time.unscaledTime + duration;
         feedbackWorldPosition = worldPosition;
         hasFeedbackWorldPosition = hasWorldPosition;
         feedbackIsWarning = warning;
@@ -861,8 +884,10 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
         string line = selectedAgent != null && selectedRole != null
             ? $"{selectedAgent.name} - {selectedRole.SelectedRole}  [AI AUTO-CAST PAUSED]\n" +
               $"{currentHint}\nRight-click / Esc to cancel"
-            : "Left-click a player to command their role ability";
-        if (Time.time < feedbackUntil && !string.IsNullOrEmpty(feedback))
+            : tacticalSlowMotion != null && !tacticalSlowMotion.IsActive
+                ? "Hold SPACE, then left-click a player to command their role ability"
+                : "Left-click a player to command their role ability";
+        if (Time.unscaledTime < feedbackUntil && !string.IsNullOrEmpty(feedback))
         {
             line = feedback + (selectedAgent != null ? "\n" + line : string.Empty);
         }
@@ -871,7 +896,7 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
             line,
             body);
 
-        if (Time.time < feedbackUntil && !string.IsNullOrEmpty(feedback))
+        if (Time.unscaledTime < feedbackUntil && !string.IsNullOrEmpty(feedback))
         {
             GUIStyle toastStyle = new GUIStyle(GUI.skin.label)
             {

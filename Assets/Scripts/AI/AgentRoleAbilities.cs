@@ -240,6 +240,14 @@ public sealed class AgentRoleAbilities : MonoBehaviour
         }
 
         ClearExpiredWallMessage();
+        TacticalSlowMotionController tacticalMode =
+            TacticalSlowMotionController.Instance;
+        if (tacticalMode != null &&
+            tacticalMode.ShouldPauseControlledAutoAbilities(stats.team))
+        {
+            return;
+        }
+
         if (playerCommandSelected)
         {
             return;
