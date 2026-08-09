@@ -815,28 +815,54 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
         }
 
         const float edgePadding = 8f;
+        float minimumY = GetFeedbackToastY(toastHeight);
         float x = screen.x - toastWidth * 0.5f;
         float y = Screen.height - screen.y - toastHeight - 18f;
         float maxX = Mathf.Max(edgePadding, Screen.width - toastWidth - edgePadding);
-        float maxY = Mathf.Max(edgePadding, Screen.height - toastHeight - edgePadding);
+        float maxY = Mathf.Max(minimumY, Screen.height - toastHeight - edgePadding);
         x = Mathf.Clamp(x, edgePadding, maxX);
-        y = Mathf.Clamp(y, edgePadding, maxY);
+        y = Mathf.Clamp(y, minimumY, maxY);
         toast = new Rect(x, y, toastWidth, toastHeight);
         return true;
+    }
+
+    private static float GetFeedbackToastY(float toastHeight)
+    {
+        const float edgePadding = 8f;
+        const float timerGap = 10f;
+        float preferredY = 98f;
+        if (HudLayoutUtility.TryGetGuiRect("RoundTimerPreview", out Rect timer))
+        {
+            preferredY = timer.yMax + timerGap;
+        }
+
+        float maximumY = Mathf.Max(
+            edgePadding,
+            Screen.height - toastHeight - edgePadding);
+        return Mathf.Clamp(Mathf.Ceil(preferredY), edgePadding, maximumY);
     }
 
     private void OnGUI()
     {
         const float width = 390f;
-        float height = selectedAgent != null ? 156f : 110f;
+        float height = selectedAgent != null ? 200f : 145f;
         Rect panel;
-        if (!HudLayoutUtility.TryGetGuiRect("ManualAbilityPreview", out panel))
+        bool usingPreviewLayout = HudLayoutUtility.TryGetGuiRect(
+            "ManualAbilityPreview", out panel);
+        if (!usingPreviewLayout)
         {
             panel = new Rect(
                 18f,
                 18f,
                 width,
                 height);
+        }
+        else
+        {
+            // IMGUI font sizes are physical pixels, while the editable preview
+            // rectangle is scaled with the screen. Preserve enough physical
+            // height for every line even at small Game view resolutions.
+            panel.height = Mathf.Max(panel.height, height);
         }
         GUI.Box(panel, GUIContent.none);
 
@@ -924,7 +950,7 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
             {
                 toast = new Rect(
                     (Screen.width - toastWidth) * 0.5f,
-                    18f,
+                    GetFeedbackToastY(toastHeight),
                     toastWidth,
                     toastHeight);
             }

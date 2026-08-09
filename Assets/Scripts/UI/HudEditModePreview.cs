@@ -66,7 +66,7 @@ public sealed class HudEditModePreview : MonoBehaviour
         GameObject panel = CreatePanel("ManualAbilityPreview", parent);
         SetRect(panel.GetComponent<RectTransform>(),
             new Vector2(0f, 1f), new Vector2(0f, 1f),
-            new Vector2(18f, -18f), new Vector2(390f, 110f), new Vector2(0f, 1f));
+            new Vector2(18f, -18f), new Vector2(390f, 145f), new Vector2(0f, 1f));
 
         CreateText("Title", panel.transform,
             "MANUAL ABILITIES",
