@@ -792,14 +792,31 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
         }
 
         const float edgePadding = 8f;
+        float minimumY = GetFeedbackToastY(toastHeight);
         float x = screen.x - toastWidth * 0.5f;
         float y = Screen.height - screen.y - toastHeight - 18f;
         float maxX = Mathf.Max(edgePadding, Screen.width - toastWidth - edgePadding);
-        float maxY = Mathf.Max(edgePadding, Screen.height - toastHeight - edgePadding);
+        float maxY = Mathf.Max(minimumY, Screen.height - toastHeight - edgePadding);
         x = Mathf.Clamp(x, edgePadding, maxX);
-        y = Mathf.Clamp(y, edgePadding, maxY);
+        y = Mathf.Clamp(y, minimumY, maxY);
         toast = new Rect(x, y, toastWidth, toastHeight);
         return true;
+    }
+
+    private static float GetFeedbackToastY(float toastHeight)
+    {
+        const float edgePadding = 8f;
+        const float timerGap = 10f;
+        float preferredY = 98f;
+        if (HudLayoutUtility.TryGetGuiRect("RoundTimerPreview", out Rect timer))
+        {
+            preferredY = timer.yMax + timerGap;
+        }
+
+        float maximumY = Mathf.Max(
+            edgePadding,
+            Screen.height - toastHeight - edgePadding);
+        return Mathf.Clamp(Mathf.Ceil(preferredY), edgePadding, maximumY);
     }
 
     private void OnGUI()
@@ -908,7 +925,7 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
             {
                 toast = new Rect(
                     (Screen.width - toastWidth) * 0.5f,
-                    18f,
+                    GetFeedbackToastY(toastHeight),
                     toastWidth,
                     toastHeight);
             }
