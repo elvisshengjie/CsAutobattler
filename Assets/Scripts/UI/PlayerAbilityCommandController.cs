@@ -805,15 +805,24 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
     private void OnGUI()
     {
         const float width = 390f;
-        float height = selectedAgent != null ? 156f : 110f;
+        float height = selectedAgent != null ? 200f : 145f;
         Rect panel;
-        if (!HudLayoutUtility.TryGetGuiRect("ManualAbilityPreview", out panel))
+        bool usingPreviewLayout = HudLayoutUtility.TryGetGuiRect(
+            "ManualAbilityPreview", out panel);
+        if (!usingPreviewLayout)
         {
             panel = new Rect(
                 18f,
                 18f,
                 width,
                 height);
+        }
+        else
+        {
+            // IMGUI font sizes are physical pixels, while the editable preview
+            // rectangle is scaled with the screen. Preserve enough physical
+            // height for every line even at small Game view resolutions.
+            panel.height = Mathf.Max(panel.height, height);
         }
         GUI.Box(panel, GUIContent.none);
 
