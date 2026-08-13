@@ -27,3 +27,8 @@ MonoBehaviour:
   - {fileID: 8300000, guid: 56cbcb4c53887a84290e090365c3ce4f, type: 3}
   turretShot: {fileID: 8300000, guid: 5cacfc74952753c40a9f3cb7c1a80b99, type: 3}
   turretDeployment: {fileID: 8300000, guid: db1a97cb1776e1f40854be6462672687, type: 3}
+  fleshHit: {fileID: 8300000, guid: 25afcc2c9834470b9850458ed04e2ea5, type: 3}
+  metalHit: {fileID: 8300000, guid: d61279c0b1c51da42baeb02aca937602, type: 3}
+  wallHit: {fileID: 8300000, guid: 640b0c41a493b4d49bac52b3e24082df, type: 3}
+  defenderWallDeployment: {fileID: 8300000, guid: bc8ff59375ac27940bf329941442cc79, type: 3}
+  gameplayMusic: {fileID: 8300000, guid: 01ec3214a1d71f8439c3197c4e78bdcd, type: 3}

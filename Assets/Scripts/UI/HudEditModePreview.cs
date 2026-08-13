@@ -11,7 +11,7 @@ public sealed class HudEditModePreview : MonoBehaviour
     private static readonly Color RedPortraitColor = new Color(0.72f, 0f, 0f, 1f);
     private static readonly Color BluePortraitColor = new Color(0.10f, 0.22f, 1f, 1f);
 
-    private const int ManualAbilityUses = 3;
+    private const int ManualAbilityUses = 10;
     private Font font;
 
     private void OnEnable()

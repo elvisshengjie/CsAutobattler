@@ -2228,6 +2228,22 @@ public sealed class AgentRoleAbilities : MonoBehaviour
         Physics.SyncTransforms();
         AStarPathfinder3D.Instance?.RefreshGrid();
 
+        AudioClip deploymentClip =
+            WeaponAudioLibrary.Instance?.DefenderWallDeployment;
+        if (deploymentClip != null)
+        {
+            AudioSource deploymentSource = wall.AddComponent<AudioSource>();
+            deploymentSource.playOnAwake = false;
+            deploymentSource.spatialBlend = 0.15f;
+            deploymentSource.rolloffMode = AudioRolloffMode.Logarithmic;
+            deploymentSource.minDistance = 15f;
+            deploymentSource.maxDistance = 100f;
+            deploymentSource.dopplerLevel = 0f;
+            deploymentSource.priority = 32;
+            deploymentSource.volume = 1f;
+            deploymentSource.PlayOneShot(deploymentClip);
+        }
+
         nextWallTime = Time.time + wallCooldown;
         wallMessageUntil = Time.time + 1.25f;
         healthBar?.SetAbilityStatus(

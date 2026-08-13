@@ -13,6 +13,11 @@ public sealed class WeaponAudioLibrary : ScriptableObject
     [SerializeField] private AudioClip[] shotgunShots;
     [SerializeField] private AudioClip turretShot;
     [SerializeField] private AudioClip turretDeployment;
+    [SerializeField] private AudioClip fleshHit;
+    [SerializeField] private AudioClip metalHit;
+    [SerializeField] private AudioClip wallHit;
+    [SerializeField] private AudioClip defenderWallDeployment;
+    [SerializeField] private AudioClip gameplayMusic;
 
     private static WeaponAudioLibrary instance;
 
@@ -43,6 +48,11 @@ public sealed class WeaponAudioLibrary : ScriptableObject
 
     public AudioClip TurretShot => turretShot;
     public AudioClip TurretDeployment => turretDeployment;
+    public AudioClip FleshHit => fleshHit;
+    public AudioClip MetalHit => metalHit;
+    public AudioClip WallHit => wallHit;
+    public AudioClip DefenderWallDeployment => defenderWallDeployment;
+    public AudioClip GameplayMusic => gameplayMusic;
 
     public static float GetVolume(WeaponType weaponType)
     {

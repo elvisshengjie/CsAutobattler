@@ -650,12 +650,22 @@ public sealed class DeployableTurret : MonoBehaviour
     {
         deploymentAudioSource = gameObject.AddComponent<AudioSource>();
         ConfigureSpatialAudioSource(deploymentAudioSource);
+        deploymentAudioSource.spatialBlend = 0.2f;
+        deploymentAudioSource.minDistance = 15f;
+        deploymentAudioSource.maxDistance = 100f;
+        deploymentAudioSource.priority = 32;
+        deploymentAudioSource.volume = 1f;
 
         shotAudioSources = new AudioSource[ShotAudioSourceCount];
         for (int index = 0; index < ShotAudioSourceCount; index++)
         {
             AudioSource source = gameObject.AddComponent<AudioSource>();
             ConfigureSpatialAudioSource(source);
+            source.spatialBlend = 0.25f;
+            source.minDistance = 15f;
+            source.maxDistance = 100f;
+            source.priority = 48;
+            source.volume = 1f;
             shotAudioSources[index] = source;
         }
     }
@@ -669,7 +679,7 @@ public sealed class DeployableTurret : MonoBehaviour
         }
 
         deploymentAudioSource.pitch = 1f;
-        deploymentAudioSource.PlayOneShot(clip, 0.9f);
+        deploymentAudioSource.PlayOneShot(clip, 1f);
     }
 
     private void PlayShotSound()
@@ -683,7 +693,7 @@ public sealed class DeployableTurret : MonoBehaviour
         AudioSource source = shotAudioSources[nextShotAudioSource];
         nextShotAudioSource = (nextShotAudioSource + 1) % shotAudioSources.Length;
         source.pitch = Random.Range(0.97f, 1.03f);
-        source.PlayOneShot(clip, Random.Range(0.82f, 0.9f));
+        source.PlayOneShot(clip, Random.Range(0.95f, 1f));
     }
 
     private static void ConfigureSpatialAudioSource(AudioSource source)

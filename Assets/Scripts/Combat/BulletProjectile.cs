@@ -1,7 +1,15 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class BulletProjectile : MonoBehaviour
 {
+    private enum ImpactTone
+    {
+        Natural,
+        BrightMetal,
+        HeavyWall
+    }
+
     public float speed = 18f;
     public float maxLifetime = 3f;
     public float ballRadius = 0.1f;
@@ -17,6 +25,10 @@ public class BulletProjectile : MonoBehaviour
     private float damageFalloffRange;
     private float minimumDamageMultiplier = 1f;
     private static Material sharedBallMaterial;
+    private static readonly Dictionary<HealthSystem, int> LastFleshHitFrameByAgent =
+        new Dictionary<HealthSystem, int>();
+    private static int lastMetalHitFrame = -1;
+    private static int lastWallHitFrame = -1;
 
     private void Awake()
     {
@@ -149,8 +161,11 @@ public class BulletProjectile : MonoBehaviour
             return false;
         }
 
-        if (CombatTargetUtility.IsAlive(hitObject))
+        bool hitLivingTarget = CombatTargetUtility.IsAlive(hitObject);
+        if (hitLivingTarget)
         {
+            HealthSystem agentHealth = hitObject.GetComponentInParent<HealthSystem>();
+            DeployableTurret turret = hitObject.GetComponentInParent<DeployableTurret>();
             float appliedDamage = damage;
             if (damageFalloffRange > 0f && minimumDamageMultiplier < 1f)
             {
@@ -158,7 +173,20 @@ public class BulletProjectile : MonoBehaviour
                 float falloff = Mathf.Clamp01(travelled / damageFalloffRange);
                 appliedDamage *= Mathf.Lerp(1f, minimumDamageMultiplier, falloff);
             }
-            CombatTargetUtility.TryApplyDamage(hitObject, appliedDamage, owner);
+            bool damaged = CombatTargetUtility.TryApplyDamage(
+                hitObject, appliedDamage, owner);
+            if (damaged && agentHealth != null)
+            {
+                PlayFleshHitSound(agentHealth);
+            }
+            else if (damaged && turret != null)
+            {
+                PlayMetalHitSound();
+            }
+        }
+        else if (IsWallImpact(hitObject))
+        {
+            PlayWallHitSound();
         }
 
         // Any solid wall or enemy collision consumes the projectile.
@@ -169,6 +197,134 @@ public class BulletProjectile : MonoBehaviour
         }
         Destroy(gameObject);
         return true;
+    }
+
+    private void PlayFleshHitSound(HealthSystem agentHealth)
+    {
+        if (LastFleshHitFrameByAgent.TryGetValue(agentHealth, out int lastFrame) &&
+            lastFrame == Time.frameCount)
+        {
+            return;
+        }
+
+        AudioClip clip = WeaponAudioLibrary.Instance?.FleshHit;
+        if (clip == null)
+        {
+            return;
+        }
+
+        LastFleshHitFrameByAgent[agentHealth] = Time.frameCount;
+        PlayImpactClip(
+            clip, "Flesh Hit Audio", 0.92f, 1f, 0.96f, 1.04f,
+            12f, 100f, 0.35f, ImpactTone.Natural);
+    }
+
+    private void PlayMetalHitSound()
+    {
+        if (lastMetalHitFrame == Time.frameCount)
+        {
+            return;
+        }
+
+        AudioClip clip = WeaponAudioLibrary.Instance?.MetalHit;
+        if (clip == null)
+        {
+            return;
+        }
+
+        lastMetalHitFrame = Time.frameCount;
+        PlayImpactClip(
+            clip, "Turret Metal Hit Audio", 0.98f, 1f, 1.12f, 1.18f,
+            15f, 100f, 0.25f, ImpactTone.BrightMetal);
+    }
+
+    private void PlayWallHitSound()
+    {
+        if (lastWallHitFrame == Time.frameCount)
+        {
+            return;
+        }
+
+        AudioClip clip = WeaponAudioLibrary.Instance?.WallHit;
+        if (clip == null)
+        {
+            return;
+        }
+
+        lastWallHitFrame = Time.frameCount;
+        PlayImpactClip(
+            clip, "Wall Hit Audio", 0.95f, 1f, 0.82f, 0.9f,
+            15f, 100f, 0.3f, ImpactTone.HeavyWall);
+    }
+
+    private static bool IsWallImpact(GameObject hitObject)
+    {
+        if (hitObject == null)
+        {
+            return false;
+        }
+
+        if (hitObject.GetComponentInParent<DeployedDefenderWall>() != null)
+        {
+            return true;
+        }
+
+        int layer = hitObject.layer;
+        if (layer == LayerMask.NameToLayer("Obstacle") ||
+            layer == LayerMask.NameToLayer("Obstacle3D"))
+        {
+            return true;
+        }
+
+        string objectName = hitObject.name.ToLowerInvariant();
+        return objectName.Contains("wall") ||
+               objectName.Contains("cover") ||
+               objectName.Contains("barrier") ||
+               objectName.Contains("pillar");
+    }
+
+    private void PlayImpactClip(
+        AudioClip clip,
+        string objectName,
+        float minimumVolume,
+        float maximumVolume,
+        float minimumPitch,
+        float maximumPitch,
+        float minimumDistance,
+        float maximumDistance,
+        float spatialBlend,
+        ImpactTone tone)
+    {
+        GameObject audioObject = new GameObject(objectName);
+        audioObject.transform.position = transform.position;
+        AudioSource source = audioObject.AddComponent<AudioSource>();
+        source.playOnAwake = false;
+        source.loop = false;
+        source.spatialBlend = spatialBlend;
+        source.dopplerLevel = 0f;
+        source.priority = 64;
+        source.rolloffMode = AudioRolloffMode.Logarithmic;
+        source.minDistance = minimumDistance;
+        source.maxDistance = maximumDistance;
+        source.volume = Random.Range(minimumVolume, maximumVolume);
+        source.pitch = Random.Range(minimumPitch, maximumPitch);
+        source.clip = clip;
+
+        if (tone == ImpactTone.BrightMetal)
+        {
+            AudioHighPassFilter highPass = audioObject.AddComponent<AudioHighPassFilter>();
+            highPass.cutoffFrequency = 900f;
+            highPass.highpassResonanceQ = 1.25f;
+        }
+        else if (tone == ImpactTone.HeavyWall)
+        {
+            AudioLowPassFilter lowPass = audioObject.AddComponent<AudioLowPassFilter>();
+            lowPass.cutoffFrequency = 5200f;
+            lowPass.lowpassResonanceQ = 1.1f;
+        }
+
+        source.Play();
+        Destroy(audioObject, clip.length / Mathf.Abs(source.pitch) + 0.1f);
     }
 
     private void EnsureBallVisual()

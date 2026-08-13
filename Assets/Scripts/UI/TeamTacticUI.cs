@@ -27,6 +27,8 @@ public sealed class TeamTacticUI : MonoBehaviour
     private GameObject midRoundPanel;
     private Text currentTacticText;
     private Text duplicateRoleWarning;
+    private AudioSource gameplayMusicSource;
+    private bool gameplayMusicRequested;
     private readonly Dictionary<AgentRole, Text> roleLabels =
         new Dictionary<AgentRole, Text>();
     private readonly Dictionary<AgentRole, Text> roleAgentNames =
@@ -56,6 +58,7 @@ public sealed class TeamTacticUI : MonoBehaviour
             ? RoundManager.Instance
             : FindAnyObjectByType<RoundManager>();
         font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        ConfigureGameplayMusic();
         BuildUI();
 
         tacticManager.InitialTacticSelected += OnInitialTacticSelected;
@@ -167,6 +170,8 @@ public sealed class TeamTacticUI : MonoBehaviour
 
     private void Update()
     {
+        MaintainGameplayMusic();
+
         if (roleSelectionWindow == null || !roleSelectionWindow.activeInHierarchy)
         {
             return;
@@ -298,7 +303,7 @@ public sealed class TeamTacticUI : MonoBehaviour
         SetRect(start.GetComponent<RectTransform>(),
             new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
             new Vector2(215f, 48f), new Vector2(380f, 65f), new Vector2(0.5f, 0.5f));
-        start.onClick.AddListener(tacticManager.ConfirmLoadouts);
+        start.onClick.AddListener(OnStartMatchClicked);
     }
 
     private void CycleWeapon(WeaponLoadout loadout)
@@ -783,7 +788,67 @@ public sealed class TeamTacticUI : MonoBehaviour
 
     private void OnRoundStateChanged(RoundState state)
     {
+        if (state == RoundState.Defused || state == RoundState.Exploded ||
+            state == RoundState.RoundEnd)
+        {
+            gameplayMusicRequested = false;
+            gameplayMusicSource?.Stop();
+        }
+
         Refresh();
+    }
+
+    private void ConfigureGameplayMusic()
+    {
+        gameplayMusicSource = gameObject.AddComponent<AudioSource>();
+        gameplayMusicSource.clip = WeaponAudioLibrary.Instance?.GameplayMusic;
+        gameplayMusicSource.playOnAwake = false;
+        gameplayMusicSource.loop = true;
+        gameplayMusicSource.spatialBlend = 0f;
+        gameplayMusicSource.volume = 0.35f;
+        gameplayMusicSource.priority = 0;
+        gameplayMusicSource.ignoreListenerPause = true;
+    }
+
+    private void OnStartMatchClicked()
+    {
+        tacticManager.ConfirmLoadouts();
+        if (!tacticManager.LoadoutsConfirmed || gameplayMusicSource == null)
+        {
+            return;
+        }
+
+        gameplayMusicRequested = true;
+        gameplayMusicSource.clip = WeaponAudioLibrary.Instance?.GameplayMusic;
+        if (gameplayMusicSource.clip != null && !gameplayMusicSource.isPlaying)
+        {
+            gameplayMusicSource.Play();
+        }
+    }
+
+    private void MaintainGameplayMusic()
+    {
+        if (!gameplayMusicRequested || gameplayMusicSource == null ||
+            gameplayMusicSource.clip == null)
+        {
+            return;
+        }
+
+        RoundState state = roundManager != null
+            ? roundManager.CurrentState
+            : RoundState.RoundEnd;
+        if (state == RoundState.Defused || state == RoundState.Exploded ||
+            state == RoundState.RoundEnd)
+        {
+            gameplayMusicRequested = false;
+            gameplayMusicSource.Stop();
+            return;
+        }
+
+        if (!gameplayMusicSource.isPlaying)
+        {
+            gameplayMusicSource.Play();
+        }
     }
 
     private Text CreateText(

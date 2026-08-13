@@ -11,14 +11,13 @@ using UnityEngine.Rendering;
 [DefaultExecutionOrder(50)]
 public sealed class PlayerAbilityCommandController : MonoBehaviour
 {
-    private const int MaximumUsesPerRound = 3;
+    private const int MaximumUsesPerRound = 10;
     private const int RingSegments = 40;
 
     private AgentStats selectedAgent;
     private AgentRole selectedRole;
     private AgentRoleAbilities selectedAbilities;
     private RoundManager roundManager;
-    private TacticalSlowMotionController tacticalSlowMotion;
     private Camera targetCamera;
     private GameObject previewRoot;
     private LineRenderer supportLine;
@@ -60,7 +59,6 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
     {
         targetCamera = Camera.main;
         BindRoundManager();
-        BindTacticalSlowMotion();
     }
 
     private void Start()
@@ -72,14 +70,7 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
     private void Update()
     {
         BindRoundManager();
-        BindTacticalSlowMotion();
         targetCamera ??= Camera.main;
-        if (selectedAgent != null && tacticalSlowMotion != null &&
-            !tacticalSlowMotion.IsActive)
-        {
-            CancelSelection();
-            SetFeedback("Hold SPACE to issue an ability command", 1.25f);
-        }
 
         if (!SelectionIsUsable())
         {
@@ -148,7 +139,7 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
         {
             remainingUses = MaximumUsesPerRound;
             CancelSelection();
-            SetFeedback("Manual abilities refreshed: 3 uses", 2f);
+            SetFeedback($"Manual abilities refreshed: {MaximumUsesPerRound} uses", 2f);
         }
         else if (state == RoundState.RoundEnd || state == RoundState.Defused ||
                  state == RoundState.Exploded)
@@ -168,12 +159,6 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
         if (remainingUses <= 0)
         {
             SetFeedback("No manual ability uses left this round", 1.8f);
-            return;
-        }
-
-        if (tacticalSlowMotion != null && !tacticalSlowMotion.IsActive)
-        {
-            SetFeedback("Hold SPACE to enter tactical command mode", 1.5f);
             return;
         }
 
@@ -723,13 +708,6 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
         }
     }
 
-    private void BindTacticalSlowMotion()
-    {
-        tacticalSlowMotion = TacticalSlowMotionController.Instance != null
-            ? TacticalSlowMotionController.Instance
-            : FindAnyObjectByType<TacticalSlowMotionController>();
-    }
-
     private bool ReleasePendingManualTurretCharge(
         AgentRoleAbilities abilities,
         bool refundUse)
@@ -910,9 +888,7 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
         string line = selectedAgent != null && selectedRole != null
             ? $"{selectedAgent.name} - {selectedRole.SelectedRole}  [AI AUTO-CAST PAUSED]\n" +
               $"{currentHint}\nRight-click / Esc to cancel"
-            : tacticalSlowMotion != null && !tacticalSlowMotion.IsActive
-                ? "Hold SPACE, then left-click a player to command their role ability"
-                : "Left-click a player to command their role ability";
+            : "Left-click a player to command their role ability";
         if (Time.unscaledTime < feedbackUntil && !string.IsNullOrEmpty(feedback))
         {
             line = feedback + (selectedAgent != null ? "\n" + line : string.Empty);

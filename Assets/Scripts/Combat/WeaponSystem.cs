@@ -155,11 +155,14 @@ public class WeaponSystem : MonoBehaviour
             AudioSource source = sourceObject.AddComponent<AudioSource>();
             source.playOnAwake = false;
             source.loop = false;
-            source.spatialBlend = 1f;
+            // A mostly-spatial blend keeps direction while remaining audible from
+            // the elevated top-down camera.
+            source.spatialBlend = 0.35f;
             source.dopplerLevel = 0f;
             source.rolloffMode = AudioRolloffMode.Logarithmic;
-            source.minDistance = 3f;
-            source.maxDistance = 35f;
+            source.minDistance = 15f;
+            source.maxDistance = 100f;
+            source.priority = 80;
             shotAudioSources[index] = source;
         }
     }
