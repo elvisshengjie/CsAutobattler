@@ -10,8 +10,8 @@ using UnityEngine.UI;
 [DisallowMultipleComponent]
 public sealed class TeamTacticUI : MonoBehaviour
 {
-    private static readonly Color InactiveColor = new Color(0.10f, 0.12f, 0.15f, 0.96f);
-    private static readonly Color ActiveColor = new Color(0.08f, 0.48f, 0.60f, 0.98f);
+    private static readonly Color InactiveColor = new Color(0.10f, 0.12f, 0.15f, 1f);
+    private static readonly Color ActiveColor = new Color(0.08f, 0.48f, 0.60f, 1f);
     private static readonly Color AccentColor = new Color(0.20f, 0.86f, 0.96f, 1f);
     private static readonly Color TextColor = new Color(0.94f, 0.97f, 1f, 1f);
     private static Sprite circleButtonSprite;
@@ -120,12 +120,12 @@ public sealed class TeamTacticUI : MonoBehaviour
     private void BuildInitialSelection(Transform parent)
     {
         initialOverlay = CreatePanel("InitialTacticOverlay", parent,
-            new Color(0.015f, 0.025f, 0.04f, 0.82f));
+            Color.clear);
         RectTransform overlayRect = initialOverlay.GetComponent<RectTransform>();
         StretchToParent(overlayRect);
 
         GameObject window = CreatePanel("SelectionWindow", initialOverlay.transform,
-            new Color(0.055f, 0.07f, 0.095f, 0.99f));
+            new Color(0.055f, 0.07f, 0.095f, 1f));
         initialTacticWindow = window;
         SetRect(window.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f),
             new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(980f, 520f),
@@ -164,8 +164,13 @@ public sealed class TeamTacticUI : MonoBehaviour
             button.onClick.AddListener(() => tacticManager.SelectInitialTactic(captured));
         }
 
-        BuildRoleSelection(initialOverlay.transform);
-        BuildLoadoutSelection(initialOverlay.transform);
+        bool lockedCampaignCharacters = CampaignManager.Instance != null &&
+                                        CampaignManager.Instance.UsesLockedCharacters;
+        if (!lockedCampaignCharacters)
+        {
+            BuildRoleSelection(initialOverlay.transform);
+            BuildLoadoutSelection(initialOverlay.transform);
+        }
     }
 
     private void Update()
@@ -188,7 +193,7 @@ public sealed class TeamTacticUI : MonoBehaviour
     private void BuildRoleSelection(Transform parent)
     {
         roleSelectionWindow = CreatePanel("RoleSelectionWindow", parent,
-            new Color(0.055f, 0.07f, 0.095f, 0.99f));
+            new Color(0.055f, 0.07f, 0.095f, 1f));
         SetRect(roleSelectionWindow.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f),
             new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(920f, 680f), new Vector2(0.5f, 0.5f));
         AddOutline(roleSelectionWindow, AccentColor, new Vector2(2f, -2f));
@@ -248,7 +253,7 @@ public sealed class TeamTacticUI : MonoBehaviour
     private void BuildLoadoutSelection(Transform parent)
     {
         loadoutSelectionWindow = CreatePanel("LoadoutSelectionWindow", parent,
-            new Color(0.055f, 0.07f, 0.095f, 0.99f));
+            new Color(0.055f, 0.07f, 0.095f, 1f));
         SetRect(loadoutSelectionWindow.GetComponent<RectTransform>(),
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero,
             new Vector2(1120f, 720f), new Vector2(0.5f, 0.5f));
@@ -418,7 +423,7 @@ public sealed class TeamTacticUI : MonoBehaviour
     private void BuildCurrentTacticPanel(Transform parent)
     {
         currentTacticPanel = CreatePanel("CurrentInitialTactic", parent,
-            new Color(0.045f, 0.06f, 0.08f, 0.97f));
+            new Color(0.045f, 0.06f, 0.08f, 1f));
         SetRect(currentTacticPanel.GetComponent<RectTransform>(),
             new Vector2(1f, 1f), new Vector2(1f, 1f),
             new Vector2(-14f, -14f), new Vector2(220f, 74f), new Vector2(1f, 1f));
@@ -435,7 +440,7 @@ public sealed class TeamTacticUI : MonoBehaviour
     private void BuildMidRoundPanel(Transform parent)
     {
         midRoundPanel = CreatePanel("MidRoundTactics", parent,
-            new Color(0.035f, 0.045f, 0.06f, 0.93f));
+            new Color(0.035f, 0.045f, 0.06f, 1f));
         SetRect(midRoundPanel.GetComponent<RectTransform>(),
             new Vector2(1f, 1f), new Vector2(1f, 1f),
             new Vector2(-20f, -126f), new Vector2(300f, 430f), new Vector2(1f, 1f));
@@ -532,7 +537,7 @@ public sealed class TeamTacticUI : MonoBehaviour
         plantInfoPanel = CreatePanel(
             "PlantPreferenceHelp",
             midRoundPanel.transform,
-            new Color(0.045f, 0.06f, 0.08f, 0.99f));
+            new Color(0.045f, 0.06f, 0.08f, 1f));
         SetRect(plantInfoPanel.GetComponent<RectTransform>(),
             new Vector2(0f, 1f), new Vector2(0f, 1f),
             new Vector2(-10f, -130f), new Vector2(360f, 156f),
@@ -655,8 +660,15 @@ public sealed class TeamTacticUI : MonoBehaviour
                                  roundManager.CurrentState == RoundState.Preparation &&
                                  (!selected || !rolesConfirmed || !loadoutsConfirmed));
         initialTacticWindow.SetActive(!selected);
-        roleSelectionWindow.SetActive(selected && !rolesConfirmed);
-        loadoutSelectionWindow.SetActive(selected && rolesConfirmed && !loadoutsConfirmed);
+        if (roleSelectionWindow != null)
+        {
+            roleSelectionWindow.SetActive(selected && !rolesConfirmed);
+        }
+        if (loadoutSelectionWindow != null)
+        {
+            loadoutSelectionWindow.SetActive(
+                selected && rolesConfirmed && !loadoutsConfirmed);
+        }
         currentTacticPanel.SetActive(controlledRound && selected && !roundEnded);
         midRoundPanel.SetActive(controlledRound && selected &&
                                 roundManager.CurrentState != RoundState.Preparation &&
@@ -783,6 +795,11 @@ public sealed class TeamTacticUI : MonoBehaviour
 
     private void OnInitialTacticSelected(InitialTeamTactic tactic)
     {
+        if (CampaignManager.Instance != null &&
+            CampaignManager.Instance.UsesLockedCharacters)
+        {
+            StartGameplayMusic();
+        }
         Refresh();
     }
 
@@ -818,11 +835,25 @@ public sealed class TeamTacticUI : MonoBehaviour
             return;
         }
 
+        StartGameplayMusic();
+    }
+
+    private void StartGameplayMusic()
+    {
+        if (gameplayMusicSource == null)
+        {
+            ConfigureGameplayMusic();
+        }
         gameplayMusicRequested = true;
         gameplayMusicSource.clip = WeaponAudioLibrary.Instance?.GameplayMusic;
+        gameplayMusicSource.loop = true;
         if (gameplayMusicSource.clip != null && !gameplayMusicSource.isPlaying)
         {
             gameplayMusicSource.Play();
+        }
+        else if (gameplayMusicSource.clip == null)
+        {
+            Debug.LogWarning("Gameplay music could not start because WeaponAudioLibrary has no music clip.");
         }
     }
 

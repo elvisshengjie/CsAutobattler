@@ -71,7 +71,7 @@ public sealed class EnemyTeamStatsPanelUI : MonoBehaviour
         TeamType enemyTeam = controlledTeam == TeamType.Red ? TeamType.Blue : TeamType.Red;
 
         List<AgentStats> enemies = new List<AgentStats>();
-        foreach (AgentStats agent in FindObjectsByType<AgentStats>(FindObjectsInactive.Include))
+        foreach (AgentStats agent in FindObjectsByType<AgentStats>(FindObjectsInactive.Exclude))
         {
             if (agent != null && agent.gameObject.scene == SceneManager.GetActiveScene() &&
                 agent.team == enemyTeam)

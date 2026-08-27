@@ -28,6 +28,11 @@ public class InfluenceMapVisualizer : MonoBehaviour
         Destroy(quad.GetComponent<Collider>());
 
         heatmapRenderer = quad.GetComponent<Renderer>();
+        // The texture has not been populated yet, so leaving the quad visible can
+        // cover the entire map with its default white texture. This was especially
+        // noticeable after a campaign scene reload when the manager singletons did
+        // not all become available in the same frame.
+        heatmapRenderer.gameObject.SetActive(false);
         Material mat = new Material(Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color"));
         
         // Transparent Blending Setup
@@ -49,9 +54,20 @@ public class InfluenceMapVisualizer : MonoBehaviour
 
     private void Update()
     {
-        if (DebugVisualManager.Instance == null || pathfinder == null || influenceMap == null) return;
-        heatmapRenderer.gameObject.SetActive(DebugVisualManager.Instance.ShowHeatmap);
-        if (!DebugVisualManager.Instance.ShowHeatmap || Time.time < nextUpdateTime) return;
+        pathfinder ??= AStarPathfinder3D.Instance;
+        influenceMap ??= InfluenceMapManager.Instance;
+
+        if (heatmapRenderer == null) return;
+
+        bool campaignRound = CampaignManager.Instance != null &&
+                             CampaignManager.Instance.IsCampaignScene;
+        bool showHeatmap = !campaignRound &&
+                           DebugVisualManager.Instance != null &&
+                           DebugVisualManager.Instance.ShowHeatmap &&
+                           pathfinder != null && influenceMap != null;
+        heatmapRenderer.gameObject.SetActive(showHeatmap);
+        if (!showHeatmap) return;
+        if (Time.time < nextUpdateTime) return;
         
         nextUpdateTime = Time.time + 0.25f;
         UpdateTexture();

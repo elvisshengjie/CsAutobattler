@@ -56,6 +56,13 @@ public sealed class TeamTacticManager : MonoBehaviour
             return;
         }
 
+        // Campaign preparation must own the scene before the legacy role/loadout
+        // flow is allowed to create itself.
+        if (CampaignManager.EnsureForCurrentScene())
+        {
+            return;
+        }
+
         new GameObject("Team Tactic System").AddComponent<TeamTacticManager>();
     }
 
@@ -123,7 +130,18 @@ public sealed class TeamTacticManager : MonoBehaviour
 
         selectedInitialTactic = tactic;
         hasSelectedInitialTactic = true;
-        AssignBalancedRoles();
+        if (CampaignManager.Instance != null &&
+            CampaignManager.Instance.UsesLockedCharacters)
+        {
+            // Campaign characters own their role and weapon. Every new scene still
+            // asks for an initial tactic, but skips the legacy reassignment pages.
+            rolesConfirmed = true;
+            loadoutsConfirmed = true;
+        }
+        else
+        {
+            AssignBalancedRoles();
+        }
         PlanRevision++;
         InitialTacticSelected?.Invoke(tactic);
         TacticsChanged?.Invoke();
@@ -281,7 +299,7 @@ public sealed class TeamTacticManager : MonoBehaviour
     public List<AgentRole> GetControlledRoles()
     {
         List<AgentRole> result = new List<AgentRole>();
-        foreach (AgentStats agent in FindObjectsByType<AgentStats>(FindObjectsInactive.Include))
+        foreach (AgentStats agent in FindObjectsByType<AgentStats>(FindObjectsInactive.Exclude))
         {
             if (agent.team != controlledTeam) continue;
             AgentRole role = agent.GetComponent<AgentRole>();

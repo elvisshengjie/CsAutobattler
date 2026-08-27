@@ -55,6 +55,22 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
         }
     }
 
+    public static void RefreshForCampaignRound()
+    {
+        PlayerAbilityCommandController controller =
+            FindAnyObjectByType<PlayerAbilityCommandController>();
+        if (controller == null)
+        {
+            controller = new GameObject("Player Ability Command Controller")
+                .AddComponent<PlayerAbilityCommandController>();
+        }
+
+        controller.BindRoundManager();
+        controller.targetCamera = Camera.main;
+        controller.remainingUses = MaximumUsesPerRound;
+        controller.CancelSelection();
+    }
+
     private void Awake()
     {
         targetCamera = Camera.main;

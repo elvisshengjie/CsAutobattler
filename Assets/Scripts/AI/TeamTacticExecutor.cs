@@ -3090,6 +3090,11 @@ public sealed class TeamTacticExecutor : MonoBehaviour
 
     private void OnDrawGizmos()
     {
+        if (Application.isPlaying)
+        {
+            return;
+        }
+
         DrawSplitRouteGizmos();
         if (!drawFeintStagingGizmos)
         {

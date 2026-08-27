@@ -111,6 +111,12 @@ public class RoundManager : MonoBehaviour
         switch (currentState)
         {
             case RoundState.Preparation:
+                if (CampaignManager.Instance != null &&
+                    CampaignManager.Instance.IsPreparationBlocking)
+                {
+                    break;
+                }
+
                 if (TeamTacticManager.Instance != null &&
                     TeamTacticManager.Instance.RequiresInitialSelection(this))
                 {

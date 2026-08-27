@@ -6,19 +6,28 @@ public sealed class WeaponLoadout : MonoBehaviour
     [SerializeField] private WeaponType selectedWeapon = WeaponType.Rifle;
     [SerializeField] private WeaponDefinition customDefinition;
 
+    private float campaignHealthMultiplier = 1f;
+    private float campaignDamageMultiplier = 1f;
+    private float campaignAccuracyBonus;
+    private float campaignMovementMultiplier = 1f;
+
     public WeaponType SelectedWeapon => selectedWeapon;
     public WeaponDefinition Definition => customDefinition != null &&
         customDefinition.weaponType == selectedWeapon
         ? customDefinition : WeaponDefaults.Get(selectedWeapon);
-    public float Damage => Definition.damage;
-    public float AgentHealth => Definition.agentHealth;
+    public float Damage => Definition.damage * campaignDamageMultiplier;
+    public float AgentHealth => Definition.agentHealth * campaignHealthMultiplier;
     public float FireCooldown => Definition.fireCooldown;
     public float MinimumRange => Definition.effectiveMinimumRange;
     public float MaximumRange => Definition.effectiveMaximumRange;
-    public float Accuracy => Definition.accuracy;
+    public float Accuracy => Mathf.Clamp(
+        Definition.accuracy + campaignAccuracyBonus,
+        0f,
+        100f);
     public float SpreadDegrees => Definition.spreadDegrees;
     public float ProjectileSpeed => Definition.projectileSpeed;
-    public float MovementSpeedMultiplier => Definition.movementSpeedMultiplier;
+    public float MovementSpeedMultiplier =>
+        Definition.movementSpeedMultiplier * campaignMovementMultiplier;
     public float PreferredCoverDistance => Definition.preferredCoverDistance;
     public int magazineSize => Definition.magazineSize;
     public float ReloadTime => Definition.reloadTime;
@@ -58,7 +67,8 @@ public sealed class WeaponLoadout : MonoBehaviour
 
             // The non-attacking team receives varied defensive loadouts. Attacker
             // weapons remain untouched so the preparation UI selection is preserved.
-            if (roundManager != null && agent.team != roundManager.attackingTeam)
+            if (CampaignManager.Instance == null &&
+                roundManager != null && agent.team != roundManager.attackingTeam)
             {
                 loadout.SelectWeapon((WeaponType)Random.Range(0, 4));
                 AgentRole role = agent.GetComponent<AgentRole>();
@@ -74,6 +84,24 @@ public sealed class WeaponLoadout : MonoBehaviour
         HealthSystem health = GetComponent<HealthSystem>();
         if (health != null) health.SetLoadoutHealth(AgentHealth);
         ApplyWeaponVisuals(true);
+    }
+
+    public void ConfigureCampaignMultipliers(
+        float healthMultiplier,
+        float damageMultiplier,
+        float accuracyBonus,
+        float movementMultiplier)
+    {
+        campaignHealthMultiplier = Mathf.Max(0.1f, healthMultiplier);
+        campaignDamageMultiplier = Mathf.Max(0.1f, damageMultiplier);
+        campaignAccuracyBonus = accuracyBonus;
+        campaignMovementMultiplier = Mathf.Max(0.1f, movementMultiplier);
+
+        HealthSystem health = GetComponent<HealthSystem>();
+        if (health != null)
+        {
+            health.SetLoadoutHealth(AgentHealth);
+        }
     }
 
     public static WeaponLoadout Get(GameObject agent)

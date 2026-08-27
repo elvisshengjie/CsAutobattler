@@ -46,6 +46,7 @@ public class AgentDebugVisual : MonoBehaviour
         }
         pathRenderer.material = pathMat;
         pathRenderer.positionCount = 0;
+        pathRenderer.gameObject.SetActive(false);
 
         // Setup Target Marker
         targetMarker = GameObject.CreatePrimitive(PrimitiveType.Quad);
@@ -60,6 +61,7 @@ public class AgentDebugVisual : MonoBehaviour
         Material markerMat = new Material(unlitShader);
         markerMat.color = new Color(1f, 0.2f, 0.2f, 0.8f);
         targetMarker.GetComponent<Renderer>().sharedMaterial = markerMat;
+        targetMarker.SetActive(false);
 
         // Setup text state
         GameObject textObj = new GameObject("DebugStateText");
@@ -71,15 +73,44 @@ public class AgentDebugVisual : MonoBehaviour
         debugStateText.characterSize = 0.04f;
         debugStateText.fontSize = 64;
         debugStateText.fontStyle = FontStyle.Bold;
+        debugStateText.gameObject.SetActive(false);
     }
 
     private void LateUpdate()
     {
-        if (DebugVisualManager.Instance == null) return;
+        bool campaignRound = CampaignManager.Instance != null &&
+                             CampaignManager.Instance.IsCampaignScene;
+        if (campaignRound || DebugVisualManager.Instance == null)
+        {
+            HideAllVisuals();
+            return;
+        }
 
         UpdatePathVisuals();
         UpdateTargetVisuals();
         UpdateTextVisuals();
+    }
+
+    private void HideAllVisuals()
+    {
+        if (pathRenderer != null)
+        {
+            pathRenderer.positionCount = 0;
+            pathRenderer.gameObject.SetActive(false);
+        }
+        if (targetMarker != null)
+        {
+            targetMarker.SetActive(false);
+        }
+        if (debugStateText != null)
+        {
+            debugStateText.gameObject.SetActive(false);
+        }
+    }
+
+    private void OnDisable()
+    {
+        HideAllVisuals();
     }
 
     //  Request path data from A* system and updates the lineRenderer 

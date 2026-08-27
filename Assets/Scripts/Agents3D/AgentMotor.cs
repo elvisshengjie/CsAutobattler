@@ -1641,6 +1641,11 @@ public class AgentMotor : MonoBehaviour
 
     private void OnDrawGizmos()
     {
+        if (Application.isPlaying)
+        {
+            return;
+        }
+
         if (!drawMovementGizmos)
         {
             return;

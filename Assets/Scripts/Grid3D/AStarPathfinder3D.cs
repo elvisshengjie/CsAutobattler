@@ -22,7 +22,7 @@ public class AStarPathfinder3D : MonoBehaviour
     public float maximumNeighborHeightDelta = 0.75f;
 
     [Header("Debug")]
-    public bool drawGrid = true;
+    public bool drawGrid;
     public float gizmoHeight = 0.05f;
 
     private PathNode[,] grid;
@@ -624,6 +624,11 @@ public class AStarPathfinder3D : MonoBehaviour
 
     private void OnDrawGizmos()
     {
+        if (Application.isPlaying)
+        {
+            return;
+        }
+
         if (!drawGrid || grid == null)
         {
             return;

@@ -1259,6 +1259,11 @@ public sealed class DefenderAgentAI : MonoBehaviour
 
     private void OnDrawGizmos()
     {
+        if (Application.isPlaying)
+        {
+            return;
+        }
+
         if (!drawCombatGizmos)
         {
             return;

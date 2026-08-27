@@ -52,6 +52,8 @@ public sealed class TeamVisionVisibility : MonoBehaviour
 
     private void RefreshVisibility()
     {
+        bool revealAllEnemies = CampaignManager.Instance != null &&
+                                CampaignManager.Instance.IsCampaignScene;
         TeamType controlledTeam = TeamTacticManager.Instance != null
             ? TeamTacticManager.Instance.ControlledTeam
             : TeamType.Red;
@@ -81,7 +83,7 @@ public sealed class TeamVisionVisibility : MonoBehaviour
             }
 
             bool friendly = agent.team == controlledTeam;
-            bool visible = friendly ||
+            bool visible = friendly || revealAllEnemies ||
                            IsVisibleToTeam(agent, controlledTeam, friendlySensors);
             SetAgentPresentationVisible(agent, visible);
             if (!friendly)
@@ -102,6 +104,12 @@ public sealed class TeamVisionVisibility : MonoBehaviour
             ? TeamTacticManager.Instance.ControlledTeam
             : TeamType.Red;
         if (agent.team == controlledTeam)
+        {
+            return true;
+        }
+
+        if (CampaignManager.Instance != null &&
+            CampaignManager.Instance.IsCampaignScene)
         {
             return true;
         }

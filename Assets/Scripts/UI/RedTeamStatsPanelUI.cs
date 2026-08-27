@@ -8,7 +8,6 @@ using UnityEngine.UI;
 public sealed class RedTeamStatsPanelUI : MonoBehaviour
 {
     private const int RequiredSlotCount = 5;
-    private const string RedAgentNamePrefix = "RedAgent3D_";
     [SerializeField] private RedTeamStatsSlotUI[] slots = new RedTeamStatsSlotUI[RequiredSlotCount];
     [SerializeField, Min(0.05f)] private float refreshInterval = 0.2f;
 
@@ -82,7 +81,7 @@ public sealed class RedTeamStatsPanelUI : MonoBehaviour
         CacheSlotsIfNeeded();
 
         Scene activeScene = SceneManager.GetActiveScene();
-        AgentStats[] allAgents = FindObjectsByType<AgentStats>(FindObjectsInactive.Include);
+        AgentStats[] allAgents = FindObjectsByType<AgentStats>(FindObjectsInactive.Exclude);
 
         List<AgentStats> redAgents = new List<AgentStats>();
         foreach (AgentStats candidate in allAgents)
@@ -96,7 +95,18 @@ public sealed class RedTeamStatsPanelUI : MonoBehaviour
         }
 
         redAgents.Sort((left, right) =>
-            string.Compare(left.gameObject.name, right.gameObject.name, StringComparison.Ordinal));
+        {
+            CampaignUnitMarker leftMarker = left.GetComponent<CampaignUnitMarker>();
+            CampaignUnitMarker rightMarker = right.GetComponent<CampaignUnitMarker>();
+            if (leftMarker != null && rightMarker != null)
+            {
+                return leftMarker.CharacterId.CompareTo(rightMarker.CharacterId);
+            }
+            return string.Compare(
+                left.gameObject.name,
+                right.gameObject.name,
+                StringComparison.Ordinal);
+        });
 
         for (int slotIndex = 0; slotIndex < RequiredSlotCount; slotIndex++)
         {
@@ -105,19 +115,8 @@ public sealed class RedTeamStatsPanelUI : MonoBehaviour
                 continue;
             }
 
-            string expectedAgentName = RedAgentNamePrefix + (slotIndex + 1);
-            AgentStats matchingAgent = null;
-
-            foreach (AgentStats candidate in redAgents)
-            {
-                if (string.Equals(candidate.gameObject.name, expectedAgentName, StringComparison.Ordinal))
-                {
-                    matchingAgent = candidate;
-                    break;
-                }
-            }
-
-            slots[slotIndex].SetAgent(matchingAgent);
+            slots[slotIndex].SetAgent(
+                slotIndex < redAgents.Count ? redAgents[slotIndex] : null);
         }
     }
 

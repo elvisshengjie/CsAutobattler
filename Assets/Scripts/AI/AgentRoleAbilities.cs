@@ -89,6 +89,7 @@ public sealed class AgentRoleAbilities : MonoBehaviour
     private Quaternion turretInstallRotation;
     private DeployableTurret ownedTurret;
     private static Material shadowBlinkMaterial;
+    private bool campaignTierApplied;
 
     public AgentRoleType ActiveRole => role != null
         ? role.SelectedRole
@@ -118,6 +119,69 @@ public sealed class AgentRoleAbilities : MonoBehaviour
             return float.IsPositiveInfinity(readyAt)
                 ? float.PositiveInfinity
                 : Mathf.Max(0f, readyAt - Time.time);
+        }
+    }
+
+    public void ApplyCampaignTier(CharacterTier tier)
+    {
+        if (campaignTierApplied)
+        {
+            return;
+        }
+
+        campaignTierApplied = true;
+        float power = tier switch
+        {
+            CharacterTier.B => 1.15f,
+            CharacterTier.A => 1.30f,
+            _ => 1f
+        };
+        float cooldown = tier switch
+        {
+            CharacterTier.B => 0.90f,
+            CharacterTier.A => 0.80f,
+            _ => 1f
+        };
+
+        wallLifetime *= power;
+        wallSize.x *= power;
+        wallCooldown *= cooldown;
+        healAmount *= power;
+        healCooldown *= cooldown;
+        turretHealth *= power;
+        turretRange *= Mathf.Lerp(1f, power, 0.5f);
+        turretCooldown *= cooldown;
+        shadowBlinkMaxRange *= power;
+        shadowBlinkCooldown *= cooldown;
+    }
+
+    /// <summary>
+    /// Rebinds runtime references after a campaign deployment activates a scene
+    /// slot. Campaign slots spend the shop phase inactive, so their normal
+    /// OnEnable callback can run before every round singleton is ready.
+    /// </summary>
+    public void RefreshCampaignRoundBinding()
+    {
+        stats = GetComponent<AgentStats>();
+        role = GetComponent<AgentRole>();
+        health = GetComponent<HealthSystem>();
+        motor = GetComponent<AgentMotor>();
+        healthBar = GetComponent<AgentHealthBar3D>();
+
+        if (health != null)
+        {
+            health.Damaged -= OnDamaged;
+            health.Damaged += OnDamaged;
+        }
+
+        RoundManager round = RoundManager.Instance != null
+            ? RoundManager.Instance
+            : FindAnyObjectByType<RoundManager>();
+        if (round != null)
+        {
+            round.StateChanged -= OnRoundStateChanged;
+            round.StateChanged += OnRoundStateChanged;
+            SyncShadowBlinkCooldownWithRound(round.CurrentState);
         }
     }
 

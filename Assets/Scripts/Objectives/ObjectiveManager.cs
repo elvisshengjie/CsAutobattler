@@ -1150,6 +1150,26 @@ public class ObjectiveManager : MonoBehaviour
         Debug.Log(selected.name + " starts with the bomb.");
     }
 
+    /// <summary>
+    /// Campaign deployment is chosen after this component's Start method. Re-run
+    /// carrier selection once the chosen attackers have been activated.
+    /// </summary>
+    public void RefreshStartingCarrier()
+    {
+        if (roundManager == null)
+        {
+            ResolveReferences();
+        }
+        CreateBombIfNeeded();
+
+        if (activeBomb != null && activeBomb.CurrentCarrier != null)
+        {
+            activeBomb.Drop(activeBomb.CurrentCarrier.transform.position);
+        }
+
+        AssignStartingCarrier();
+    }
+
     private GameObject FindNearestLivingAgent(TeamType team, Vector3 position)
     {
         AgentStats[] agents = FindObjectsByType<AgentStats>(FindObjectsInactive.Exclude);

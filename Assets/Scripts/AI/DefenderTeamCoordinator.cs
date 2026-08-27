@@ -256,6 +256,11 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
     private void Start()
     {
         ResolveReferences();
+        if (CampaignManager.Instance != null &&
+            CampaignManager.Instance.IsCampaignScene)
+        {
+            ApplyCampaignTactic(CampaignManager.Instance.CurrentEnemyTactic);
+        }
         CacheCoverPoints();
         RefreshDefenderTeam(true);
         if (roundManager != null)
@@ -265,6 +270,39 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
         if (objectiveManager != null)
         {
             objectiveManager.OnBombPlanted += OnBombPlanted;
+        }
+    }
+
+    public void ApplyCampaignTactic(CampaignEnemyTactic tactic)
+    {
+        switch (tactic)
+        {
+            case CampaignEnemyTactic.BasicHold:
+                rotationDelay = 0.8f;
+                rotateSpeedMultiplier = 1.1f;
+                requireConfirmedAttackBeforeRotate = true;
+                pursuitMaxDistanceFromSite = 9f;
+                enableEncirclement = false;
+                break;
+
+            case CampaignEnemyTactic.SplitDefense:
+                rotationDelay = 0.35f;
+                rotateSpeedMultiplier = 1.25f;
+                requireConfirmedAttackBeforeRotate = true;
+                pursuitMaxDistanceFromSite = 12f;
+                enableEncirclement = true;
+                minimumEncirclementTeamSize = 2;
+                break;
+
+            case CampaignEnemyTactic.AggressiveRotation:
+                rotationDelay = 0.05f;
+                rotateSpeedMultiplier = 1.45f;
+                requireConfirmedAttackBeforeRotate = false;
+                pursuitMaxDistanceFromSite = 18f;
+                enableEncirclement = true;
+                minimumEncirclementTeamSize = 2;
+                encirclementAssignmentHoldTime = 7.5f;
+                break;
         }
     }
 
@@ -2925,6 +2963,11 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
 
     private void OnDrawGizmos()
     {
+        if (Application.isPlaying)
+        {
+            return;
+        }
+
         if (!drawDebugGizmos)
         {
             return;

@@ -9,6 +9,11 @@ public sealed class InfluenceMapDebugRenderer : MonoBehaviour
 
     private void OnDrawGizmos()
     {
+        if (Application.isPlaying)
+        {
+            return;
+        }
+
         if (!drawDebug || InfluenceMapManager.Instance == null) return;
         InfluenceMapManager map = InfluenceMapManager.Instance;
         for (int y = 0; y < map.Height; y++) for (int x = 0; x < map.Width; x++)

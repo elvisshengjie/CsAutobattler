@@ -249,6 +249,11 @@ public class AStarPathfinder : MonoBehaviour
 
     private void OnDrawGizmos()
     {
+        if (Application.isPlaying)
+        {
+            return;
+        }
+
         if (!drawGrid || grid == null)
         {
             return;
