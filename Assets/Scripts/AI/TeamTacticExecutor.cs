@@ -85,6 +85,8 @@ public sealed class TeamTacticExecutor : MonoBehaviour
     private readonly List<Vector3> feintSelectedStagingPath = new List<Vector3>();
     private readonly List<Vector3> feintSelectedExposureOrigins = new List<Vector3>();
 
+    private float smallSquadProbeUntil = -1f;
+    private float feintStartedAt = -1f;
     private bool hasSplitRoutePlan;
     private Vector3 splitPlannedSitePosition;
     private Vector3 splitRoutePointA;
@@ -194,6 +196,15 @@ public sealed class TeamTacticExecutor : MonoBehaviour
                                       InitialTeamTactic.FeintAndRotate;
         if (feintAndRotateSelected)
         {
+            if (livingAttackers.Count <= 2 || fakeSite == null || fakeSite == targetSite)
+            {
+                if (smallSquadProbeUntil < 0f) smallSquadProbeUntil = Time.time + 3f;
+                if (fakeSite != null && fakeSite != targetSite && Time.time < smallSquadProbeUntil)
+                    return MoveOrHold(agent, motor,
+                        GetApproachPosition(fakeSite, 6f, GetFormationSideOffset(agent, 0.8f)),
+                        fakeSite.PlantPosition);
+                return ExecuteFast(agent, motor, carrier, role);
+            }
             UpdateFeintAndRotateState();
             return ExecuteFeint(agent, motor, carrier);
         }
@@ -255,6 +266,8 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         if (tacticManager.GetSelectedInitialTactic() ==
             InitialTeamTactic.FeintAndRotate)
         {
+            if (livingAttackers.Count <= 2 || fakeSite == null || fakeSite == targetSite)
+                return normallyDetectedTarget;
             UpdateFeintAndRotateState();
             return SelectFeintAndRotateCombatTarget(
                 agent,
@@ -337,7 +350,7 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         {
             TeamTacticRole.Entry => 0.5f,
             TeamTacticRole.Trader => 2f,
-            TeamTacticRole.BombCarrier => IsPlantWindowSafe(false) ? 0f : 3.5f,
+            TeamTacticRole.BombCarrier => livingAttackers.Count == 1 || IsPlantWindowSafe(false) ? 0f : 3.5f,
             _ => 3f
         };
         float side = GetFormationSideOffset(agent, 1.4f);
@@ -468,6 +481,9 @@ public sealed class TeamTacticExecutor : MonoBehaviour
             return true;
         }
 
+        if (livingAttackers.Count <= 2)
+            return ExecuteSplitFallback(agent, motor, carrier);
+
         if (!EnsureSplitRoutePlan() ||
             !splitSecondGroup.TryGetValue(agent, out bool sideGroup))
         {
@@ -555,6 +571,7 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         AgentMotor motor,
         BombCarrier carrier)
     {
+        if (TryStartPlant(carrier, false)) return true;
         Vector3 destination = carrier != null && carrier.HasBomb
             ? targetSite.GetNearestPlantPosition(agent.transform.position)
             : GetApproachPosition(
@@ -600,14 +617,14 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         if (bombCarrier == null)
         {
             // Keep ownership of the squad while ObjectiveManager recovers a dropped bomb.
-            motor.Stop();
+            motor.PauseMovement();
             return true;
         }
 
         SelectBestPlantSite(bombCarrier);
         if (targetSite == null)
         {
-            motor.Stop();
+            motor.PauseMovement();
             return true;
         }
 
@@ -676,7 +693,7 @@ public sealed class TeamTacticExecutor : MonoBehaviour
 
         if (bombCarrier != null && bombCarrier.gameObject == agent)
         {
-            motor.Stop();
+            motor.PauseMovement();
             motor.FacePosition(GetDefenderCenter());
             return true;
         }
@@ -850,7 +867,7 @@ public sealed class TeamTacticExecutor : MonoBehaviour
     {
         if (roundManager.CurrentState != RoundState.BombPlanted)
         {
-            motor.Stop();
+            motor.PauseMovement();
             motor.FacePosition(targetSite != null
                 ? targetSite.PlantPosition
                 : agent.transform.position + agent.transform.forward);
@@ -1066,9 +1083,10 @@ public sealed class TeamTacticExecutor : MonoBehaviour
 
         bool assignmentsStillValid = currentCarrier != null &&
                                      currentCarrier == feintBombCarrier &&
-                                     feintFakeGroup.Count == Mathf.Min(
-                                         3,
-                                         Mathf.Max(0, livingAttackers.Count - 2)) &&
+                                     feintFakeGroup.Count == GetFeintFakeCount(livingAttackers.Count) &&
+                                     feintFakeGroup.TrueForAll(livingAttackers.Contains) &&
+                                     feintRealGroup.TrueForAll(livingAttackers.Contains) &&
+                                     feintFakeGroup.Count + feintRealGroup.Count == livingAttackers.Count &&
                                      feintRealGroup.Contains(currentCarrier);
         if (assignmentsStillValid)
         {
@@ -1096,7 +1114,8 @@ public sealed class TeamTacticExecutor : MonoBehaviour
             }
         }
 
-        int fakeCount = Mathf.Min(3, Mathf.Max(0, livingAttackers.Count - 2));
+        int fakeCount = GetFeintFakeCount(livingAttackers.Count);
+        availableTeammates.Sort((a, b) => GetFlankPriority(b).CompareTo(GetFlankPriority(a)));
         for (int i = 0; i < fakeCount && i < availableTeammates.Count; i++)
         {
             feintFakeGroup.Add(availableTeammates[i]);
@@ -1107,7 +1126,6 @@ public sealed class TeamTacticExecutor : MonoBehaviour
             if (!feintFakeGroup.Contains(teammate))
             {
                 feintRealGroup.Add(teammate);
-                break;
             }
         }
 
@@ -1136,22 +1154,15 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         }
 
         Debug.Log(
-            "Feint and Rotate assignments: fake A group (3): " +
+            "Feint and Rotate assignments: distraction group: " +
             FormatAgentNames(feintFakeGroup));
         Debug.Log(
             "Feint and Rotate assignments: real B group (carrier + escort): " +
             FormatAgentNames(feintRealGroup));
 
-        if (feintFakeGroup.Count < 3 || feintRealGroup.Count < 2)
-        {
-            Debug.LogWarning(
-                "Feint and Rotate started with fewer than five living attackers; " +
-                $"assigned {feintFakeGroup.Count} to fake A and " +
-                $"{feintRealGroup.Count} to real B.");
-        }
-
         if (feintState == FeintAndRotateState.Setup)
         {
+            feintStartedAt = Time.time;
             feintState = FeintAndRotateState.FakeAttack;
             Debug.Log(
                 "Feint and Rotate: fake attack starts at A; carrier and escort hold outside B. " +
@@ -1168,6 +1179,13 @@ public sealed class TeamTacticExecutor : MonoBehaviour
             feintState == FeintAndRotateState.BExecute ||
             feintState == FeintAndRotateState.FakeGroupRotate)
         {
+            return;
+        }
+
+        // A feint must finish even when no enemy responds to the distraction.
+        if (feintStartedAt >= 0f && Time.time - feintStartedAt >= 8f)
+        {
+            feintState = FeintAndRotateState.BExecute;
             return;
         }
 
@@ -2130,9 +2148,18 @@ public sealed class TeamTacticExecutor : MonoBehaviour
             return false;
         }
 
-        for (int i = 0; i < livingAttackers.Count; i++)
+        List<AgentStats> splitMembers = new List<AgentStats>(livingAttackers);
+        splitMembers.Sort((a, b) =>
         {
-            splitSecondGroup[livingAttackers[i].gameObject] =
+            bool aCarrier = a.GetComponent<BombCarrier>()?.HasBomb == true;
+            bool bCarrier = b.GetComponent<BombCarrier>()?.HasBomb == true;
+            if (aCarrier != bCarrier) return aCarrier ? -1 : 1;
+            int score = GetFlankPriority(a).CompareTo(GetFlankPriority(b));
+            return score != 0 ? score : string.CompareOrdinal(a.name, b.name);
+        });
+        for (int i = 0; i < splitMembers.Count; i++)
+        {
+            splitSecondGroup[splitMembers[i].gameObject] =
                 IsSecondSplitGroupIndex(i, livingAttackers.Count);
         }
 
@@ -2337,10 +2364,24 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         return combined;
     }
 
+    public static int GetFeintFakeCount(int livingCount)
+    {
+        return Mathf.Clamp(livingCount - 2, 0, 2);
+    }
+
+    private static int GetFlankPriority(AgentStats agent)
+    {
+        AgentRole role = agent.GetComponent<AgentRole>();
+        int priority = role != null && role.SelectedRole == AgentRoleType.Flanker ? 100 :
+            role != null && role.SelectedRole == AgentRoleType.Support ? -100 : 0;
+        HealthSystem health = agent.GetComponent<HealthSystem>();
+        return priority + (health != null ? Mathf.RoundToInt(health.NormalizedHealth * 50f) : 0);
+    }
+
     public static bool IsSecondSplitGroupIndex(int index, int attackerCount)
     {
         return attackerCount > 1 &&
-               index >= Mathf.CeilToInt(attackerCount * 0.6f);
+               index >= (attackerCount + 1) / 2;
     }
 
     public static Vector3 GetSplitRouteCandidate(
@@ -2371,7 +2412,9 @@ public sealed class TeamTacticExecutor : MonoBehaviour
                 return false;
             }
         }
-        return livingAttackers.Count >= 2;
+        return livingAttackers.Count >= 2 &&
+               livingAttackers.Exists(a => splitSecondGroup[a.gameObject]) &&
+               livingAttackers.Exists(a => !splitSecondGroup[a.gameObject]);
     }
 
     private Vector3 GetSplitGroupCenter(bool secondGroup, Vector3 fallback)
@@ -2714,7 +2757,7 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         }
         else
         {
-            motor.Stop();
+            motor.PauseMovement();
             motor.FacePosition(watchPosition);
         }
 
@@ -2946,6 +2989,8 @@ public sealed class TeamTacticExecutor : MonoBehaviour
 
     private void OnRoundTacticsReset()
     {
+        smallSquadProbeUntil = -1f;
+        feintStartedAt = -1f;
         targetSite = null;
         fakeSite = null;
         silentAttackTriggered = false;

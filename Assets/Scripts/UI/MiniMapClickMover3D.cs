@@ -13,6 +13,10 @@ public class MiniMapClickMover3D : MonoBehaviour, IPointerClickHandler, IDragHan
 
     private void Awake()
     {
+        UnityEngine.UI.Outline frame = GetComponent<UnityEngine.UI.Outline>();
+        if (frame == null) frame = gameObject.AddComponent<UnityEngine.UI.Outline>();
+        frame.effectColor = HudLayoutUtility.TacticalSurface;
+        frame.effectDistance = new Vector2(4f, -4f);
         if (miniMapDisplay == null)
         {
             miniMapDisplay = GetComponent<RectTransform>();

@@ -49,7 +49,6 @@ public sealed class DefenderAgentAI : MonoBehaviour
     [SerializeField] private float retreatMovementThreshold = 0.4f;
     [SerializeField] private float searchLastKnownAreaDuration = 3f;
     [SerializeField] private float lastKnownSearchRadius = 1.8f;
-    [SerializeField] private float defuseDamageCancelThreshold = 20f;
     [Header("Retake Utility Clearing")]
     [SerializeField] private float turretBlockClearRadius = 2.25f;
     [SerializeField] private float turretBlockObjectiveRadius = 3.5f;
@@ -156,9 +155,21 @@ public sealed class DefenderAgentAI : MonoBehaviour
             return false;
         }
 
+        if (objectiveManager != null && objectiveManager.ActiveDefuser == gameObject)
+        {
+            currentState = DefenderCombatState.Defusing;
+            return true;
+        }
         UpdateProgressDebug();
+        bool fightBeforeDefuse = coordinator.ShouldFightBeforeDefuse(gameObject, visibleTarget);
+        if (fightBeforeDefuse && (visibleTarget == null || !sensors.CanDetect(visibleTarget)))
+        {
+            currentReasonDebug = "Combat priority: waiting for one clear second before defuse";
+            motor.PauseMovement();
+            return true;
+        }
 
-        if (roundManager.CurrentState == RoundState.BombPlanted &&
+        if (!fightBeforeDefuse && roundManager.CurrentState == RoundState.BombPlanted &&
             coordinator.BombPositionKnown)
         {
             bool allStrikersDead = !roundManager.AreAttackersAlive;
@@ -339,7 +350,7 @@ public sealed class DefenderAgentAI : MonoBehaviour
             return true;
         }
 
-        motor.Stop();
+        motor.PauseMovement();
         currentState = DefenderCombatState.SearchingLastKnownArea;
         lastKnownSearchUntil = Time.time + searchLastKnownAreaDuration;
         nextSearchPointTime = Time.time;
@@ -610,7 +621,7 @@ public sealed class DefenderAgentAI : MonoBehaviour
                     return true;
                 }
 
-                motor.Stop();
+                motor.PauseMovement();
                 motor.FacePosition(targetPosition);
                 currentState = DefenderCombatState.InCover;
                 stateUntil = Time.time + (lowHealth ? hideDuration * 1.5f : hideDuration);
@@ -620,7 +631,7 @@ public sealed class DefenderAgentAI : MonoBehaviour
                 return true;
 
             case DefenderCombatState.InCover:
-                motor.Stop();
+                motor.PauseMovement();
                 motor.FacePosition(targetPosition);
                 if ((Time.time >= stateUntil ||
                     Time.time >= coverCycleStartedAt + maxCoverIdleTime) && !isReloading)
@@ -636,7 +647,7 @@ public sealed class DefenderAgentAI : MonoBehaviour
                     return true;
                 }
 
-                motor.Stop();
+                motor.PauseMovement();
                 if (!hideTimerStarted)
                 {
                     hideTimerStarted = true;
@@ -884,7 +895,7 @@ public sealed class DefenderAgentAI : MonoBehaviour
         forceReposition = true;
         hasValidPeekPosition = false;
         hideTimerStarted = false;
-        motor.Stop();
+        motor.PauseMovement();
     }
 
     private bool ExecuteStrafeCombat(
@@ -949,7 +960,7 @@ public sealed class DefenderAgentAI : MonoBehaviour
 
         if (!moving)
         {
-            motor.Stop();
+            motor.PauseMovement();
             motor.FacePosition(order.watchPosition);
         }
 
@@ -960,7 +971,7 @@ public sealed class DefenderAgentAI : MonoBehaviour
     {
         if (!coordinator.TryGetOrder(gameObject, out DefenderOrder order))
         {
-            motor.Stop();
+            motor.PauseMovement();
             return true;
         }
 
@@ -977,7 +988,7 @@ public sealed class DefenderAgentAI : MonoBehaviour
                         order.destination,
                         Mathf.Max(0.75f, motor.waypointReachDistance)))
                 {
-                    motor.Stop();
+                    motor.PauseMovement();
                     motor.FacePosition(order.watchPosition);
                     coordinator.ReportSiteChecked(gameObject, order.site);
                 }
@@ -992,7 +1003,7 @@ public sealed class DefenderAgentAI : MonoBehaviour
                         Debug.Log("Defender starting defuse");
                     }
                     currentState = DefenderCombatState.Defusing;
-                    motor.Stop();
+                    motor.PauseMovement();
                     objectiveManager.BeginDefuse(gameObject);
                     return true;
                 }
@@ -1009,7 +1020,7 @@ public sealed class DefenderAgentAI : MonoBehaviour
                 motor.MoveToExactObjective(order.destination);
                 if (motor.HasReachedRequestedDestination(order.destination, 0.08f))
                 {
-                    motor.Stop();
+                    motor.PauseMovement();
                     motor.FacePosition(order.watchPosition);
                 }
                 return true;
@@ -1078,7 +1089,7 @@ public sealed class DefenderAgentAI : MonoBehaviour
         currentObjectiveDebug = "Destroy enemy turret";
         currentCover = default;
         forceReposition = false;
-        motor.Stop();
+        motor.PauseMovement();
         motor.FacePosition(turretObject.transform.position);
         weapon.TryAttack(turretObject);
         coordinator?.ReportCombat(gameObject, null);
@@ -1158,7 +1169,9 @@ public sealed class DefenderAgentAI : MonoBehaviour
         }
 
         motor.MoveTo(destination);
-        return motor.HasDestination && !motor.HasReachedDestination(tolerance);
+        // MoveTo can defer this request while the previous destination is already reached.
+        // Only arrival at this request may advance the combat state to holding cover.
+        return !motor.HasReachedRequestedDestination(destination, tolerance);
     }
 
     private void MoveOrHold(Vector3 destination, Vector3 watchPosition)
@@ -1168,7 +1181,7 @@ public sealed class DefenderAgentAI : MonoBehaviour
             return;
         }
 
-        motor.Stop();
+        motor.PauseMovement();
         motor.FacePosition(watchPosition);
     }
 
@@ -1199,16 +1212,9 @@ public sealed class DefenderAgentAI : MonoBehaviour
     {
         ResolveReferences();
         coordinator?.ReportDefenderDamaged(gameObject, attacker);
-        bool immediateThreat = attacker != null && sensors != null &&
-                               FlatDistance(transform.position, attacker.transform.position) <=
-                               closeEnemyDistance && sensors.HasLineOfSight(attacker);
-        if (currentState == DefenderCombatState.Defusing &&
-            objectiveManager != null && objectiveManager.ActiveDefuser == gameObject &&
-            coordinator != null && !coordinator.BombTimerIsCritical &&
-            (amount >= defuseDamageCancelThreshold || immediateThreat))
-        {
-            objectiveManager.CancelDefuse(gameObject);
-        }
+        // Defusing is a committed interaction. ObjectiveManager still cancels on
+        // death, invalid range, or round end, but damage must not restart combat.
+        if (objectiveManager != null && objectiveManager.ActiveDefuser == gameObject) return;
 
         forceReposition = true;
     }

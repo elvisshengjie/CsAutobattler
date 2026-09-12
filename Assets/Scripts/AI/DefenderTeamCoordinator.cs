@@ -1387,6 +1387,59 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
                Time.time >= confirmedAlertTime + rotationDelay;
     }
 
+    private readonly Dictionary<GameObject, float> lastOutnumberedThreatTime = new Dictionary<GameObject, float>();
+
+    public static bool ShouldFightBeforeStartingDefuse(int defenders, int attackers,
+        bool alreadyDefusing, bool visibleThreat, float clearSeconds,
+        float bombSeconds, float defuseSeconds, float urgentThreshold, bool withinDefuseRange = false)
+    {
+        bool duel = defenders == 1 && attackers == 1;
+        if (alreadyDefusing || (duel && withinDefuseRange) || (!duel && attackers <= defenders)) return false;
+        bool urgentAndPossible = bombSeconds >= defuseSeconds + 0.1f &&
+            bombSeconds <= Mathf.Max(urgentThreshold, defuseSeconds + 1f);
+        return !urgentAndPossible && (visibleThreat || clearSeconds < 1f);
+    }
+
+    public bool ShouldFightBeforeDefuse(GameObject defender, GameObject visibleAttacker)
+    {
+        if (defender == null || roundManager == null || objectiveManager == null ||
+            roundManager.CurrentState != RoundState.BombPlanted) return false;
+        GetLivingTeamCounts(out int defenders, out int attackers);
+        AgentSensors sensors = defender.GetComponent<AgentSensors>();
+        bool visible = visibleAttacker != null && sensors != null && sensors.CanDetect(visibleAttacker);
+        if (visible) lastOutnumberedThreatTime[defender] = Time.time;
+        float clearSeconds = lastOutnumberedThreatTime.TryGetValue(defender, out float lastSeen)
+            ? Time.time - lastSeen : Mathf.Infinity;
+        return ShouldFightBeforeStartingDefuse(defenders, attackers,
+            objectiveManager.ActiveDefuser == defender, visible, clearSeconds,
+            roundManager.BombTimeRemaining, roundManager.defuseDuration, bombTimerRiskThreshold,
+            objectiveManager.ActiveBomb != null && FlatDistance(defender.transform.position,
+                objectiveManager.ActiveBomb.transform.position) <= defuseStartDistance);
+    }
+
+    private void GetLivingTeamCounts(out int defenders, out int attackers)
+    {
+        defenders = 0;
+        attackers = 0;
+        foreach (AgentStats unit in FindObjectsByType<AgentStats>(FindObjectsInactive.Exclude))
+        {
+            HealthSystem unitHealth = unit.GetComponent<HealthSystem>();
+            if (unitHealth == null || unitHealth.IsDead) continue;
+            if (unit.team == roundManager.defendingTeam) defenders++;
+            else if (unit.team == roundManager.attackingTeam) attackers++;
+        }
+    }
+
+    private bool HasDuelDefusePriority(GameObject defender)
+    {
+        if (roundManager == null || objectiveManager == null || objectiveManager.ActiveBomb == null)
+            return false;
+        GetLivingTeamCounts(out int defenders, out int attackers);
+        return defenders == 1 && attackers == 1 &&
+            (FlatDistance(defender.transform.position, objectiveManager.ActiveBomb.transform.position)
+                <= defuseStartDistance || BombTimerIsCritical);
+    }
+
     public bool ShouldPrioritizeDefuse(
         GameObject defender,
         GameObject visibleAttacker)
@@ -1397,9 +1450,11 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
             return false;
         }
 
+        if (ShouldFightBeforeDefuse(defender, visibleAttacker)) return false;
         AssignDefuserIfNeeded();
         bool isDesignated = designatedDefuser != null &&
                             designatedDefuser.gameObject == defender;
+        if (isDesignated && HasDuelDefusePriority(defender)) return true;
         bool attackersAlive = roundManager.AreAttackersAlive;
         bool timerCritical = BombTimerIsCritical;
         bool immediateThreat = IsImmediateThreatToDefender(
@@ -1477,6 +1532,10 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
             return false;
         }
 
+        if (objectiveManager.ActiveDefuser == defender) return true;
+        if (ShouldFightBeforeDefuse(defender, visibleAttacker)) return false;
+        if (roundManager.BombTimeRemaining < roundManager.defuseDuration + 0.1f) return false;
+
         Vector3 bombPosition = objectiveManager.ActiveBomb.transform.position;
         if (FlatDistance(defender.transform.position, bombPosition) > defuseStartDistance)
         {
@@ -1487,6 +1546,8 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
         {
             Debug.Log("Defender reached defuse range");
         }
+
+        if (HasDuelDefusePriority(defender)) return true;
 
         if (!roundManager.AreAttackersAlive)
         {
@@ -2925,6 +2986,7 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
 
     private void OnRoundStateChanged(RoundState state)
     {
+        if (state != RoundState.BombPlanted) lastOutnumberedThreatTime.Clear();
         if (state == RoundState.Preparation)
         {
             alertA.state = DefenderSiteAlertState.None;

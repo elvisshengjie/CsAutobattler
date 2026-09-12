@@ -46,8 +46,6 @@ public class AgentMotor : MonoBehaviour
 
     [Header("Target Stability")]
     [SerializeField] private float minTargetSwitchInterval = 0.75f;
-    [Tooltip("A target this far from the current request is a new objective and switches immediately.")]
-    [SerializeField] private float targetSwitchScoreMargin = 2f;
 
     [Header("Stuck Recovery")]
     [SerializeField] private float stuckDistanceThreshold = 0.05f;
@@ -101,6 +99,9 @@ public class AgentMotor : MonoBehaviour
     private Vector3 lastAvoidanceDirection;
     private Vector3 smoothedSeparation;
     private bool hasDestination;
+    private bool movementPaused;
+    private Vector3 facingPosition;
+    private float facingUntil;
     private bool hasPendingDestination;
     private bool hasReservedSlot;
     private bool exactObjectiveMovement;
@@ -162,7 +163,7 @@ public class AgentMotor : MonoBehaviour
 
     private void Update()
     {
-        if (!hasDestination)
+        if (!hasDestination || movementPaused)
         {
             ResetStuckTracking();
             UpdateDiagnostics();
@@ -223,7 +224,7 @@ public class AgentMotor : MonoBehaviour
                                      gameObject,
                                      false);
             currentTargetValid &= reservationValid;
-            if (currentTargetValid)
+            if (currentTargetValid && hasResolvedRequest)
             {
                 RefreshPath();
                 if (currentPath == null &&
@@ -267,6 +268,7 @@ public class AgentMotor : MonoBehaviour
 
     public void MoveTo(Vector3 newDestination)
     {
+        movementPaused = false;
         bool wasExactObjective = exactObjectiveMovement;
         exactObjectiveMovement = false;
         if (!hasDestination || wasExactObjective)
@@ -278,6 +280,7 @@ public class AgentMotor : MonoBehaviour
         float change = FlatDistance(requestedDestination, newDestination);
         if (change <= Mathf.Max(0.1f, waypointReachDistance * 0.65f))
         {
+            hasPendingDestination = false;
             return;
         }
 
@@ -288,10 +291,9 @@ public class AgentMotor : MonoBehaviour
             return;
         }
 
-        bool significantChange = change >= targetSwitchScoreMargin;
         bool intervalElapsed = Time.time >=
                                lastTargetSwitchTime + minTargetSwitchInterval;
-        if (significantChange || intervalElapsed || !currentTargetValid || isStuck)
+        if (intervalElapsed || !currentTargetValid)
         {
             ApplyValidatedDestination(newDestination, false);
             return;
@@ -305,6 +307,7 @@ public class AgentMotor : MonoBehaviour
 
     public void ForceMoveTo(Vector3 newDestination)
     {
+        movementPaused = false;
         exactObjectiveMovement = false;
         recoveringLocally = false;
         hasPendingDestination = false;
@@ -328,6 +331,7 @@ public class AgentMotor : MonoBehaviour
     /// </summary>
     public void MoveToExactObjective(Vector3 newDestination)
     {
+        movementPaused = false;
         bool modeChanged = !exactObjectiveMovement;
         float change = hasDestination
             ? FlatDistance(requestedDestination, newDestination)
@@ -350,8 +354,8 @@ public class AgentMotor : MonoBehaviour
 
     public bool HasReachedRequestedDestination(Vector3 request, float tolerance)
     {
-        return hasResolvedRequest &&
-               FlatDistance(requestedDestination, request) <= waypointReachDistance &&
+        return hasResolvedRequest && !recoveringLocally &&
+               FlatDistance(requestedDestination, request) <= Mathf.Max(0.1f, waypointReachDistance * 0.65f) &&
                FlatDistance(transform.position, destination) <=
                GetEffectiveArrivalTolerance(tolerance);
     }
@@ -386,6 +390,7 @@ public class AgentMotor : MonoBehaviour
 
     public void Stop()
     {
+        movementPaused = false;
         exactObjectiveMovement = false;
         hasDestination = false;
         hasPendingDestination = false;
@@ -402,8 +407,17 @@ public class AgentMotor : MonoBehaviour
         ResetStuckTracking();
     }
 
+    // A combat hold keeps its route and avoidance side for the next movement request.
+    public void PauseMovement()
+    {
+        movementPaused = true;
+        hasPendingDestination = false;
+    }
+
     public void FacePosition(Vector3 targetPosition)
     {
+        facingPosition = targetPosition;
+        facingUntil = Time.time + 0.15f;
         Vector3 direction = targetPosition - transform.position;
         direction.y = 0f;
         if (direction.sqrMagnitude <= 0.001f)
@@ -445,6 +459,7 @@ public class AgentMotor : MonoBehaviour
                          gameObject,
                          false);
 
+        bool resolvedOriginalRequest = valid;
         if (!valid && pathfinder != null)
         {
             valid = pathfinder.TryGetNearestWalkablePosition(
@@ -521,9 +536,10 @@ public class AgentMotor : MonoBehaviour
         }
 
         requestedDestination = requested;
+        if (!hasDestination) ResetStuckTracking();
         destination = resolved;
         hasDestination = true;
-        hasResolvedRequest = true;
+        hasResolvedRequest = resolvedOriginalRequest;
         hasReservedSlot = slotReserved;
         currentTargetValid = true;
         currentPath = resolvedPath;
@@ -571,7 +587,10 @@ public class AgentMotor : MonoBehaviour
         }
 
         float distanceMoved = FlatDistance(transform.position, lastPosition);
-        if (distanceMoved >= stuckDistanceThreshold)
+        // Net displacement of roughly a body width counts as movement. A cached
+        // path anchor can lie behind an agent after replanning or corner avoidance.
+        // Small back-and-forth jitter still cannot continually reset this clock.
+        if (distanceMoved >= Mathf.Max(0.5f, agentRadius * 2f))
         {
             lastPosition = transform.position;
             lastMoveProgressTime = Time.time;
@@ -730,7 +749,7 @@ public class AgentMotor : MonoBehaviour
 
     private void FollowPath()
     {
-        if (body == null || stats == null || currentPath == null || currentPath.Count == 0 ||
+        if (movementPaused || body == null || stats == null || currentPath == null || currentPath.Count == 0 ||
             currentWaypointIndex >= currentPath.Count)
         {
             return;
@@ -741,8 +760,8 @@ public class AgentMotor : MonoBehaviour
         targetWaypoint.y = currentPosition.y;
 
         bool isFinalWaypoint = currentWaypointIndex == currentPath.Count - 1;
-        float waypointTolerance = exactObjectiveMovement && isFinalWaypoint
-            ? ExactObjectiveReachDistance
+        float waypointTolerance = isFinalWaypoint
+            ? GetEffectiveArrivalTolerance(targetArrivalDistance)
             : waypointReachDistance;
         if (FlatDistance(currentPosition, targetWaypoint) <= waypointTolerance)
         {
@@ -795,10 +814,10 @@ public class AgentMotor : MonoBehaviour
             return;
         }
 
-        float stepDistance = baseStepDistance * GetCrowdSpeedScale(
+        float stepDistance = Mathf.Min(FlatDistance(currentPosition, targetWaypoint), baseStepDistance * GetCrowdSpeedScale(
             currentPosition,
             safeDirection,
-            baseStepDistance);
+            baseStepDistance));
         if (stepDistance <= 0.001f)
         {
             pathBlocked = true;
@@ -806,7 +825,10 @@ public class AgentMotor : MonoBehaviour
         }
 
         pathBlocked = false;
-        Quaternion movementRotation = Quaternion.LookRotation(safeDirection, Vector3.up);
+        Vector3 facingDirection = facingUntil > Time.time ? facingPosition - currentPosition : safeDirection;
+        facingDirection.y = 0f;
+        if (facingDirection.sqrMagnitude < 0.001f) facingDirection = safeDirection;
+        Quaternion movementRotation = Quaternion.LookRotation(facingDirection, Vector3.up);
         body.MoveRotation(Quaternion.RotateTowards(
             body.rotation,
             movementRotation,
@@ -1590,7 +1612,8 @@ public class AgentMotor : MonoBehaviour
             Debug.Log(
                 $"AI status [{name}] state={GetCurrentAIState()}, role={roleDebug}, " +
                 $"objective={objectiveDebug}, target={currentTargetDebug}, " +
-                $"path={pathStatusDebug}, enemyVisible={enemyVisibleDebug}, " +
+                $"path={pathStatusDebug}, paused={movementPaused}, recovering={recoveringLocally}, " +
+                $"resolved={hasResolvedRequest}, position={transform.position:F2}, destination={destination:F2}, enemyVisible={enemyVisibleDebug}, " +
                 $"bombPlanted={bombPlantedDebug}, reason={inactivityReasonDebug}");
         }
     }

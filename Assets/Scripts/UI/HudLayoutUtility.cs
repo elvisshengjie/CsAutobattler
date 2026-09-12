@@ -3,6 +3,23 @@ using UnityEngine.UI;
 
 public static class HudLayoutUtility
 {
+    public static readonly Color TacticalPanel = new Color(0.075f, 0.085f, 0.095f, 0.97f);
+    public static readonly Color TacticalSurface = new Color(0.12f, 0.135f, 0.15f, 1f);
+    public static readonly Color TacticalAccent = new Color(0.91f, 0.69f, 0.32f, 1f);
+    public static readonly Color TacticalText = new Color(0.94f, 0.93f, 0.89f, 1f);
+
+    public static void DrawTacticalPanel(Rect rect)
+    {
+        Color previous = GUI.color;
+        GUI.color = new Color(0f, 0f, 0f, 0.25f);
+        GUI.DrawTexture(new Rect(rect.x + 2f, rect.y + 4f, rect.width, rect.height), Texture2D.whiteTexture);
+        GUI.color = TacticalPanel;
+        GUI.DrawTexture(rect, Texture2D.whiteTexture);
+        GUI.color = TacticalAccent;
+        GUI.DrawTexture(new Rect(rect.x, rect.y + 12f, 3f, 22f), Texture2D.whiteTexture);
+        GUI.color = previous;
+    }
+
     private const string CanvasName = "EditableHudCanvas";
 
     public static bool TryCopyPreviewRect(string objectName, RectTransform target)

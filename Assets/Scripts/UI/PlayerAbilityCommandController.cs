@@ -838,8 +838,8 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
 
     private void OnGUI()
     {
-        const float width = 390f;
-        float height = selectedAgent != null ? 200f : 145f;
+        const float width = 400f;
+        float height = selectedAgent != null ? 240f : 150f;
         Rect panel;
         bool usingPreviewLayout = HudLayoutUtility.TryGetGuiRect(
             "ManualAbilityPreview", out panel);
@@ -858,10 +858,10 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
             // height for every line even at small Game view resolutions.
             panel.height = Mathf.Max(panel.height, height);
         }
-        GUI.Box(panel, GUIContent.none);
+        HudLayoutUtility.DrawTacticalPanel(panel);
 
         Color usesColor = remainingUses > 0
-            ? new Color(1f, 0.35f, 0.25f)
+            ? HudLayoutUtility.TacticalAccent
             : new Color(0.65f, 0.65f, 0.65f);
         GUIStyle title = new GUIStyle(GUI.skin.label)
         {
@@ -875,15 +875,15 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
             alignment = TextAnchor.UpperRight,
             fontSize = 23
         };
-        const float horizontalPadding = 12f;
-        const float countWidth = 58f;
+        const float horizontalPadding = 18f;
+        const float countWidth = 80f;
         const float titleGap = 6f;
         float titleWidth = Mathf.Max(
             0f,
             panel.width - horizontalPadding * 2f - countWidth - titleGap);
         GUI.Label(
             new Rect(panel.x + horizontalPadding, panel.y + 8f, titleWidth, 28f),
-            "MANUAL ABILITIES",
+            "MANUAL",
             title);
         GUI.Label(
             new Rect(
@@ -902,15 +902,15 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
             normal = { textColor = Color.white }
         };
         string line = selectedAgent != null && selectedRole != null
-            ? $"{selectedAgent.name} - {selectedRole.SelectedRole}  [AI AUTO-CAST PAUSED]\n" +
-              $"{currentHint}\nRight-click / Esc to cancel"
-            : "Left-click a player to command their role ability";
+            ? $"{selectedRole.SelectedRole}  /  ABILITY SELECTED\n" +
+              $"{currentHint}\nRight-click or Esc to cancel."
+            : "Left-click a player unit to activate its role ability.";
         if (Time.unscaledTime < feedbackUntil && !string.IsNullOrEmpty(feedback))
         {
             line = feedback + (selectedAgent != null ? "\n" + line : string.Empty);
         }
         GUI.Label(
-            new Rect(panel.x + 12f, panel.y + 40f, panel.width - 24f, panel.height - 46f),
+            new Rect(panel.x + 18f, panel.y + 48f, panel.width - 36f, panel.height - 60f),
             line,
             body);
 
@@ -947,7 +947,7 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
                     toastHeight);
             }
 
-            GUI.Box(toast, GUIContent.none);
+            HudLayoutUtility.DrawTacticalPanel(toast);
             GUI.Label(
                 new Rect(toast.x + 8f, toast.y + 4f, toast.width - 16f, toast.height - 8f),
                 feedback,

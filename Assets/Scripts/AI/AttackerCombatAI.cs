@@ -387,7 +387,7 @@ public sealed class AttackerCombatAI : MonoBehaviour
                     return true;
                 }
 
-                motor.Stop();
+                motor.PauseMovement();
                 motor.FacePosition(targetPosition);
                 currentState = AttackerCombatState.InCover;
                 coverCycleStartedAt = Time.time;
@@ -396,7 +396,7 @@ public sealed class AttackerCombatAI : MonoBehaviour
                 return true;
 
             case AttackerCombatState.InCover:
-                motor.Stop();
+                motor.PauseMovement();
                 motor.FacePosition(targetPosition);
                 if ((Time.time >= stateUntil || Time.time >= coverCycleStartedAt + maxCoverIdleTime) && !isReloading)
                 {
@@ -446,7 +446,7 @@ public sealed class AttackerCombatAI : MonoBehaviour
                     return true;
                 }
 
-                motor.Stop();
+                motor.PauseMovement();
                 if (!hideTimerStarted)
                 {
                     hideTimerStarted = true;
@@ -620,7 +620,7 @@ public sealed class AttackerCombatAI : MonoBehaviour
         forceNewCover = true;
         hasValidPeek = false;
         hideTimerStarted = false;
-        motor.Stop();
+        motor.PauseMovement();
     }
 
     private bool IsAggressiveTactic()
@@ -678,7 +678,9 @@ public sealed class AttackerCombatAI : MonoBehaviour
         }
 
         motor.MoveTo(destination);
-        return motor.HasDestination && !motor.HasReachedDestination(tolerance);
+        // MoveTo can defer this request while the previous destination is already reached.
+        // Only arrival at this request may advance the combat state to holding cover.
+        return !motor.HasReachedRequestedDestination(destination, tolerance);
     }
 
     private void OnDamaged(HealthSystem damaged, float amount, GameObject attacker)

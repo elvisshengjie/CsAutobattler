@@ -59,7 +59,7 @@ public static class TeamTacticDefinitions
             InitialTeamTactic.FastExecute =>
                 "Rush one site, overwhelm its defenders, and plant immediately.",
             InitialTeamTactic.FeintAndRotate =>
-                "Fake one site with three players while two prepare the real hit.",
+                "Probe and rotate with a small squad; larger squads send a distraction while the main group prepares the hit.",
             InitialTeamTactic.SplitPush =>
                 "Attack one site from two routes and collapse from multiple angles.",
             InitialTeamTactic.SilentInfiltration =>

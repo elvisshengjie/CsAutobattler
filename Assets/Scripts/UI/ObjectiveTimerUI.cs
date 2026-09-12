@@ -195,10 +195,10 @@ public class ObjectiveTimerUI : MonoBehaviour
 
         panelTexture = new Texture2D(1, 1);
         panelTexture.name = "ObjectiveTimerPanelBackground";
-        panelTexture.SetPixel(0, 0, new Color(0.04f, 0.04f, 0.05f, 0.92f));
+        panelTexture.SetPixel(0, 0, HudLayoutUtility.TacticalPanel);
         panelTexture.Apply();
 
-        panelStyle = new GUIStyle(GUI.skin.box);
+        panelStyle = new GUIStyle(GUI.skin.box) { normal = { background = panelTexture }, border = new RectOffset(0, 0, 0, 0) };
         backgroundStyle = new GUIStyle(GUI.skin.box)
         {
             normal = { background = panelTexture },
@@ -229,12 +229,12 @@ public class ObjectiveTimerUI : MonoBehaviour
         {
             alignment = TextAnchor.MiddleCenter,
             fontSize = 24,
-            normal = { textColor = new Color(0.2f, 0.86f, 0.96f, 1f) }
+            normal = { textColor = HudLayoutUtility.TacticalAccent }
         };
         progressBackgroundTexture = CreateTexture("DefuseProgressBackground",
             new Color(0.12f, 0.13f, 0.15f, 1f));
         defuseFillTexture = CreateTexture("DefuseProgressFill",
-            new Color(0.12f, 0.78f, 0.92f, 1f));
+            HudLayoutUtility.TacticalAccent);
         tooLateFillTexture = CreateTexture("DefuseTooLateFill",
             new Color(0.95f, 0.18f, 0.12f, 1f));
     }

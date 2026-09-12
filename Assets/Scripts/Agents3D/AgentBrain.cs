@@ -18,6 +18,8 @@ public class AgentBrain : MonoBehaviour
     private AttackerCombatAI attackerCombatAI;
     private AgentRole role;
     private WeaponLoadout loadout;
+    private GameObject committedTarget;
+    private float targetCommitUntil;
 
     public GameObject CurrentTarget { get; private set; }
 
@@ -66,6 +68,19 @@ public class AgentBrain : MonoBehaviour
             CurrentTarget = role.SelectPreferredTarget(CurrentTarget, sensors);
         }
 
+        // Keep a valid firing target briefly; urgent defuse threats and commands override it.
+        bool priorityTarget = ObjectiveManager.Instance != null &&
+                              ObjectiveManager.Instance.ActiveDefuser == CurrentTarget && CurrentTarget != null;
+        if (!suppressCombatTargets && !midRoundOverride && !priorityTarget &&
+            CurrentTarget != null && committedTarget != null &&
+            Time.time < targetCommitUntil && sensors.CanDetect(committedTarget))
+            CurrentTarget = committedTarget;
+        if (CurrentTarget != committedTarget)
+        {
+            committedTarget = CurrentTarget;
+            targetCommitUntil = Time.time + 0.6f;
+        }
+
         if (CurrentTarget != null)
         {
             memory.ObserveEnemy(CurrentTarget);
@@ -106,7 +121,7 @@ public class AgentBrain : MonoBehaviour
             if (distance <= loadout.MaximumRange &&
                 sensors.HasLineOfSight(CurrentTarget))
             {
-                motor.Stop();
+                motor.PauseMovement();
                 motor.FacePosition(CurrentTarget.transform.position);
                 if (weapon != null)
                 {

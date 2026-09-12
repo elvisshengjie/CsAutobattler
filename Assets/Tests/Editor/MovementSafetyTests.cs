@@ -530,6 +530,169 @@ public class MovementSafetyTests
             Is.False);
     }
 
+    [TestCase(1, 0, 0)]
+    [TestCase(2, 1, 0)]
+    [TestCase(3, 1, 1)]
+    [TestCase(4, 2, 2)]
+    [TestCase(5, 2, 2)]
+    public void SquadSizes_HaveExpectedSplitAndFeintCounts(int count, int splitCount, int fakeCount)
+    {
+        int actual = 0;
+        for (int i = 0; i < count; i++)
+            if (TeamTacticExecutor.IsSecondSplitGroupIndex(i, count)) actual++;
+        Assert.That(actual, Is.EqualTo(splitCount));
+        Assert.That(TeamTacticExecutor.GetFeintFakeCount(count), Is.EqualTo(fakeCount));
+    }
+
+    [Test]
+    public void LargeCompetingDestination_WaitsForCommitment_AndLatestRequestCancelsPending()
+    {
+        AgentMotor motor = CreateAgent("Stable Intent", Vector3.zero);
+        Vector3 first = new Vector3(8f, 0f, 0f);
+        motor.MoveTo(first);
+        motor.MoveTo(new Vector3(-8f, 0f, 0f));
+        Assert.That(motor.RequestedDestination, Is.EqualTo(first));
+        motor.MoveTo(first);
+        Assert.That(typeof(AgentMotor).GetField("hasPendingDestination",
+            BindingFlags.Instance | BindingFlags.NonPublic).GetValue(motor), Is.False);
+    }
+
+    [Test]
+    public void CombatPause_PreservesRoute_AndMoveResumesIt()
+    {
+        AgentMotor motor = CreateAgent("Paused Agent", Vector3.zero);
+        motor.MoveTo(new Vector3(8f, 0f, 0f));
+        Vector3 slot = motor.Destination;
+        motor.PauseMovement();
+        Assert.That(motor.HasDestination, Is.True);
+        Assert.That(motor.Destination, Is.EqualTo(slot));
+        motor.MoveTo(motor.RequestedDestination);
+        Assert.That(typeof(AgentMotor).GetField("movementPaused",
+            BindingFlags.Instance | BindingFlags.NonPublic).GetValue(motor), Is.False);
+    }
+
+    [Test]
+    public void SidewaysVibration_DoesNotResetProgressClock()
+    {
+        AgentMotor motor = CreateAgent("Vibrating Agent", Vector3.zero);
+        motor.MoveTo(new Vector3(8f, 0f, 0f));
+        FieldInfo clock = typeof(AgentMotor).GetField("lastMoveProgressTime",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        float before = Time.time - 0.25f;
+        clock.SetValue(motor, before);
+        motor.transform.position += Vector3.forward * 0.1f;
+        typeof(AgentMotor).GetMethod("UpdateStuckDetection",
+            BindingFlags.Instance | BindingFlags.NonPublic).Invoke(motor, null);
+        Assert.That((float)clock.GetValue(motor), Is.EqualTo(before));
+    }
+
+    [Test]
+    public void FinalWaypoint_DoesNotFinishOutsideTacticalArrivalTolerance()
+    {
+        AgentMotor motor = CreateAgent("Arrival Agent", Vector3.zero);
+        motor.MoveTo(new Vector3(8f, 0f, 0f));
+        Vector3 goal = motor.Destination;
+        typeof(AgentMotor).GetField("body", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(motor, motor.GetComponent<Rigidbody>());
+        typeof(AgentMotor).GetField("stats", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(motor, motor.GetComponent<AgentStats>());
+        motor.GetComponent<Rigidbody>().position = goal - Vector3.right * 0.27f;
+        typeof(AgentMotor).GetField("currentPath", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(motor, new List<Vector3> { goal });
+        typeof(AgentMotor).GetMethod("FollowPath", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(motor, null);
+        Assert.That(typeof(AgentMotor).GetField("currentWaypointIndex",
+            BindingFlags.Instance | BindingFlags.NonPublic).GetValue(motor), Is.EqualTo(0));
+    }
+
+    [TestCase(typeof(AttackerCombatAI), 8f)]
+    [TestCase(typeof(DefenderAgentAI), 8f)]
+    [TestCase(typeof(AttackerCombatAI), 0.25f)]
+    [TestCase(typeof(DefenderAgentAI), 0.25f)]
+    public void CombatMove_QueuedRequestDoesNotReportArrivalAtPreviousCover(System.Type aiType, float offset)
+    {
+        AgentMotor motor = CreateAgent("Cover Transition", Vector3.zero);
+        Vector3 previous = new Vector3(8f, 0f, 0f);
+        motor.MoveTo(previous);
+        motor.transform.position = motor.Destination;
+        motor.PauseMovement();
+        Component combat = motor.gameObject.AddComponent(aiType);
+        aiType.GetField("motor", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(combat, motor);
+        Vector3 next = previous + Vector3.forward * offset;
+        bool moving = (bool)aiType.GetMethod("MoveTo", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(combat, new object[] { next, 0.65f });
+        Assert.That(moving, Is.True, "Old cover arrival must not enter a hold state for the new request.");
+        Assert.That(motor.HasReachedRequestedDestination(next, 0.65f), Is.False);
+        Assert.That(typeof(AgentMotor).GetField("hasPendingDestination", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(motor), Is.True);
+        // Expire commitment and let the motor accept the queued move.
+        typeof(AgentMotor).GetField("lastTargetSwitchTime", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(motor, Time.time - 2f);
+        motor.MoveTo(next);
+        Assert.That(motor.RequestedDestination, Is.EqualTo(next));
+        Assert.That(typeof(AgentMotor).GetField("movementPaused", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(motor), Is.False);
+    }
+
+    [Test]
+    public void RecoveryWaypointArrival_DoesNotCompleteOriginalObjective()
+    {
+        AgentMotor motor = CreateAgent("Recovery Arrival", Vector3.zero);
+        Vector3 objective = new Vector3(20f, 0f, 0f);
+        motor.MoveTo(objective);
+        typeof(AgentMotor).GetField("recoveringLocally", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(motor, true);
+        typeof(AgentMotor).GetField("destination", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(motor, motor.transform.position);
+        Assert.That(motor.HasReachedDestination(0.65f), Is.True);
+        Assert.That(motor.HasReachedRequestedDestination(objective, 0.65f), Is.False,
+            "An intermediate recovery step must not cause tactics to hold permanently.");
+    }
+
+    [Test]
+    public void MovingAroundCorner_ResetsStuckClock()
+    {
+        AgentMotor motor = CreateAgent("Corner Progress", Vector3.zero);
+        motor.MoveTo(new Vector3(20f, 0f, 0f));
+        FieldInfo clock = typeof(AgentMotor).GetField("lastMoveProgressTime",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        clock.SetValue(motor, Time.time - 2f);
+        // A valid detour can move sideways or away from the goal.
+        motor.transform.position = new Vector3(-1f, 0f, 1f);
+        typeof(AgentMotor).GetMethod("UpdateStuckDetection", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(motor, null);
+        Assert.That((float)clock.GetValue(motor), Is.EqualTo(Time.time));
+    }
+
+    [TestCase(2, 4, false, true, 0f, 30f, true)]
+    [TestCase(2, 4, true, true, 0f, 30f, false)]
+    [TestCase(2, 4, false, false, 0.5f, 30f, true)]
+    [TestCase(2, 4, false, false, 1f, 30f, false)]
+    [TestCase(4, 4, false, true, 0f, 30f, false)]
+    [TestCase(5, 4, false, true, 0f, 30f, false)]
+    [TestCase(2, 4, false, true, 0f, 6f, false)]
+    [TestCase(2, 4, false, true, 0f, 4f, true)]
+    [TestCase(2, 0, false, false, 0f, 30f, false)]
+    public void OutnumberedDefusePolicy_RespectsThreatsCommitmentAndTimer(int defenders, int attackers,
+        bool defusing, bool visible, float clearSeconds, float remaining, bool expected)
+    {
+        Assert.That(DefenderTeamCoordinator.ShouldFightBeforeStartingDefuse(defenders, attackers,
+            defusing, visible, clearSeconds, remaining, 5f, 7f), Is.EqualTo(expected));
+    }
+
+    [TestCase(false, true, 30f, false, true)]
+    [TestCase(true, true, 30f, false, false)]
+    [TestCase(false, true, 6f, false, false)]
+    [TestCase(false, true, 30f, true, false)]
+    [TestCase(false, false, 30f, false, false)]
+    public void DuelDefusePolicy_FightsDetectedThreatExceptNearBombOrUrgent(
+        bool nearBomb, bool detectedThreat, float remaining, bool alreadyDefusing, bool expected)
+    {
+        // Detected threats are supplied by AgentSensors, which includes hostile turrets.
+        Assert.That(DefenderTeamCoordinator.ShouldFightBeforeStartingDefuse(1, 1,
+            alreadyDefusing, detectedThreat, 2f, remaining, 5f, 7f, nearBomb), Is.EqualTo(expected));
+    }
+
     private static AgentMotor CreateAgent(string name, Vector3 position)
     {
         GameObject agent = new GameObject(name);

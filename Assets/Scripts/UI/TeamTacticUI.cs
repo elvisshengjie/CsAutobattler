@@ -10,10 +10,10 @@ using UnityEngine.UI;
 [DisallowMultipleComponent]
 public sealed class TeamTacticUI : MonoBehaviour
 {
-    private static readonly Color InactiveColor = new Color(0.10f, 0.12f, 0.15f, 1f);
-    private static readonly Color ActiveColor = new Color(0.08f, 0.48f, 0.60f, 1f);
-    private static readonly Color AccentColor = new Color(0.20f, 0.86f, 0.96f, 1f);
-    private static readonly Color TextColor = new Color(0.94f, 0.97f, 1f, 1f);
+    private static readonly Color InactiveColor = HudLayoutUtility.TacticalSurface;
+    private static readonly Color ActiveColor = new Color(0.30f, 0.25f, 0.17f, 1f);
+    private static readonly Color AccentColor = HudLayoutUtility.TacticalAccent;
+    private static readonly Color TextColor = HudLayoutUtility.TacticalText;
     private static Sprite circleButtonSprite;
 
     private TeamTacticManager tacticManager;
@@ -120,12 +120,12 @@ public sealed class TeamTacticUI : MonoBehaviour
     private void BuildInitialSelection(Transform parent)
     {
         initialOverlay = CreatePanel("InitialTacticOverlay", parent,
-            Color.clear);
+            new Color(0.015f, 0.02f, 0.025f, 0.80f));
         RectTransform overlayRect = initialOverlay.GetComponent<RectTransform>();
         StretchToParent(overlayRect);
 
         GameObject window = CreatePanel("SelectionWindow", initialOverlay.transform,
-            new Color(0.055f, 0.07f, 0.095f, 1f));
+            HudLayoutUtility.TacticalPanel);
         initialTacticWindow = window;
         SetRect(window.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f),
             new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(980f, 520f),
@@ -133,7 +133,7 @@ public sealed class TeamTacticUI : MonoBehaviour
         AddOutline(window, AccentColor, new Vector2(2f, -2f));
 
         Text title = CreateText("Title", window.transform,
-            "CHOOSE INITIAL TEAM TACTIC", 30, FontStyle.Bold, TextAnchor.MiddleCenter);
+            "CHOOSE YOUR APPROACH", 30, FontStyle.Bold, TextAnchor.MiddleCenter);
         SetRect(title.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
             new Vector2(0f, -48f), new Vector2(960f, 55f), new Vector2(0.5f, 0.5f));
         title.color = AccentColor;
@@ -193,7 +193,7 @@ public sealed class TeamTacticUI : MonoBehaviour
     private void BuildRoleSelection(Transform parent)
     {
         roleSelectionWindow = CreatePanel("RoleSelectionWindow", parent,
-            new Color(0.055f, 0.07f, 0.095f, 1f));
+            HudLayoutUtility.TacticalPanel);
         SetRect(roleSelectionWindow.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f),
             new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(920f, 680f), new Vector2(0.5f, 0.5f));
         AddOutline(roleSelectionWindow, AccentColor, new Vector2(2f, -2f));
@@ -253,7 +253,7 @@ public sealed class TeamTacticUI : MonoBehaviour
     private void BuildLoadoutSelection(Transform parent)
     {
         loadoutSelectionWindow = CreatePanel("LoadoutSelectionWindow", parent,
-            new Color(0.055f, 0.07f, 0.095f, 1f));
+            HudLayoutUtility.TacticalPanel);
         SetRect(loadoutSelectionWindow.GetComponent<RectTransform>(),
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero,
             new Vector2(1120f, 720f), new Vector2(0.5f, 0.5f));
@@ -622,7 +622,7 @@ public sealed class TeamTacticUI : MonoBehaviour
         image.raycastTarget = true;
 
         Outline outline = buttonObject.GetComponent<Outline>();
-        outline.effectColor = new Color(0.28f, 0.33f, 0.39f, 1f);
+        outline.effectColor = new Color(0f, 0f, 0f, 0.3f);
         outline.effectDistance = new Vector2(1f, -1f);
 
         Button button = buttonObject.GetComponent<Button>();
@@ -632,12 +632,12 @@ public sealed class TeamTacticUI : MonoBehaviour
         colors.highlightedColor = new Color(1.35f, 1.35f, 1.35f, 1f);
         colors.pressedColor = new Color(0.75f, 0.82f, 0.88f, 1f);
         colors.selectedColor = Color.white;
-        colors.fadeDuration = 0.08f;
+        colors.fadeDuration = 0.12f;
         button.colors = colors;
 
         Text text = CreateText("Label", buttonObject.transform, label, fontSize,
             FontStyle.Normal, TextAnchor.MiddleLeft);
-        StretchToParent(text.rectTransform, 18f, 18f, 10f, 10f);
+        StretchToParent(text.rectTransform, 24f, 24f, 16f, 16f);
         text.raycastTarget = false;
         text.supportRichText = true;
         return button;
@@ -737,7 +737,7 @@ public sealed class TeamTacticUI : MonoBehaviour
             Image image = pair.Value.GetComponent<Image>();
             Outline outline = pair.Value.GetComponent<Outline>();
             image.color = active ? ActiveColor : InactiveColor;
-            outline.effectColor = active ? AccentColor : new Color(0.28f, 0.33f, 0.39f, 1f);
+            outline.effectColor = active ? AccentColor : new Color(0f, 0f, 0f, 0.3f);
             outline.effectDistance = active ? new Vector2(2f, -2f) : new Vector2(1f, -1f);
 
             midRoundLabels[pair.Key].text = GetMidRoundLabel(pair.Key);
@@ -752,7 +752,7 @@ public sealed class TeamTacticUI : MonoBehaviour
             image.color = selectedPreference ? ActiveColor : InactiveColor;
             outline.effectColor = selectedPreference
                 ? AccentColor
-                : new Color(0.28f, 0.33f, 0.39f, 1f);
+                : new Color(0f, 0f, 0f, 0.3f);
         }
 
         if (plantInfoText != null)
@@ -927,8 +927,8 @@ public sealed class TeamTacticUI : MonoBehaviour
     private static void AddOutline(GameObject target, Color color, Vector2 distance)
     {
         Outline outline = target.AddComponent<Outline>();
-        outline.effectColor = color;
-        outline.effectDistance = distance;
+        outline.effectColor = new Color(0f, 0f, 0f, 0.30f);
+        outline.effectDistance = new Vector2(0f, -4f);
     }
 
     private static void SetRect(

@@ -677,10 +677,15 @@ public sealed class CampaignManager : MonoBehaviour
             return;
         }
 
-        float width = Mathf.Min(1080f, Screen.width - 40f);
-        float height = Mathf.Min(760f, Screen.height - 40f);
-        Rect panel = new Rect((Screen.width - width) * 0.5f, 20f, width, height);
+        float width = Mathf.Min(1120f, Screen.width - 40f);
+        float desiredHeight = screen == CampaignScreen.Preparation ? 900f : screen == CampaignScreen.StarterDraft ? (Screen.width < 800f ? 850f : 480f) : 400f;
+        float height = Mathf.Min(desiredHeight, Screen.height - 40f);
+        Rect panel = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
+        DrawSolidRect(new Rect(0, 0, Screen.width, Screen.height), new Color(0.015f, 0.02f, 0.025f, 0.78f));
+        DrawSolidRect(new Rect(panel.x + 6, panel.y + 8, panel.width, panel.height), new Color(0, 0, 0, 0.3f));
 
+        GUIStyle previousLabel = GUI.skin.label;
+        GUI.skin.label = new GUIStyle(previousLabel) { fontSize = 16, wordWrap = true, normal = { textColor = HudLayoutUtility.TacticalText }, margin = new RectOffset(4, 4, 5, 5) };
         GUIStyle previousBox = GUI.skin.box;
         GUIStyle previousButton = GUI.skin.button;
         GUIStyle previousToggle = GUI.skin.toggle;
@@ -709,8 +714,15 @@ public sealed class CampaignManager : MonoBehaviour
         }
 
         GUILayout.EndScrollView();
+        if (screen == CampaignScreen.Preparation)
+        {
+            GUILayout.Space(12f);
+            if (GUILayout.Button("CONFIRM SQUAD  /  CHOOSE TACTIC", PrimaryButtonStyle(), GUILayout.Height(52f)))
+                CommitDeploymentAndOpenTactics();
+        }
         GUILayout.EndArea();
 
+        GUI.skin.label = previousLabel;
         GUI.skin.box = previousBox;
         GUI.skin.button = previousButton;
         GUI.skin.toggle = previousToggle;
@@ -722,11 +734,12 @@ public sealed class CampaignManager : MonoBehaviour
     private void DrawStarterDraft()
     {
         GUILayout.Label("CHOOSE YOUR STARTER", TitleStyle());
-        GUILayout.Label("Choose one C-tier character. Role, weapon and ability belong to the character.");
+        GUILayout.Label("Recruit your first operator. Each brings a unique role, weapon and ability.");
         GUILayout.Space(20f);
         GUILayout.BeginHorizontal();
         for (int i = 0; i < starterOffers.Length; i++)
         {
+            if (i > 0 && Screen.width < 800f) { GUILayout.EndHorizontal(); GUILayout.BeginHorizontal(); }
             CampaignCharacter offer = starterOffers[i];
             GUILayout.BeginVertical(
                 new GUIContent(string.Empty, GetCharacterTooltip(offer)),
@@ -735,7 +748,7 @@ public sealed class CampaignManager : MonoBehaviour
             DrawCharacterCardHeader(offer);
             GUILayout.FlexibleSpace();
             int captured = i;
-            if (GUILayout.Button("SELECT", GUILayout.Height(42f)))
+            if (GUILayout.Button("SELECT OPERATOR", PrimaryButtonStyle(), GUILayout.Height(46f)))
             {
                 ChooseStarter(captured);
             }
@@ -809,10 +822,10 @@ public sealed class CampaignManager : MonoBehaviour
 
     private void DrawMenuFrame()
     {
-        DrawSolidRect(new Rect(0f, 0f, 1920f, 18f), new Color(0.08f, 0.78f, 0.83f, 0.75f));
+        DrawSolidRect(new Rect(0f, 0f, 1920f, 18f), new Color(0.91f, 0.69f, 0.32f, 0.6f));
         DrawSolidRect(new Rect(0f, 1062f, 1920f, 18f), new Color(0.025f, 0.08f, 0.11f, 0.95f));
-        DrawSolidRect(new Rect(238f, 285f, 1444f, 4f), new Color(0.2f, 0.86f, 0.96f, 0.4f));
-        DrawSolidRect(new Rect(460f, 290f, 1000f, 2f), new Color(0.2f, 0.86f, 0.96f, 0.2f));
+        DrawSolidRect(new Rect(238f, 285f, 1444f, 4f), new Color(0.91f, 0.69f, 0.32f, 0.25f));
+        DrawSolidRect(new Rect(460f, 290f, 1000f, 2f), new Color(0.91f, 0.69f, 0.32f, 0.10f));
     }
 
     private bool DrawMenuButton(Rect rect, string label)
@@ -822,7 +835,7 @@ public sealed class CampaignManager : MonoBehaviour
             new Color(0.015f, 0.045f, 0.055f, 0.85f));
         DrawSolidRect(
             new Rect(rect.x - 7f, rect.y - 7f, rect.width + 14f, rect.height + 14f),
-            new Color(0.16f, 0.78f, 0.82f, 0.95f));
+            new Color(0.15f, 0.17f, 0.19f, 0.95f));
         DrawSolidRect(rect, new Color(0.055f, 0.11f, 0.14f, 1f));
         return GUI.Button(rect, label, menuButtonStyle);
     }
@@ -835,7 +848,7 @@ public sealed class CampaignManager : MonoBehaviour
             new Color(0.01f, 0.035f, 0.045f, 0.85f));
         DrawSolidRect(
             new Rect(panel.x - 5f, panel.y - 5f, panel.width + 10f, panel.height + 10f),
-            new Color(0.16f, 0.78f, 0.82f, 0.95f));
+            new Color(0.15f, 0.17f, 0.19f, 0.95f));
         DrawSolidRect(panel, new Color(0.045f, 0.075f, 0.095f, 0.98f));
 
         GUIStyle heading = new GUIStyle(menuSubtitleStyle)
@@ -874,24 +887,29 @@ public sealed class CampaignManager : MonoBehaviour
 
     private void DrawPreparation()
     {
-        GUILayout.Label($"ROUND {CurrentRoundNumber} / {rounds.Length}: {CurrentRound.name}",
-            TitleStyle());
-        GUILayout.Label(CurrentRound.description);
-        GUILayout.Label(
-            $"Enemy tactic: {CurrentRound.enemyTactic}    |    " +
-            $"Enemy buff: {CurrentRound.enemyBuffName} — {CurrentRound.enemyBuffDescription}");
-        GUILayout.Space(8f);
-        GUILayout.Label(
-            $"GOLD: {gold}    |    NEXT CLEAR INCOME: " +
-            $"{CampaignBalance.BaseIncome} + {CampaignBalance.GetInterest(gold)} interest    |    " +
-            $"DEPLOYED: {GetDeployedCount()} / {CurrentRound.deploymentLimit}",
-            HeadingStyle());
-
+        GUILayout.Label($"ROUND {CurrentRoundNumber:00} / {rounds.Length:00}", HeadingStyle());
+        GUILayout.Label(CurrentRound.name, TitleStyle());
+        GUILayout.Space(10f);
+        GUILayout.BeginHorizontal();
+        DrawRoundMetric("AVAILABLE GOLD", gold.ToString());
+        DrawRoundMetric($"NEXT WIN ({CampaignBalance.BaseIncome} + {CampaignBalance.GetInterest(gold)} INTEREST)", $"+{CampaignBalance.BaseIncome + CampaignBalance.GetInterest(gold)} GOLD");
+        DrawRoundMetric("DEPLOYED", $"{GetDeployedCount()} / {CurrentRound.deploymentLimit}");
+        GUILayout.EndHorizontal();
+        GUILayout.Space(16f);
+        GUILayout.BeginVertical(campaignCardStyle);
+        GUILayout.Label("ENEMY OVERVIEW", HeadingStyle());
+        string tacticName = System.Text.RegularExpressions.Regex.Replace(CurrentRound.enemyTactic.ToString(), "([a-z])([A-Z])", "$1 $2");
+        GUILayout.Label($"Tactic: {tacticName}", CharacterNameStyle());
+        GUILayout.Label($"Buff: {CurrentRound.enemyBuffName}", CharacterNameStyle());
+        if (CurrentRound.enemyBuffName != "None") GUILayout.Label(CurrentRound.enemyBuffDescription);
+        GUILayout.Label($"Briefing: {CurrentRound.description}");
+        GUILayout.EndVertical();
         GUILayout.Space(14f);
-        GUILayout.Label("CHARACTER SHOP", HeadingStyle());
+        GUILayout.Label("RECRUIT OPERATORS", HeadingStyle());
         GUILayout.BeginHorizontal();
         for (int i = 0; i < shopOffers.Length; i++)
         {
+            if (i > 0 && Screen.width < 800f) { GUILayout.EndHorizontal(); GUILayout.BeginHorizontal(); }
             CampaignCharacter offer = shopOffers[i];
             string tooltip = offer != null ? GetCharacterTooltip(offer) : string.Empty;
             GUILayout.BeginVertical(
@@ -906,7 +924,7 @@ public sealed class CampaignManager : MonoBehaviour
             {
                 DrawCharacterCardHeader(offer);
                 int captured = i;
-                if (GUILayout.Button($"BUY — {offer.Cost} GOLD", GUILayout.Height(34f)))
+                if (GUILayout.Button($"BUY / {offer.Cost} GOLD", PrimaryButtonStyle(), GUILayout.Height(44f)))
                 {
                     BuyCharacter(captured);
                 }
@@ -916,16 +934,16 @@ public sealed class CampaignManager : MonoBehaviour
         GUILayout.EndHorizontal();
 
         GUILayout.BeginHorizontal();
-        if (GUILayout.Button($"REROLL ({CampaignBalance.RerollCost} GOLD)", GUILayout.Height(34f)))
+        if (GUILayout.Button($"REROLL ({CampaignBalance.RerollCost} GOLD)", GUILayout.Height(44f)))
         {
             RerollShop();
         }
-        bool newFrozen = GUILayout.Toggle(shopFrozen, " FREEZE SHOP FOR NEXT ROUND");
+        bool newFrozen = GUILayout.Toggle(shopFrozen, " Keep these offers next round");
         shopFrozen = newFrozen;
         GUILayout.EndHorizontal();
 
         GUILayout.Space(12f);
-        GUILayout.Label("UPGRADE / TACTIC OFFER", HeadingStyle());
+        GUILayout.Label("SQUAD UPGRADE", HeadingStyle());
         GUILayout.BeginVertical(GUI.skin.box);
         GUILayout.Label(CampaignBalance.GetUpgradeName(modifierOffer), HeadingStyle());
         GUILayout.Label(CampaignBalance.GetUpgradeDescription(modifierOffer));
@@ -934,7 +952,7 @@ public sealed class CampaignManager : MonoBehaviour
                 modifierOfferPurchased
                     ? "PURCHASED"
                     : $"BUY — {CampaignBalance.UpgradeCost} GOLD",
-                GUILayout.Height(34f)))
+                GUILayout.Height(44f)))
         {
             BuyModifier();
         }
@@ -946,7 +964,7 @@ public sealed class CampaignManager : MonoBehaviour
         foreach (CampaignCharacter character in roster)
         {
             GUILayout.BeginHorizontal(GUI.skin.box);
-            GUILayout.Label(character.DisplayName, GUILayout.Width(310f));
+            GUILayout.Label(character.DisplayName, GUILayout.Width(Mathf.Min(310f, Screen.width * 0.28f)));
             GUILayout.Label(GetRoleAbilityDescription(character.role));
             bool selected = GUILayout.Toggle(
                 character.deployed,
@@ -972,12 +990,6 @@ public sealed class CampaignManager : MonoBehaviour
             GUILayout.Label(feedback, HeadingStyle());
         }
 
-        GUILayout.Space(12f);
-        if (GUILayout.Button("LOCK DEPLOYMENT AND CHOOSE INITIAL TEAM TACTIC",
-                GUILayout.Height(48f)))
-        {
-            CommitDeploymentAndOpenTactics();
-        }
     }
 
     private void DrawResult()
@@ -993,7 +1005,7 @@ public sealed class CampaignManager : MonoBehaviour
         {
             if (GUILayout.Button(
                     currentRoundIndex + 1 >= rounds.Length
-                        ? "COMPLETE PROTOTYPE CAMPAIGN"
+                        ? "COMPLETE CAMPAIGN"
                         : "COLLECT INCOME AND CONTINUE",
                     GUILayout.Height(52f)))
             {
@@ -1034,9 +1046,9 @@ public sealed class CampaignManager : MonoBehaviour
     {
         return new GUIStyle(GUI.skin.label)
         {
-            fontSize = 28,
+            fontSize = 32,
             fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleCenter,
+            alignment = TextAnchor.MiddleLeft,
             normal = { textColor = Color.white }
         };
     }
@@ -1045,9 +1057,9 @@ public sealed class CampaignManager : MonoBehaviour
     {
         return new GUIStyle(GUI.skin.label)
         {
-            fontSize = 16,
+            fontSize = 17,
             fontStyle = FontStyle.Bold,
-            normal = { textColor = new Color(0.2f, 0.86f, 0.96f) }
+            normal = { textColor = HudLayoutUtility.TacticalAccent }
         };
     }
 
@@ -1060,29 +1072,29 @@ public sealed class CampaignManager : MonoBehaviour
 
         campaignPanelTexture = CreateSolidTexture(
             "CampaignPanel",
-            new Color(0.055f, 0.07f, 0.095f, 1f));
+            HudLayoutUtility.TacticalPanel);
         campaignCardTexture = CreateSolidTexture(
             "CampaignCard",
-            new Color(0.10f, 0.12f, 0.15f, 1f));
+            HudLayoutUtility.TacticalSurface);
         campaignButtonTexture = CreateSolidTexture(
             "CampaignButton",
-            new Color(0.10f, 0.12f, 0.15f, 1f));
+            HudLayoutUtility.TacticalSurface);
         campaignButtonHoverTexture = CreateSolidTexture(
             "CampaignButtonHover",
-            new Color(0.08f, 0.48f, 0.60f, 1f));
+            new Color(0.24f, 0.27f, 0.29f, 1f));
         campaignButtonPressedTexture = CreateSolidTexture(
             "CampaignButtonPressed",
-            new Color(0.055f, 0.34f, 0.44f, 1f));
+            new Color(0.08f, 0.09f, 0.10f, 1f));
         campaignAccentTexture = CreateSolidTexture(
             "CampaignAccent",
-            new Color(0.20f, 0.86f, 0.96f, 1f));
+            HudLayoutUtility.TacticalAccent);
         menuBackgroundTexture = CreateMenuBackgroundTexture();
 
         campaignPanelStyle = new GUIStyle(GUI.skin.box)
         {
             normal = { background = campaignPanelTexture },
-            padding = new RectOffset(24, 24, 22, 22),
-            border = new RectOffset(0, 0, 0, 0)
+            padding = new RectOffset(32, 32, 28, 28),
+            border = new RectOffset(6, 6, 6, 6)
         };
         campaignCardStyle = new GUIStyle(GUI.skin.box)
         {
@@ -1091,9 +1103,9 @@ public sealed class CampaignManager : MonoBehaviour
                 background = campaignCardTexture,
                 textColor = Color.white
             },
-            padding = new RectOffset(14, 14, 12, 12),
+            padding = new RectOffset(20, 20, 18, 18),
             margin = new RectOffset(5, 5, 5, 5),
-            border = new RectOffset(0, 0, 0, 0)
+            border = new RectOffset(6, 6, 6, 6)
         };
         campaignButtonStyle = new GUIStyle(GUI.skin.button)
         {
@@ -1101,7 +1113,7 @@ public sealed class CampaignManager : MonoBehaviour
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
             padding = new RectOffset(12, 12, 8, 8),
-            border = new RectOffset(0, 0, 0, 0)
+            border = new RectOffset(6, 6, 6, 6)
         };
         campaignButtonStyle.normal.background = campaignButtonTexture;
         campaignButtonStyle.normal.textColor = Color.white;
@@ -1117,16 +1129,16 @@ public sealed class CampaignManager : MonoBehaviour
             fontSize = 14,
             fontStyle = FontStyle.Bold,
             normal = { textColor = Color.white },
-            onNormal = { textColor = new Color(0.20f, 0.86f, 0.96f, 1f) },
+            onNormal = { textColor = HudLayoutUtility.TacticalAccent },
             hover = { textColor = Color.white },
-            onHover = { textColor = new Color(0.20f, 0.86f, 0.96f, 1f) }
+            onHover = { textColor = HudLayoutUtility.TacticalAccent }
         };
 
         menuTitleStyle = new GUIStyle(GUI.skin.label)
         {
             alignment = TextAnchor.MiddleCenter,
             fontSize = 86,
-            fontStyle = FontStyle.BoldAndItalic,
+            fontStyle = FontStyle.Bold,
             normal = { textColor = new Color(0.82f, 0.97f, 1f, 1f) }
         };
         menuSubtitleStyle = new GUIStyle(GUI.skin.label)
@@ -1134,14 +1146,14 @@ public sealed class CampaignManager : MonoBehaviour
             alignment = TextAnchor.MiddleCenter,
             fontSize = 22,
             fontStyle = FontStyle.Bold,
-            normal = { textColor = new Color(0.20f, 0.86f, 0.96f, 1f) }
+            normal = { textColor = HudLayoutUtility.TacticalAccent }
         };
         menuButtonStyle = new GUIStyle(campaignButtonStyle)
         {
             fontSize = 30,
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
-            border = new RectOffset(0, 0, 0, 0)
+            border = new RectOffset(6, 6, 6, 6)
         };
         menuButtonStyle.normal.background = campaignButtonTexture;
         menuButtonStyle.hover.background = campaignButtonHoverTexture;
@@ -1155,16 +1167,29 @@ public sealed class CampaignManager : MonoBehaviour
         };
     }
 
+    private GUIStyle PrimaryButtonStyle()
+    {
+        GUIStyle style = new GUIStyle(campaignButtonStyle);
+        style.normal.background = campaignAccentTexture;
+        style.normal.textColor = new Color(0.08f, 0.09f, 0.10f);
+        style.hover.background = campaignAccentTexture;
+        style.hover.textColor = Color.black;
+        style.focused.background = campaignAccentTexture;
+        style.focused.textColor = Color.black;
+        return style;
+    }
+
+    private void DrawRoundMetric(string label, string value)
+    {
+        GUILayout.BeginVertical(campaignCardStyle);
+        GUILayout.Label(label, CharacterSubtitleStyle());
+        GUILayout.Label(value, CharacterNameStyle());
+        GUILayout.EndVertical();
+    }
+
     private void DrawCampaignBorder(Rect rect, float thickness)
     {
-        GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, thickness), campaignAccentTexture);
-        GUI.DrawTexture(
-            new Rect(rect.x, rect.yMax - thickness, rect.width, thickness),
-            campaignAccentTexture);
-        GUI.DrawTexture(new Rect(rect.x, rect.y, thickness, rect.height), campaignAccentTexture);
-        GUI.DrawTexture(
-            new Rect(rect.xMax - thickness, rect.y, thickness, rect.height),
-            campaignAccentTexture);
+        GUI.DrawTexture(new Rect(rect.x + 32f, rect.y, 56f, thickness), campaignAccentTexture);
     }
 
     private void DrawCharacterCardHeader(CampaignCharacter character)
@@ -1181,7 +1206,7 @@ public sealed class CampaignManager : MonoBehaviour
             true);
         GUILayout.Label(character.CharacterName.ToUpperInvariant(), CharacterNameStyle());
         GUILayout.Label(
-            $"{character.role}  •  {character.weapon}",
+            $"{character.role}  /  {character.weapon}",
             CharacterSubtitleStyle());
     }
 
@@ -1243,7 +1268,7 @@ public sealed class CampaignManager : MonoBehaviour
             AgentRoleType.Flanker => new Color(0.66f, 0.28f, 0.88f, 1f),
             AgentRoleType.Assaulter => new Color(0.94f, 0.30f, 0.20f, 1f),
             AgentRoleType.Defender => new Color(0.16f, 0.55f, 0.94f, 1f),
-            _ => new Color(0.20f, 0.86f, 0.96f, 1f)
+            _ => HudLayoutUtility.TacticalAccent
         };
     }
 
@@ -1251,7 +1276,7 @@ public sealed class CampaignManager : MonoBehaviour
     {
         return weapon switch
         {
-            WeaponType.Rifle => new Color(0.20f, 0.86f, 0.96f, 1f),
+            WeaponType.Rifle => HudLayoutUtility.TacticalAccent,
             WeaponType.SMG => new Color(1f, 0.72f, 0.22f, 1f),
             WeaponType.Sniper => new Color(0.46f, 0.72f, 1f, 1f),
             WeaponType.Shotgun => new Color(1f, 0.38f, 0.22f, 1f),
@@ -1324,10 +1349,10 @@ public sealed class CampaignManager : MonoBehaviour
     {
         return new GUIStyle(GUI.skin.label)
         {
-            fontSize = 24,
+            fontSize = 14,
             fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleCenter,
-            normal = { textColor = new Color(0.20f, 0.86f, 0.96f, 1f) }
+            alignment = TextAnchor.MiddleLeft,
+            normal = { textColor = HudLayoutUtility.TacticalAccent }
         };
     }
 
@@ -1335,9 +1360,9 @@ public sealed class CampaignManager : MonoBehaviour
     {
         return new GUIStyle(GUI.skin.label)
         {
-            fontSize = 17,
+            fontSize = 22,
             fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleCenter,
+            alignment = TextAnchor.MiddleLeft,
             normal = { textColor = Color.white }
         };
     }
@@ -1346,22 +1371,30 @@ public sealed class CampaignManager : MonoBehaviour
     {
         return new GUIStyle(GUI.skin.label)
         {
-            fontSize = 13,
-            alignment = TextAnchor.MiddleCenter,
+            fontSize = 16,
+            alignment = TextAnchor.MiddleLeft,
             normal = { textColor = new Color(0.68f, 0.74f, 0.80f, 1f) }
         };
     }
 
     private static Texture2D CreateSolidTexture(string textureName, Color color)
     {
-        Texture2D texture = new Texture2D(1, 1)
+        int size = textureName == "CampaignAccent" ? 1 : 24;
+        Texture2D texture = new Texture2D(size, size)
         {
             name = textureName,
             hideFlags = HideFlags.HideAndDontSave,
             wrapMode = TextureWrapMode.Clamp,
             filterMode = FilterMode.Point
         };
-        texture.SetPixel(0, 0, color);
+        for (int y = 0; y < size; y++) for (int x = 0; x < size; x++)
+        {
+            float dx = Mathf.Max(5f - x, x - (size - 6f), 0f);
+            float dy = Mathf.Max(5f - y, y - (size - 6f), 0f);
+            Color pixel = color;
+            if (size > 1) pixel.a *= Mathf.Clamp01(6f - Mathf.Sqrt(dx * dx + dy * dy));
+            texture.SetPixel(x, y, pixel);
+        }
         texture.Apply(false, true);
         return texture;
     }
@@ -1378,11 +1411,11 @@ public sealed class CampaignManager : MonoBehaviour
             filterMode = FilterMode.Bilinear
         };
         Color32[] pixels = new Color32[width * height];
-        Color skyTop = new Color(0.015f, 0.20f, 0.25f, 1f);
-        Color skyBottom = new Color(0.02f, 0.34f, 0.38f, 1f);
-        Color farRange = new Color(0.025f, 0.25f, 0.29f, 1f);
-        Color middleRange = new Color(0.02f, 0.17f, 0.21f, 1f);
-        Color nearRange = new Color(0.012f, 0.105f, 0.14f, 1f);
+        Color skyTop = new Color(0.055f, 0.065f, 0.075f, 1f);
+        Color skyBottom = new Color(0.14f, 0.15f, 0.16f, 1f);
+        Color farRange = new Color(0.12f, 0.13f, 0.14f, 1f);
+        Color middleRange = new Color(0.08f, 0.09f, 0.10f, 1f);
+        Color nearRange = new Color(0.045f, 0.055f, 0.06f, 1f);
 
         for (int y = 0; y < height; y++)
         {
