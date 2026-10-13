@@ -188,6 +188,7 @@ public sealed class AgentRoleAbilities : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void AttachToAgents()
     {
+        SceneReloadHooks.RunOnEverySceneLoad(AttachToAgents);
         HealClaims.Clear();
         NextTeamShadowBlinkTime.Clear();
         foreach (AgentStats agent in

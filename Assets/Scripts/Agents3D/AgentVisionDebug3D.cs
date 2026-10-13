@@ -28,6 +28,7 @@ public class AgentVisionDebug3D : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void EnsureInstance()
     {
+        SceneReloadHooks.RunOnEverySceneLoad(EnsureInstance);
         if (FindAnyObjectByType<AgentVisionDebug3D>() == null)
         {
             new GameObject("AgentVisionDebug3D").AddComponent<AgentVisionDebug3D>();

@@ -15,6 +15,7 @@ public sealed class EnemyTeamStatsPanelUI : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void CreateRuntimePanel()
     {
+        SceneReloadHooks.RunOnEverySceneLoad(CreateRuntimePanel);
         if (FindAnyObjectByType<EnemyTeamStatsPanelUI>() != null) return;
 
         Canvas canvas = null;

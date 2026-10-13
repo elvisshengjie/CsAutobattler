@@ -14,6 +14,7 @@ public class DebugVisualManager : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Initialize()
     {
+        SceneReloadHooks.RunOnEverySceneLoad(Initialize);
         if (FindAnyObjectByType<DebugVisualManager>() == null)
         {
             GameObject go = new GameObject("DebugVisualManager");

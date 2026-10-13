@@ -50,6 +50,7 @@ public sealed class TeamTacticManager : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void EnsureInstanceForBombRound()
     {
+        SceneReloadHooks.RunOnEverySceneLoad(EnsureInstanceForBombRound);
         if (FindAnyObjectByType<RoundManager>() == null ||
             FindAnyObjectByType<TeamTacticManager>() != null)
         {

@@ -20,6 +20,7 @@ public sealed class TeamVisionVisibility : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void EnsureInstance()
     {
+        SceneReloadHooks.RunOnEverySceneLoad(EnsureInstance);
         if (FindAnyObjectByType<TeamVisionVisibility>() == null)
         {
             new GameObject("Team Vision Visibility").AddComponent<TeamVisionVisibility>();

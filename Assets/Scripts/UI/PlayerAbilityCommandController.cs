@@ -47,6 +47,7 @@ public sealed class PlayerAbilityCommandController : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void EnsureInstance()
     {
+        SceneReloadHooks.RunOnEverySceneLoad(EnsureInstance);
         if (FindAnyObjectByType<RoundManager>() != null &&
             FindAnyObjectByType<PlayerAbilityCommandController>() == null)
         {

@@ -18,6 +18,7 @@ public class EliminationRoundManager : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void EnsureInstance()
     {
+        SceneReloadHooks.RunOnEverySceneLoad(EnsureInstance);
         if (FindAnyObjectByType<EliminationRoundManager>() == null)
         {
             new GameObject("EliminationRoundManager").AddComponent<EliminationRoundManager>();

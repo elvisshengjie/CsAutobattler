@@ -42,6 +42,7 @@ public sealed class InfluenceMapManager : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void EnsureInstance()
     {
+        SceneReloadHooks.RunOnEverySceneLoad(EnsureInstance);
         if (FindAnyObjectByType<InfluenceMapManager>() == null)
             new GameObject("Influence Map Manager").AddComponent<InfluenceMapManager>();
     }
