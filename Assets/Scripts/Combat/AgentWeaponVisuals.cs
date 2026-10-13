@@ -58,6 +58,20 @@ public sealed class AgentWeaponVisuals : MonoBehaviour
             return;
         }
 
+        // Prefer the rigged, animated character. Play mode only, so OnValidate
+        // never bakes runtime models into the saved scene.
+        if (useHumanoidModel && Application.isPlaying &&
+            AgentCharacterModel.TryApply(gameObject, weaponType))
+        {
+            targetRenderer.enabled = false;
+            Transform generated = transform.Find(HumanoidRootName);
+            if (generated != null)
+            {
+                generated.gameObject.SetActive(false);
+            }
+            return;
+        }
+
         if (useHumanoidModel)
         {
             EnsureHumanoidModel();

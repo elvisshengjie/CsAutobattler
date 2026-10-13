@@ -1,0 +1,3 @@
+Textures from Poly Haven (https://polyhaven.com), licensed CC0 1.0 Universal.
+- concrete_tiles: https://polyhaven.com/a/concrete_tiles
+- rock_embedded_concrete_wall: https://polyhaven.com/a/rock_embedded_concrete_wall
