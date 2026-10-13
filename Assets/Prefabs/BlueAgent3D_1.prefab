@@ -278,6 +278,7 @@ MonoBehaviour:
   surfaceProbeHeight: 6
   surfaceProbeDistance: 14
   maximumSurfaceStep: 0.6
+  maximumClimbSlope: 1
   agentRadius: 0.4
   minObstacleClearance: 0.15
   minAgentSeparation: 0.8

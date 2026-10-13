@@ -65,6 +65,12 @@ public sealed class AttackerCombatAI : MonoBehaviour
     private Vector3 trackedObjectivePosition;
     private float lastMovementTime;
     private float lastObjectiveProgressTime;
+    // Hits, not shots, count as combat progress: firing into cover over a
+    // slope or sandbag line would otherwise reset the stalemate timer forever.
+    private const float FruitlessFireLimit = 7f;
+    private float lastHitDealtTime;
+    private GameObject engagedTarget;
+    private float engagedSince;
     private float bestObjectiveDistance = Mathf.Infinity;
     private float nextForcedPeekTime;
     private float nextForcedRepositionTime;
@@ -85,7 +91,9 @@ public sealed class AttackerCombatAI : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void EnsureAttackerComponents()
     {
-        AgentStats[] agents = FindObjectsByType<AgentStats>(FindObjectsInactive.Exclude);
+        SceneReloadHooks.RunOnEverySceneLoad(EnsureAttackerComponents);
+        // Include inactive: the campaign hides player slots until deployment.
+        AgentStats[] agents = FindObjectsByType<AgentStats>(FindObjectsInactive.Include);
         foreach (AgentStats agent in agents)
         {
             if (agent.team == TeamType.Red && agent.GetComponent<AttackerCombatAI>() == null)
@@ -121,6 +129,8 @@ public sealed class AttackerCombatAI : MonoBehaviour
         {
             health.Damaged += OnDamaged;
         }
+        HealthSystem.AnyDamaged += OnAnyDamaged;
+        lastHitDealtTime = Time.time;
     }
 
     private void OnDisable()
@@ -129,6 +139,27 @@ public sealed class AttackerCombatAI : MonoBehaviour
         {
             health.Damaged -= OnDamaged;
         }
+        HealthSystem.AnyDamaged -= OnAnyDamaged;
+    }
+
+    private void OnAnyDamaged(HealthSystem victim, float amount, GameObject attacker)
+    {
+        if (attacker == gameObject && amount > 0f)
+        {
+            lastHitDealtTime = Time.time;
+        }
+    }
+
+    /// <summary>True when we have been shooting a visible target for a while without landing a hit.</summary>
+    private bool IsFireFruitless(GameObject target)
+    {
+        if (target != engagedTarget)
+        {
+            engagedTarget = target;
+            engagedSince = Time.time;
+        }
+        return target != null && weapon != null && weapon.TimeSinceLastShot < 1.5f &&
+               Time.time - Mathf.Max(lastHitDealtTime, engagedSince) > FruitlessFireLimit;
     }
 
     public bool TryExecute(GameObject visibleTarget)
@@ -218,8 +249,10 @@ public sealed class AttackerCombatAI : MonoBehaviour
     {
         actionResult = false;
         float targetDistance = FlatDistance(transform.position, targetPosition);
+        bool fruitless = IsFireFruitless(target);
         if (visible && target != null && weapon != null && weapon.IsReady &&
-            targetDistance <= loadout.MaximumRange && sensors.HasLineOfSight(target))
+            targetDistance <= loadout.MaximumRange && sensors.HasLineOfSight(target) &&
+            !fruitless)
         {
             return false;
         }
@@ -227,7 +260,7 @@ public sealed class AttackerCombatAI : MonoBehaviour
         float lastShot = weapon != null ? weapon.LastShotTime : Mathf.NegativeInfinity;
         float noProgressDuration = Time.time - Mathf.Max(
             lastObjectiveProgressTime,
-            lastShot);
+            fruitless ? lastHitDealtTime : lastShot);
         float activeThreshold = IsAggressiveTactic()
             ? maxNoProgressTime / Mathf.Max(1f, objectiveUrgencyIncreaseRate)
             : maxNoProgressTime;

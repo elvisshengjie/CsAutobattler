@@ -233,6 +233,7 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void EnsureInstance()
     {
+        SceneReloadHooks.RunOnEverySceneLoad(EnsureInstance);
         if (FindAnyObjectByType<RoundManager>() == null ||
             FindAnyObjectByType<DefenderTeamCoordinator>() != null)
         {
@@ -1119,6 +1120,145 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
         return cachedEncirclementDefenders;
     }
 
+    private GameObject overwatchDefender;
+    private GameObject forwardLookout;
+    private float nextOverwatchEvaluation;
+
+    /// <summary>The defender currently assigned to hold high ground over its site.</summary>
+    public GameObject OverwatchDefender => overwatchDefender;
+    /// <summary>With four or more defenders, a second long gun holds the central hill.</summary>
+    public GameObject ForwardLookout => forwardLookout;
+
+    /// <summary>
+    /// With three or more defenders alive, the longest-range one holds the
+    /// vantage point overlooking its home site (fort rim above the south ramp,
+    /// quarry rim above the pit) instead of standing on the site itself.
+    /// </summary>
+    private bool TryGetOverwatchOrder(GameObject defender, BombSite site, out DefenderOrder order)
+    {
+        order = default;
+        UpdateOverwatchAssignment();
+        if (defender == forwardLookout && TryGetForwardLookoutOrder(site, out order))
+        {
+            return true;
+        }
+        if (defender != overwatchDefender || site == null)
+        {
+            return false;
+        }
+
+        Vector3 approach = GetSiteApproach(site);
+        if (!HighGround.TryFindVantage(site.PlantPosition, approach, defender.transform.position, 26f, out Transform vantage) ||
+            FlatDistance(vantage.position, site.PlantPosition) > 22f)
+        {
+            return false;
+        }
+
+        order.type = DefenderOrderType.HoldSite;
+        order.site = site;
+        order.destination = vantage.position;
+        order.watchPosition = HighGround.Advantage(vantage.position, approach) >= HighGround.MeaningfulAdvantage
+            ? approach
+            : site.PlantPosition;
+        order.speedMultiplier = 1.15f;
+        return true;
+    }
+
+    /// <summary>
+    /// The forward lookout holds the vantage farthest from every site (the
+    /// central hill), watching the attacker side. Once a site is confirmed
+    /// under attack the normal rotate logic, which runs first, pulls it back.
+    /// </summary>
+    private bool TryGetForwardLookoutOrder(BombSite site, out DefenderOrder order)
+    {
+        order = default;
+        if (objectiveManager == null)
+        {
+            return false;
+        }
+
+        Transform central = null;
+        float bestSiteDistance = 0f;
+        foreach (Transform vantage in HighGround.Vantages)
+        {
+            float nearestSite = float.PositiveInfinity;
+            foreach (BombSite candidate in objectiveManager.GetSites())
+            {
+                nearestSite = Mathf.Min(nearestSite, FlatDistance(vantage.position, candidate.PlantPosition));
+            }
+            if (nearestSite > bestSiteDistance)
+            {
+                bestSiteDistance = nearestSite;
+                central = vantage;
+            }
+        }
+        if (central == null || bestSiteDistance < 15f)
+        {
+            return false;
+        }
+
+        GameObject attackerSpawn = GameObject.Find("TSpawn");
+        order.type = DefenderOrderType.HoldSite;
+        order.site = site;
+        order.destination = central.position;
+        order.watchPosition = attackerSpawn != null
+            ? attackerSpawn.transform.position
+            : central.position + Vector3.back * 10f;
+        order.speedMultiplier = 1.1f;
+        return true;
+    }
+
+    private void UpdateOverwatchAssignment()
+    {
+        if (Time.time < nextOverwatchEvaluation && IsLivingDefender(overwatchDefender))
+        {
+            return;
+        }
+        nextOverwatchEvaluation = Time.time + 2f;
+
+        List<AgentStats> living = GetLivingDefenders();
+        if (living.Count < 3)
+        {
+            overwatchDefender = null;
+            forwardLookout = null;
+            return;
+        }
+
+        // Keep the current lookout unless a clearly better long gun is alive.
+        int currentRank = IsLivingDefender(overwatchDefender)
+            ? HighGround.OverwatchRank(WeaponLoadout.Get(overwatchDefender).SelectedWeapon)
+            : -1;
+        foreach (AgentStats candidate in living)
+        {
+            int rank = HighGround.OverwatchRank(WeaponLoadout.Get(candidate.gameObject).SelectedWeapon);
+            if (rank > currentRank)
+            {
+                currentRank = rank;
+                overwatchDefender = candidate.gameObject;
+            }
+        }
+
+        forwardLookout = null;
+        if (living.Count >= 4)
+        {
+            int lookoutRank = 0; // anything but a shotgun
+            foreach (AgentStats candidate in living)
+            {
+                int rank = HighGround.OverwatchRank(WeaponLoadout.Get(candidate.gameObject).SelectedWeapon);
+                if (candidate.gameObject != overwatchDefender && rank > lookoutRank)
+                {
+                    lookoutRank = rank;
+                    forwardLookout = candidate.gameObject;
+                }
+            }
+        }
+    }
+
+    private static Vector3 GetSiteApproach(BombSite site)
+    {
+        return HighGround.GetAttackerApproach(site.PlantPosition);
+    }
+
     public bool TryGetOrder(GameObject defender, out DefenderOrder order)
     {
         order = default;
@@ -1344,6 +1484,12 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
                                     (role == DefenderRole.Rotator ||
                                      homeSite == activeAlert.site) &&
                                     !requireConfirmedAttackBeforeRotate;
+        if (!investigateSuspicion && TryGetOverwatchOrder(defender, homeSite, out DefenderOrder overwatch))
+        {
+            order = overwatch;
+            return true;
+        }
+
         BombSite assignedSite = investigateSuspicion ? activeAlert.site : homeSite;
         if (assignedSite == null)
         {
@@ -1930,7 +2076,12 @@ public sealed class DefenderTeamCoordinator : MonoBehaviour
                           (canPeek ? 4f : 0f) +
                           Mathf.Clamp01(1f - objectiveDistance / 16f) * 3f +
                           (occupantCount == 0 ? 4f : -8f * occupantCount) -
-                          Mathf.Clamp01(1f - enemyDistance / 5f) * 5f;
+                          Mathf.Clamp01(1f - enemyDistance / 5f) * 5f +
+                          // Shared by both teams: cover above the threat beats
+                          // equal cover below it, but only if it can shoot.
+                          (canPeek
+                              ? HighGround.Score(hiddenPosition, threatPosition, 1.6f, 1.2f)
+                              : Mathf.Min(0f, HighGround.Score(hiddenPosition, threatPosition, 1.6f, 1.2f)));
             if (score <= bestScore)
             {
                 continue;

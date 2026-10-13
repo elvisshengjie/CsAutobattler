@@ -237,9 +237,30 @@ public sealed class AgentRole : MonoBehaviour
             front, sideRear);
         score += weaponScore;
         WeaponLoadout loadout = WeaponLoadout.Get(gameObject);
+        float highGround = HighGround.Score(p, watch,
+            GetHighGroundWeight(loadout.SelectedWeapon),
+            GetHighGroundWeight(loadout.SelectedWeapon) * 0.8f);
+        if (highGround > 0f && DefenderTeamCoordinator.IsLineBlocked(p, watch))
+        {
+            highGround = 0f; // a rim you cannot see over is not an advantage
+        }
+        score += highGround;
         reason = $"{selectedRole}+{loadout.SelectedWeapon}: obj {objectiveValue:F1}, " +
-                 $"cover {cover:F1}, danger {danger:F1}, weapon {weaponScore:F1}";
+                 $"cover {cover:F1}, danger {danger:F1}, weapon {weaponScore:F1}, high {highGround:F1}";
         return score;
+    }
+
+    /// <summary>How much this operator values standing above what it watches.</summary>
+    private float GetHighGroundWeight(WeaponType weapon)
+    {
+        float weight = weapon switch
+        {
+            WeaponType.Sniper => 1.4f,
+            WeaponType.Rifle => 0.9f,
+            WeaponType.SMG => 0.35f,
+            _ => 0.15f
+        };
+        return selectedRole == AgentRoleType.Support ? weight + 0.2f : weight;
     }
 
     private float ScoreWeaponPosition(Vector3 position, float cover,

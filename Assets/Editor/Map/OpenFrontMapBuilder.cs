@@ -57,6 +57,7 @@ public static class OpenFrontMapBuilder
         PlaceRouteMarkers();
         BuildBoundary();
         ConfigureNavigation();
+        ConfigureRound();
         SnapAgents();
         Object.DestroyImmediate(preserved.gameObject);
         VisualOverhaulBuilder.FrameMainCamera();
@@ -542,6 +543,10 @@ public static class OpenFrontMapBuilder
         AddMarker("RoutePoint_West_Woods", new Vector2(-18f, 0f));
         AddMarker("RoutePoint_East_Woods", new Vector2(18f, 0f));
         AddMarker("RoutePoint_CT_Compound", OpenFrontLayout.CompoundCenter);
+        foreach ((string name, Vector2 position) in OpenFrontLayout.Vantages)
+        {
+            AddMarker(name, position);
+        }
     }
 
     private static void AddMarker(string name, Vector2 position)
@@ -555,6 +560,20 @@ public static class OpenFrontMapBuilder
     {
         float x = OpenFrontLayout.PlayHalfX;
         float z = OpenFrontLayout.PlayHalfZ;
+
+        // A visible fence line on the invisible walls so the edge of play reads.
+        const float fenceLength = 5.85f;
+        for (float fx = -x + fenceLength * 0.5f; fx < x; fx += fenceLength)
+        {
+            Place("Fence", fx, z - 0.3f, 0f, 1f, null);
+            Place("Fence", fx, -z + 0.3f, 0f, 1f, null);
+        }
+        for (float fz = -z + fenceLength * 0.5f; fz < z; fz += fenceLength)
+        {
+            Place("Fence", x - 0.3f, fz, 90f, 1f, null);
+            Place("Fence", -x + 0.3f, fz, 90f, 1f, null);
+        }
+
         AddInvisibleWall("Wall_Boundary_North", new Vector3(0f, 3f, z + 0.5f), new Vector3(x * 2f + 2f, 8f, 1f));
         AddInvisibleWall("Wall_Boundary_South", new Vector3(0f, 3f, -z - 0.5f), new Vector3(x * 2f + 2f, 8f, 1f));
         AddInvisibleWall("Wall_Boundary_East", new Vector3(x + 0.5f, 3f, 0f), new Vector3(1f, 8f, z * 2f + 2f));
@@ -593,6 +612,15 @@ public static class OpenFrontMapBuilder
             }
             PrefabUtility.SaveAsPrefabAsset(prefab, prefabPath);
             PrefabUtility.UnloadPrefabContents(prefab);
+        }
+    }
+
+    private static void ConfigureRound()
+    {
+        foreach (RoundManager round in Object.FindObjectsByType<RoundManager>(FindObjectsInactive.Include))
+        {
+            round.roundDuration = OpenFrontLayout.RoundDuration;
+            EditorUtility.SetDirty(round);
         }
     }
 

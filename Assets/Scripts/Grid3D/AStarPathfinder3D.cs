@@ -92,11 +92,77 @@ public class AStarPathfinder3D : MonoBehaviour
                 grid[x, z] = new PathNode(walkable, worldPosition, x, z);
             }
         }
+
+        if (walkableSurfaceMask.value != 0)
+        {
+            BlockCliffEdges();
+        }
+    }
+
+    /// <summary>
+    /// Cells at the top or bottom of a cliff (any neighbour beyond the walkable
+    /// step) become unwalkable, so paths keep a one-cell margin from drops and
+    /// agents cannot snag on the lip of a ramp while cutting a corner.
+    /// </summary>
+    private void BlockCliffEdges()
+    {
+        bool[,] edge = new bool[gridSizeX, gridSizeZ];
+        for (int x = 0; x < gridSizeX; x++)
+        {
+            for (int z = 0; z < gridSizeZ; z++)
+            {
+                if (!grid[x, z].walkable)
+                {
+                    continue;
+                }
+                float height = grid[x, z].worldPosition.y;
+                for (int dx = -1; dx <= 1 && !edge[x, z]; dx++)
+                {
+                    for (int dz = -1; dz <= 1; dz++)
+                    {
+                        int nx = x + dx;
+                        int nz = z + dz;
+                        if ((dx != 0 || dz != 0) && nx >= 0 && nx < gridSizeX && nz >= 0 && nz < gridSizeZ &&
+                            Mathf.Abs(grid[nx, nz].worldPosition.y - height) > maximumNeighborHeightDelta)
+                        {
+                            edge[x, z] = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        for (int x = 0; x < gridSizeX; x++)
+        {
+            for (int z = 0; z < gridSizeZ; z++)
+            {
+                if (edge[x, z])
+                {
+                    grid[x, z].walkable = false;
+                }
+            }
+        }
     }
 
     public void RefreshGrid()
     {
         CreateGrid();
+    }
+
+    /// <summary>
+    /// Ground height under a point, read from the grid's probed surface (no
+    /// physics query). False when the grid is flat (no walkable surface mask)
+    /// or the point is outside it.
+    /// </summary>
+    public bool TryGetGroundHeight(Vector3 position, out float height)
+    {
+        height = 0f;
+        if (grid == null || walkableSurfaceMask.value == 0 || !IsInsideGrid(position))
+        {
+            return false;
+        }
+        height = NodeFromWorldPoint(position).worldPosition.y;
+        return true;
     }
 
     public List<Vector3> FindPath(Vector3 startWorldPosition, Vector3 targetWorldPosition)

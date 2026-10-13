@@ -22,6 +22,8 @@ public class AgentMotor : MonoBehaviour
     [SerializeField] private float surfaceProbeHeight = 6f;
     [SerializeField] private float surfaceProbeDistance = 12f;
     [SerializeField] private float maximumSurfaceStep = 0.6f;
+    [Tooltip("Steepest climb (rise over run) an agent can walk up. Dropping down is always allowed.")]
+    [SerializeField] private float maximumClimbSlope = 1f;
 
     [Header("Agent Size and Clearance")]
     [SerializeField] private float agentRadius = 0.4f;
@@ -841,6 +843,13 @@ public class AgentMotor : MonoBehaviour
         Vector3 newPosition = currentPosition + safeDirection * stepDistance;
         if (TryGetSurfaceY(newPosition, out float surfaceY))
         {
+            // Each physics step is only centimetres long, so the per-step
+            // height limit alone would let agents walk straight up cliffs.
+            if (surfaceY - currentPosition.y > maximumClimbSlope * stepDistance)
+            {
+                pathBlocked = true;
+                return;
+            }
             newPosition.y = surfaceY;
         }
         else

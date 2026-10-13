@@ -95,6 +95,23 @@ public static class OpenFrontLayout
     };
     public const float RoadHalfWidth = 1.4f;
 
+    /// <summary>
+    /// High-ground positions for the AI (see HighGround): each sits about 2.5m
+    /// back from a cliff edge (clear of the pathfinder's cliff-lip margin) or on a hilltop, on walkable ground.
+    /// </summary>
+    public static readonly (string name, Vector2 position)[] Vantages =
+    {
+        ("Vantage_Overlook", HillCenter),
+        ("Vantage_Fort_SouthRim", new Vector2(28.5f, 9.4f)),   // above the south ramp
+        ("Vantage_Fort_WestRim", new Vector2(18.5f, 21.5f)),   // above the CT side
+        ("Vantage_Quarry_SouthRim", new Vector2(-22.5f, 5.9f)), // looks down into B
+        ("Vantage_Quarry_EastRim", new Vector2(-13.9f, 12.5f)),
+        ("Vantage_Quarry_NorthRim", new Vector2(-27f, 26.2f))
+    };
+
+    /// <summary>Round length for this map: it is larger and more open than the blockout.</summary>
+    public const float RoundDuration = 210f;
+
     // --- Height -------------------------------------------------------------
 
     public static float Height(float x, float z)

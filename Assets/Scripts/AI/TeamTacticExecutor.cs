@@ -192,6 +192,9 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         if (roundManager.CurrentState == RoundState.BombPlanted)
             return ExecuteDefaultPostPlant(agent, motor);
 
+        if (TryExecuteOverwatch(agent, motor, carrier))
+            return true;
+
         bool feintAndRotateSelected = tacticManager.GetSelectedInitialTactic() ==
                                       InitialTeamTactic.FeintAndRotate;
         if (feintAndRotateSelected)
@@ -288,6 +291,85 @@ public sealed class TeamTacticExecutor : MonoBehaviour
         }
 
         return normallyDetectedTarget;
+    }
+
+    private GameObject overwatchAttacker;
+    private Transform overwatchVantage;
+    private BombSite overwatchSite;
+    private float nextOverwatchEvaluation;
+
+    /// <summary>The attacker covering the push from high ground, if any.</summary>
+    public GameObject OverwatchAttacker => overwatchAttacker;
+    public Transform OverwatchVantage => overwatchVantage;
+
+    /// <summary>
+    /// With three or more attackers, the best rifle or sniper (never the bomb
+    /// carrier) takes a vantage point overlooking the target site, such as the
+    /// quarry rim above B, and fires down while the others push in. The fort
+    /// on A has nothing above it, so A is taken up the ramps without one.
+    /// </summary>
+    private bool TryExecuteOverwatch(GameObject agent, AgentMotor motor, BombCarrier carrier)
+    {
+        UpdateAttackerOverwatch();
+        if (agent != overwatchAttacker || overwatchVantage == null ||
+            (carrier != null && carrier.HasBomb))
+        {
+            return false;
+        }
+
+        return MoveOrHold(agent, motor, overwatchVantage.position, targetSite.PlantPosition, false);
+    }
+
+    private void UpdateAttackerOverwatch()
+    {
+        bool overwatchAlive = overwatchAttacker != null &&
+                              livingAttackers.Exists(attacker => attacker.gameObject == overwatchAttacker);
+        if (Time.time < nextOverwatchEvaluation && overwatchSite == targetSite && overwatchAlive)
+        {
+            return;
+        }
+        nextOverwatchEvaluation = Time.time + 2f;
+        overwatchSite = targetSite;
+        overwatchAttacker = null;
+        overwatchVantage = null;
+        if (targetSite == null || livingAttackers.Count < 3)
+        {
+            return;
+        }
+
+        AgentStats best = null;
+        int bestRank = 1; // rifles and snipers only
+        foreach (AgentStats attacker in livingAttackers)
+        {
+            BombCarrier attackerCarrier = attacker.GetComponent<BombCarrier>();
+            if (attackerCarrier != null && attackerCarrier.HasBomb)
+            {
+                continue;
+            }
+            int rank = HighGround.OverwatchRank(WeaponLoadout.Get(attacker.gameObject).SelectedWeapon);
+            if (rank > bestRank)
+            {
+                bestRank = rank;
+                best = attacker;
+            }
+        }
+        if (best == null)
+        {
+            return;
+        }
+
+        // Passing the site as the approach too means only vantages that look
+        // down onto the site itself qualify for attackers.
+        if (HighGround.TryFindVantage(
+                targetSite.PlantPosition,
+                targetSite.PlantPosition,
+                best.transform.position,
+                28f,
+                out Transform vantage))
+        {
+            overwatchAttacker = best.gameObject;
+            overwatchVantage = vantage;
+        }
     }
 
     public TeamTacticRole GetRole(GameObject agent)
@@ -959,12 +1041,46 @@ public sealed class TeamTacticExecutor : MonoBehaviour
             ? objectiveManager.ActiveBomb.transform.position
             : targetSite.PlantPosition;
 
+        // The overwatch (or, failing that, the best long gun) denies the defuse
+        // from above when a vantage overlooks the bomb, e.g. the quarry rim.
+        if (agent == GetPostPlantOverwatch() &&
+            HighGround.TryFindVantage(bombPosition, bombPosition, agent.transform.position, 26f, out Transform vantage))
+        {
+            return MoveOrHold(agent, motor, vantage.position, bombPosition, false);
+        }
+
         return MoveOrHold(
             agent,
             motor,
             bombPosition + GetSpreadOffset(agent, 3f),
             GetDefenderCenter(),
             false);
+    }
+
+    private GameObject GetPostPlantOverwatch()
+    {
+        if (overwatchAttacker != null &&
+            livingAttackers.Exists(attacker => attacker.gameObject == overwatchAttacker))
+        {
+            return overwatchAttacker;
+        }
+        if (livingAttackers.Count < 2)
+        {
+            return null; // a lone survivor stays on the bomb
+        }
+
+        AgentStats best = null;
+        int bestRank = 1; // rifles and snipers only
+        foreach (AgentStats attacker in livingAttackers)
+        {
+            int rank = HighGround.OverwatchRank(WeaponLoadout.Get(attacker.gameObject).SelectedWeapon);
+            if (rank > bestRank)
+            {
+                bestRank = rank;
+                best = attacker;
+            }
+        }
+        return best != null ? best.gameObject : null;
     }
 
     private bool TryStartPlant(BombCarrier carrier, bool carefulPlant)

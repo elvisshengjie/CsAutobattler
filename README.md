@@ -58,7 +58,19 @@ Map1 is an open, multi-level battlefield inspired by *Running With Rifles*, gene
 - **Zig-zag trench:** 1.4 m deep, split around a central gap.
 - **Elsewhere:** woods on both flanks, a walled CT compound, a tank wreck on the T approach, and dirt roads linking everything.
 
-Terrain blocks sight lines and bullets. Shots aim in 3D, and shooting down from 1.5 m or more above the target tightens spread by 25%, while shooting uphill widens it by 20%. The pathfinder and agent motors follow the height field: slopes with at most a 0.75 m step per metre are walkable, and cliffs are not. `OpenFrontLayoutTests` checks that ramps are walkable, cliffs block movement, sites are flat, and both spawns can reach both sites.
+A wooden fence marks the edge of play, and rounds last 210 seconds on this map (180 seconds on the old blockout).
+
+Terrain blocks sight lines and bullets. Shots aim in 3D, and shooting down from 1.5 m or more above the target tightens spread by 25%, while shooting uphill widens it by 20%. The pathfinder and agent motors follow the height field: slopes with at most a 0.75 m step per metre are walkable, and cliffs are not. Cells on a cliff lip are excluded from pathfinding, so paths keep a one-metre margin from drops. `OpenFrontLayoutTests` checks that ramps are walkable, cliffs block movement, sites are flat, both spawns can reach both sites, and every vantage point is reachable.
+
+### High-ground AI
+
+The map builder places `Vantage_*` markers on the hill top, the fort rims and the quarry rims. The `HighGround` service reads ground heights from the pathfinding grid and is used at three levels:
+
+- **Cover and positioning:** cover above the threat scores higher, and cover below it scores lower. Role positioning weighs height by weapon: snipers care most, shotguns least. A raised spot only counts if it actually has a sight line to what it watches.
+- **Defender overwatch:** with three or more defenders alive, the longest gun holds the vantage over its site, such as the fort rim above the south ramp. With four or more, a second long gun takes the central Overlook as a forward lookout. When a site is confirmed under attack, the lookout falls back.
+- **Attacker overwatch:** with three or more attackers, the best rifle or sniper takes a vantage overlooking the target site, such as the quarry rim above B, and covers the push. After the plant it guards the bomb from there. Nothing overlooks the fort, so A has to be taken up the ramps.
+
+Attackers count hits, not shots, as combat progress, so they reposition after about seven seconds of fruitless fire into cover.
 
 ### Visuals and audio
 

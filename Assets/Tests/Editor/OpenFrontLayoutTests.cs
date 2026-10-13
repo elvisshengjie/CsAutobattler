@@ -5,7 +5,8 @@ using UnityEngine;
 public sealed class OpenFrontLayoutTests
 {
     // Mirrors AStarPathfinder3D: 1m cells, neighbours walkable when the height
-    // step is at most maximumNeighborHeightDelta.
+    // step is at most maximumNeighborHeightDelta, and cells on a cliff lip
+    // (any neighbour beyond that step) blocked entirely.
     private const float MaxStep = 0.75f;
 
     [Test]
@@ -69,6 +70,33 @@ public sealed class OpenFrontLayoutTests
         Assert.That(max - min, Is.GreaterThan(5f), "High ground and pits should span > 5m");
     }
 
+    [Test]
+    public void Vantages_AreReachableAndOverlookTheirTargets()
+    {
+        HashSet<Vector2Int> fromT = Flood(OpenFrontLayout.TSpawn);
+        HashSet<Vector2Int> fromCT = Flood(OpenFrontLayout.CTSpawn);
+        foreach ((string name, Vector2 position) in OpenFrontLayout.Vantages)
+        {
+            Assert.That(fromT.Contains(Cell(position)) && fromCT.Contains(Cell(position)), Is.True,
+                $"{name} must be reachable by both teams");
+        }
+
+        // The quarry rims look down into B, the fort rim looks down its ramp.
+        Assert.That(H(Vantage("Vantage_Quarry_SouthRim")) - H(OpenFrontLayout.SiteB), Is.GreaterThan(2f));
+        Assert.That(H(Vantage("Vantage_Fort_SouthRim")) - H(OpenFrontLayout.PlateauRamps[0].Bottom), Is.GreaterThan(2.5f));
+        Assert.That(H(Vantage("Vantage_Overlook")), Is.GreaterThan(1f));
+    }
+
+    private static Vector2 Vantage(string name)
+    {
+        foreach ((string vantageName, Vector2 position) in OpenFrontLayout.Vantages)
+        {
+            if (vantageName == name) return position;
+        }
+        Assert.Fail("Missing vantage " + name);
+        return default;
+    }
+
     private static IEnumerable<OpenFrontLayout.Ramp> AllRamps()
     {
         foreach (var ramp in OpenFrontLayout.PlateauRamps) yield return ramp;
@@ -112,7 +140,7 @@ public sealed class OpenFrontLayoutTests
                 Vector2Int next = new Vector2Int(cell.x + dx, cell.y + dz);
                 if ((dx == 0 && dz == 0) || visited.Contains(next) ||
                     Mathf.Abs(next.x) > OpenFrontLayout.PlayHalfX - 1f || Mathf.Abs(next.y) > OpenFrontLayout.PlayHalfZ - 1f ||
-                    Mathf.Abs(H(next) - height) > MaxStep)
+                    Mathf.Abs(H(next) - height) > MaxStep || IsCliffLip(next))
                 {
                     continue;
                 }
@@ -121,6 +149,20 @@ public sealed class OpenFrontLayoutTests
             }
         }
         return visited;
+    }
+
+    private static bool IsCliffLip(Vector2Int cell)
+    {
+        float height = H(cell);
+        for (int dx = -1; dx <= 1; dx++)
+        for (int dz = -1; dz <= 1; dz++)
+        {
+            if ((dx != 0 || dz != 0) && Mathf.Abs(H(new Vector2Int(cell.x + dx, cell.y + dz)) - height) > MaxStep)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Vector2Int Cell(Vector2 p) => new Vector2Int(Mathf.RoundToInt(p.x), Mathf.RoundToInt(p.y));
