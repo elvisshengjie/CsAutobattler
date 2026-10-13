@@ -6,7 +6,7 @@ Recruit a squad, manage your gold, choose your deployment and tactics, and let y
 
 ## Project status
 
-**This project is in active development.** The current implementation is a three-round campaign prototype. Gameplay, balance, visuals, UI, and content are still evolving.
+**This project is in active development.** The current implementation is a seven-round, one-life campaign on a single map. Gameplay, balance, visuals, UI, and content are still evolving.
 
 The campaign currently reloads the map between rounds while retaining your roster and run upgrades. A defeat clears your roster, upgrades, shop state, and gold progress, then returns you to the main menu for a fresh run.
 
@@ -15,20 +15,21 @@ The campaign currently reloads the map between rounds while retaining your roste
 1. Select **Play** and choose one free C-tier starter from three different role offers. You begin with 5 gold.
 2. Preview the next enemy squad, its tactic, and any stat buffs.
 3. Buy characters and squad modifiers, reroll the shop, or freeze its offers for the next round.
-4. Deploy up to five characters. Extra recruits go to the bench; the total roster holds up to eight characters.
+4. Deploy up to the round's limit (2 in round 1, growing to 5). The enemy always fields the same number, so your edge has to come from ranks, merges, upgrades and tactics. Extra recruits go to the bench; the roster holds up to eight characters.
 5. Lock your deployment and choose an opening team tactic. Recruits keep the role and weapon they were purchased with.
 6. Fight an automated tactical battle, using commands and abilities when needed.
-7. Win to earn gold and advance. Clear all three rounds to complete the prototype campaign; lose any round and start a new run.
+7. Win to earn gold and advance. Clear all seven rounds to complete the campaign; lose any round and start a new run.
 
 ## Current features
 
 ### Recruitment and economy
 
-- Three character offers and a separate modifier offer in the shop.
+- Four character offers and a separate modifier offer in the shop. B-tier offers appear from round 3 and A-tier from round 4.
 - C-, B-, and A-tier characters, with tiers affecting combat stats and role abilities.
-- Character prices of **3 / 5 / 8 gold** for C / B / A tiers.
+- **Merging:** three operators with the same role and rank merge into one of the next rank (C → B → A). The oldest copy survives and keeps its weapon. Buying the third copy works even with a full roster.
+- Character prices of **3 / 5 / 8 gold** for C / B / A tiers; operators sell for one gold less.
 - Shop rerolls cost **1 gold**; modifiers cost **3 gold**.
-- Victory income of **5 gold**, plus **1 interest per 5 saved gold**, capped at 5 interest.
+- Victory income of **5 gold**, plus **1 interest per 5 saved gold** (capped at 5), plus a **+2 flawless bonus** for winning without losing an operator.
 - Persistent recruitment and upgrades within a run, with units restored to full health between rounds.
 
 Available modifiers include stackable health and weapon damage upgrades for the run, plus temporary opening effects that speed up allies or slow enemies for the first 10 seconds of the next battle.
@@ -45,16 +46,31 @@ Available modifiers include stackable health and weapon damage upgrades for the 
 - AI systems for sensing, target selection, role positioning, coordinated movement, and defender rotations.
 - A* pathfinding, position reservations, and influence maps for navigation and tactical positioning.
 - Team status panels, health bars, a minimap, objective timers, and round results.
+- Combat feedback: damage numbers, kill and multi-kill banners (up to ACE), death bursts, camera shake, a low-health pressure vignette with heartbeat, and accelerating bomb beeps.
+
+### Visuals and audio
+
+- URP forward renderer with soft shadows, SSAO and a graded post-processing volume.
+- Triplanar PBR map materials using CC0 textures from [Poly Haven](https://polyhaven.com).
+- Animated CC0 characters from Quaternius' [Toon Shooter Game Kit](https://quaternius.com/packs/toonshootergamekit.html), driven by a Playables graph (idle, run, shoot, hit, death).
+- Menu key art and operator portraits rendered from the in-game models.
+- UI and combat sound effects synthesized by `Tools/Audio/synth_feedback_sfx.py`.
+
+The look is rebuilt by `CsAutobattler > Visual Overhaul > Build All` (`VisualOverhaulBuilder`), and UI art by `Render UI Art` (`UiArtRenderer`).
 
 Campaign enemies are currently always visible. Team-vision visibility rules also exist for play outside the campaign.
 
-### Prototype encounters
+### Campaign encounters
 
-| Round | Encounter | Opposition |
-| --- | --- | --- |
-| 1 | Opening Skirmish | One C-tier rifle defender using a basic hold tactic. |
-| 2 | Split Response | Two C-tier enemies using split defense, with +5% health and damage. |
-| 3 | Coordinated Retake | Three mixed B/C-tier enemies using aggressive rotations, with +12% health and +8% damage. |
+| Round | Encounter | Squad (= deploy limit) | Enemy buff |
+| --- | --- | --- | --- |
+| 1 | Opening Skirmish | 2 × C, no abilities | Rookies: −20% health, −15% damage |
+| 2 | Split Response | 3 × C | Abilities online |
+| 3 | Crossfire | B sniper + 2 × C | +5% health and damage |
+| 4 | Hard Point | 2 × B + 2 × C | +8% health, +5% damage |
+| 5 | Hunter Squad | 3 × B + C, aggressive | +10% health and damage |
+| 6 | Coordinated Retake | A + 3 × B + C | +12% health, +10% damage |
+| 7 | Final Stand | 2 × A + 3 × B | +18% health, +12% damage |
 
 These encounters are defined in `CampaignRoundDefinition.CreatePrototypeRounds()` in [CampaignTypes.cs](Assets/Scripts/Campaign/CampaignTypes.cs). They currently form a fixed sequence rather than a procedurally generated campaign.
 
