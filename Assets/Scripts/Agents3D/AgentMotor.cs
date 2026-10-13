@@ -123,6 +123,9 @@ public class AgentMotor : MonoBehaviour
     public bool PathBlocked => pathBlocked;
     public TacticalSlotKind CurrentSlotKind => currentSlotKind;
     public float SpeedMultiplier { get; set; } = 1f;
+    // Campaign effects (opening haste/slow) own this separately so AI state
+    // changes to SpeedMultiplier never overwrite them.
+    public float EffectSpeedMultiplier { get; set; } = 1f;
     private float movementPlaneY;
     private float surfaceOffset = 1f;
 
@@ -803,7 +806,8 @@ public class AgentMotor : MonoBehaviour
         float weaponMovementMultiplier = loadout != null
             ? loadout.MovementSpeedMultiplier : 1f;
         float baseStepDistance = stats.moveSpeed * weaponMovementMultiplier *
-                                 SpeedMultiplier * Time.fixedDeltaTime;
+                                 SpeedMultiplier * EffectSpeedMultiplier *
+                                 Time.fixedDeltaTime;
         Vector3 safeDirection = GetCollisionSafeDirection(
             currentPosition,
             desiredDirection,

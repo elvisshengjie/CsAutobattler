@@ -59,6 +59,9 @@ public class AgentVisionDebug3D : MonoBehaviour
 
     private bool TogglePressed()
     {
+#if !UNITY_EDITOR && !DEVELOPMENT_BUILD
+        return false;
+#endif
 #if ENABLE_INPUT_SYSTEM
         if (Keyboard.current != null && Keyboard.current.vKey.wasPressedThisFrame)
         {

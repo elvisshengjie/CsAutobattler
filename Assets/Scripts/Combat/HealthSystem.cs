@@ -21,6 +21,10 @@ public class HealthSystem : MonoBehaviour
     public GameObject LastAttacker { get; private set; }
     public event Action<HealthSystem, float, GameObject> Damaged;
     public event Action<HealthSystem> Died;
+    // Global hooks for presentation systems (damage numbers, kill feed, audio)
+    // that should not have to subscribe to every agent individually.
+    public static event Action<HealthSystem, float, GameObject> AnyDamaged;
+    public static event Action<HealthSystem> AnyDied;
 
     private void Awake()
     {
@@ -89,8 +93,7 @@ public class HealthSystem : MonoBehaviour
 
         currentHealth = Mathf.Max(0f, currentHealth - amount);
         Damaged?.Invoke(this, amount, attacker);
-
-        Debug.Log(gameObject.name + " took " + amount + " damage. HP: " + currentHealth);
+        AnyDamaged?.Invoke(this, amount, attacker);
 
         if (currentHealth <= 0)
         {
@@ -109,6 +112,7 @@ public class HealthSystem : MonoBehaviour
 
         Debug.Log(gameObject.name + " died.");
         Died?.Invoke(this);
+        AnyDied?.Invoke(this);
 
         if (controller != null)
         {

@@ -6,7 +6,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// Persistent three-round campaign prototype. The current map supplies five agent
+/// Persistent multi-round campaign. The current map supplies five agent
 /// slots per team; this manager turns those slots into a roster, shop and deployment.
 /// </summary>
 [DefaultExecutionOrder(-1000)]
@@ -26,7 +26,8 @@ public sealed class CampaignManager : MonoBehaviour
 
     private readonly List<CampaignCharacter> roster = new List<CampaignCharacter>();
     private readonly CampaignCharacter[] starterOffers = new CampaignCharacter[3];
-    private readonly CampaignCharacter[] shopOffers = new CampaignCharacter[3];
+    private readonly CampaignCharacter[] shopOffers =
+        new CampaignCharacter[CampaignBalance.ShopSlots];
     private readonly List<CampaignUpgradeKind> permanentUpgrades =
         new List<CampaignUpgradeKind>();
     private readonly List<CampaignUpgradeKind> pendingTemporaryUpgrades =
@@ -41,7 +42,7 @@ public sealed class CampaignManager : MonoBehaviour
     private string campaignSceneName;
     private Vector2 scrollPosition;
     private int currentRoundIndex;
-    private int gold = 5;
+    private int gold = CampaignBalance.StartingGold;
     private int nextCharacterId = 1;
     private int preparedShopRound = -1;
     private int lastIncome;
@@ -52,6 +53,8 @@ public sealed class CampaignManager : MonoBehaviour
     private bool shopFrozen;
     private bool modifierOfferPurchased;
     private bool lastRoundWon;
+    private bool lastRoundFlawless;
+    private int lastRoundDeployedCount;
     private bool campaignStarted;
     private bool showGameOverMessage;
     private CampaignUpgradeKind modifierOffer;
@@ -82,6 +85,13 @@ public sealed class CampaignManager : MonoBehaviour
     public IReadOnlyList<CampaignCharacter> Roster => roster;
     public int Gold => gold;
     public int CurrentRoundNumber => currentRoundIndex + 1;
+    public int TotalRounds => rounds.Length;
+    public bool IsFinalRound => currentRoundIndex >= rounds.Length - 1;
+
+    /// <summary>Raised when operators rank up through a merge (for UI/audio juice).</summary>
+    public static event Action<CampaignCharacter> CharacterPromoted;
+    /// <summary>Raised for shop actions: "buy", "sell", "reroll", "deny".</summary>
+    public static event Action<string> ShopAction;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Bootstrap()
@@ -344,17 +354,7 @@ public sealed class CampaignManager : MonoBehaviour
 
     private CharacterTier RollShopTier()
     {
-        if (currentRoundIndex < 2)
-        {
-            return CharacterTier.C;
-        }
-
-        int roll = random.Next(0, 100);
-        if (roll < 5)
-        {
-            return CharacterTier.A;
-        }
-        return roll < 35 ? CharacterTier.B : CharacterTier.C;
+        return CampaignBalance.RollShopTier(currentRoundIndex, random.Next(0, 100));
     }
 
     private void BuyCharacter(int index)
@@ -366,14 +366,17 @@ public sealed class CampaignManager : MonoBehaviour
         {
             return;
         }
-        if (roster.Count >= CampaignBalance.RosterCapacity)
+        if (roster.Count >= CampaignBalance.RosterCapacity &&
+            !CampaignRosterRules.PurchaseCompletesMerge(roster, offer))
         {
-            feedback = "Roster is full.";
+            feedback = "Roster is full. Sell an operator first.";
+            ShopAction?.Invoke("deny");
             return;
         }
         if (gold < offer.Cost)
         {
             feedback = "Not enough gold.";
+            ShopAction?.Invoke("deny");
             return;
         }
 
@@ -383,6 +386,48 @@ public sealed class CampaignManager : MonoBehaviour
         shopOffers[index] = null;
         feedback = "Purchased " + offer.DisplayName +
                    (offer.deployed ? " and deployed it." : " to the bench.");
+        ShopAction?.Invoke("buy");
+        ResolveMerges();
+    }
+
+    private void ResolveMerges()
+    {
+        List<CampaignCharacter> promoted = CampaignRosterRules.MergeAll(roster);
+        foreach (CampaignCharacter character in promoted)
+        {
+            feedback = $"RANK UP! {character.CharacterName} is now {character.tier}-Tier.";
+            CharacterPromoted?.Invoke(character);
+        }
+        // A merge can free deployment space or exceed it; keep the limit honest.
+        while (GetDeployedCount() > CurrentRound.deploymentLimit)
+        {
+            CampaignCharacter weakest = roster
+                .Where(character => character.deployed)
+                .OrderBy(character => character.tier)
+                .ThenByDescending(character => character.id)
+                .First();
+            weakest.deployed = false;
+        }
+    }
+
+    private void SellCharacter(CampaignCharacter character)
+    {
+        if (character == null || !roster.Contains(character))
+        {
+            return;
+        }
+        if (roster.Count <= 1)
+        {
+            feedback = "You cannot sell your last operator.";
+            ShopAction?.Invoke("deny");
+            return;
+        }
+
+        int value = CampaignBalance.GetSellValue(character.tier);
+        roster.Remove(character);
+        gold += value;
+        feedback = $"Sold {character.CharacterName} for {value} gold.";
+        ShopAction?.Invoke("sell");
     }
 
     private void BuyModifier()
@@ -394,10 +439,12 @@ public sealed class CampaignManager : MonoBehaviour
         if (gold < CampaignBalance.UpgradeCost)
         {
             feedback = "Not enough gold.";
+            ShopAction?.Invoke("deny");
             return;
         }
 
         gold -= CampaignBalance.UpgradeCost;
+        ShopAction?.Invoke("buy");
         if (CampaignBalance.IsPermanent(modifierOffer))
         {
             permanentUpgrades.Add(modifierOffer);
@@ -415,10 +462,12 @@ public sealed class CampaignManager : MonoBehaviour
         if (gold < CampaignBalance.RerollCost)
         {
             feedback = "Not enough gold to reroll.";
+            ShopAction?.Invoke("deny");
             return;
         }
 
         gold -= CampaignBalance.RerollCost;
+        ShopAction?.Invoke("reroll");
         shopFrozen = false;
         GenerateShopOffers();
         feedback = "Shop rerolled.";
@@ -504,6 +553,7 @@ public sealed class CampaignManager : MonoBehaviour
 
         PlayerAbilityCommandController.RefreshForCampaignRound();
 
+        lastRoundDeployedCount = deployed.Count;
         deploymentCommitted = true;
         screen = CampaignScreen.None;
         ObjectiveManager.Instance?.RefreshStartingCarrier();
@@ -572,7 +622,9 @@ public sealed class CampaignManager : MonoBehaviour
                 AgentMotor motor = agent.GetComponent<AgentMotor>();
                 if (motor != null)
                 {
-                    motor.SpeedMultiplier = multiplier;
+                    // EffectSpeedMultiplier is independent of the AI-owned
+                    // SpeedMultiplier, so state changes cannot cancel the effect.
+                    motor.EffectSpeedMultiplier = multiplier;
                 }
             }
         }
@@ -583,6 +635,8 @@ public sealed class CampaignManager : MonoBehaviour
         lastRoundWon = roundManager != null && winner == roundManager.attackingTeam;
         if (lastRoundWon)
         {
+            lastRoundFlawless = CountLivingPlayerUnits() >= lastRoundDeployedCount &&
+                                lastRoundDeployedCount > 0;
             screen = CampaignScreen.Result;
             return;
         }
@@ -595,6 +649,29 @@ public sealed class CampaignManager : MonoBehaviour
         screen = CampaignScreen.MainMenu;
         RoundResultUI.Instance?.Hide();
         StartCoroutine(ReturnToMenuAfterLoss());
+    }
+
+    private static int CountLivingPlayerUnits()
+    {
+        int count = 0;
+        foreach (CampaignUnitMarker marker in
+                 FindObjectsByType<CampaignUnitMarker>(FindObjectsInactive.Exclude))
+        {
+            AgentStats stats = marker.GetComponent<AgentStats>();
+            HealthSystem health = marker.GetComponent<HealthSystem>();
+            if (marker.CharacterId > 0 && stats != null && stats.team == TeamType.Red &&
+                (health == null || !health.IsDead))
+            {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private int GetPendingIncome()
+    {
+        return CampaignBalance.GetRoundIncome(gold) +
+               (lastRoundFlawless ? CampaignBalance.FlawlessBonus : 0);
     }
 
     private IEnumerator ReturnToMenuAfterLoss()
@@ -610,8 +687,9 @@ public sealed class CampaignManager : MonoBehaviour
 
     private void ContinueAfterWin()
     {
-        int income = CampaignBalance.GetRoundIncome(gold);
+        int income = GetPendingIncome();
         gold += income;
+        lastRoundFlawless = false;
         lastIncome = income;
         currentRoundIndex++;
 
@@ -653,7 +731,9 @@ public sealed class CampaignManager : MonoBehaviour
         pendingTemporaryUpgrades.Clear();
         Array.Clear(shopOffers, 0, shopOffers.Length);
         currentRoundIndex = 0;
-        gold = 5;
+        gold = CampaignBalance.StartingGold;
+        lastRoundFlawless = false;
+        lastRoundDeployedCount = 0;
         nextCharacterId = 1;
         preparedShopRound = -1;
         lastIncome = 0;
@@ -811,12 +891,12 @@ public sealed class CampaignManager : MonoBehaviour
             }
         }
 
-        GUI.Label(new Rect(42f, 1018f, 500f, 32f), "PROTOTYPE CAMPAIGN  •  MAP 1", menuSmallStyle);
+        GUI.Label(new Rect(42f, 1018f, 500f, 32f), "CAMPAIGN  •  MAP 1", menuSmallStyle);
         GUIStyle rightFooter = new GUIStyle(menuSmallStyle)
         {
             alignment = TextAnchor.MiddleRight
         };
-        GUI.Label(new Rect(1378f, 1018f, 500f, 32f), "3 ROUNDS  •  DEPLOYMENT LIMIT 5", rightFooter);
+        GUI.Label(new Rect(1378f, 1018f, 500f, 32f), $"{rounds.Length} ROUNDS  •  ONE LIFE", rightFooter);
         GUI.matrix = previousMatrix;
     }
 
@@ -866,10 +946,10 @@ public sealed class CampaignManager : MonoBehaviour
         GUI.Label(new Rect(590f, 395f, 740f, 50f), "HOW TO PLAY", heading);
         GUI.Label(
             new Rect(625f, 465f, 670f, 165f),
-            "1. Choose one of three starting characters.\n" +
-            "2. Buy recruits and upgrades in the shop.\n" +
-            "3. Deploy up to five characters and choose an initial tactic.\n" +
-            "4. Win all three rounds. A defeat ends the campaign.",
+            "1. Choose one of three starting operators.\n" +
+            "2. Buy recruits; 3 of the same role and rank merge into a higher rank.\n" +
+            "3. Enemy squads match your deployment size - out-build them.\n" +
+            $"4. Win all {rounds.Length} rounds. One defeat ends the campaign.",
             body);
         if (DrawMenuButton(new Rect(770f, 650f, 380f, 72f), "◀   BACK"))
         {
@@ -887,13 +967,18 @@ public sealed class CampaignManager : MonoBehaviour
 
     private void DrawPreparation()
     {
-        GUILayout.Label($"ROUND {CurrentRoundNumber:00} / {rounds.Length:00}", HeadingStyle());
+        GUILayout.Label(
+            IsFinalRound
+                ? $"ROUND {CurrentRoundNumber:00} / {rounds.Length:00}  —  FINAL ROUND"
+                : $"ROUND {CurrentRoundNumber:00} / {rounds.Length:00}",
+            HeadingStyle());
         GUILayout.Label(CurrentRound.name, TitleStyle());
         GUILayout.Space(10f);
         GUILayout.BeginHorizontal();
         DrawRoundMetric("AVAILABLE GOLD", gold.ToString());
         DrawRoundMetric($"NEXT WIN ({CampaignBalance.BaseIncome} + {CampaignBalance.GetInterest(gold)} INTEREST)", $"+{CampaignBalance.BaseIncome + CampaignBalance.GetInterest(gold)} GOLD");
         DrawRoundMetric("DEPLOYED", $"{GetDeployedCount()} / {CurrentRound.deploymentLimit}");
+        DrawRoundMetric("ENEMIES", $"{CurrentRound.enemies.Length}  ({GetEnemyTierSummary()})");
         GUILayout.EndHorizontal();
         GUILayout.Space(16f);
         GUILayout.BeginVertical(campaignCardStyle);
@@ -923,6 +1008,15 @@ public sealed class CampaignManager : MonoBehaviour
             else
             {
                 DrawCharacterCardHeader(offer);
+                int owned = CampaignRosterRules.CountMatching(roster, offer.role, offer.tier);
+                if (offer.tier != CharacterTier.A && owned > 0)
+                {
+                    GUILayout.Label(
+                        owned >= CampaignBalance.MergeCount - 1
+                            ? "★ BUY TO RANK UP!"
+                            : $"MERGE {owned + 1}/{CampaignBalance.MergeCount}",
+                        RankStyle());
+                }
                 int captured = i;
                 if (GUILayout.Button($"BUY / {offer.Cost} GOLD", PrimaryButtonStyle(), GUILayout.Height(44f)))
                 {
@@ -960,7 +1054,8 @@ public sealed class CampaignManager : MonoBehaviour
         GUILayout.EndVertical();
 
         GUILayout.Space(12f);
-        GUILayout.Label($"ROSTER ({roster.Count}/{CampaignBalance.RosterCapacity})", HeadingStyle());
+        GUILayout.Label($"ROSTER ({roster.Count}/{CampaignBalance.RosterCapacity})  •  3 of the same role + rank merge into the next rank", HeadingStyle());
+        CampaignCharacter toSell = null;
         foreach (CampaignCharacter character in roster)
         {
             GUILayout.BeginHorizontal(GUI.skin.box);
@@ -974,7 +1069,18 @@ public sealed class CampaignManager : MonoBehaviour
             {
                 ToggleDeployment(character);
             }
+            if (GUILayout.Button(
+                    $"SELL +{CampaignBalance.GetSellValue(character.tier)}",
+                    GUILayout.Width(96f),
+                    GUILayout.Height(30f)))
+            {
+                toSell = character;
+            }
             GUILayout.EndHorizontal();
+        }
+        if (toSell != null)
+        {
+            SellCharacter(toSell);
         }
 
         if (permanentUpgrades.Count > 0 || pendingTemporaryUpgrades.Count > 0)
@@ -995,11 +1101,19 @@ public sealed class CampaignManager : MonoBehaviour
     private void DrawResult()
     {
         GUILayout.FlexibleSpace();
-        GUILayout.Label(lastRoundWon ? "ROUND CLEARED" : "ROUND LOST", TitleStyle());
         GUILayout.Label(lastRoundWon
-            ? $"Your saved {gold} gold will earn {CampaignBalance.GetInterest(gold)} interest."
-            : "You can retry with the same roster and gold. Defeats do not grant farmable income.",
+            ? (lastRoundFlawless ? "FLAWLESS VICTORY" : "ROUND CLEARED")
+            : "ROUND LOST", TitleStyle());
+        GUILayout.Label(
+            $"Income: {CampaignBalance.BaseIncome} base + " +
+            $"{CampaignBalance.GetInterest(gold)} interest" +
+            (lastRoundFlawless ? $" + {CampaignBalance.FlawlessBonus} flawless bonus" : string.Empty) +
+            $" = +{GetPendingIncome()} gold",
             HeadingStyle());
+        if (!lastRoundFlawless)
+        {
+            GUILayout.Label($"Win without losing an operator for +{CampaignBalance.FlawlessBonus} bonus gold.");
+        }
         GUILayout.Space(20f);
         if (lastRoundWon)
         {
@@ -1018,7 +1132,7 @@ public sealed class CampaignManager : MonoBehaviour
     private void DrawComplete()
     {
         GUILayout.FlexibleSpace();
-        GUILayout.Label("THREE-ROUND PROTOTYPE COMPLETE", TitleStyle());
+        GUILayout.Label("CAMPAIGN COMPLETE — ALL SITES TAKEN", TitleStyle());
         GUILayout.Label(
             $"Final gold: {gold}  |  Last income: {lastIncome}  |  Roster: {roster.Count}",
             HeadingStyle());
@@ -1028,6 +1142,14 @@ public sealed class CampaignManager : MonoBehaviour
             ResetCampaign();
         }
         GUILayout.FlexibleSpace();
+    }
+
+    private string GetEnemyTierSummary()
+    {
+        return string.Join(" ", CurrentRound.enemies
+            .GroupBy(enemy => enemy.tier)
+            .OrderByDescending(group => group.Key)
+            .Select(group => $"{group.Count()}×{group.Key}"));
     }
 
     private static string GetRoleAbilityDescription(AgentRoleType role)

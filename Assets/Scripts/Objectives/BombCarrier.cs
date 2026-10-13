@@ -98,6 +98,10 @@ public class BombCarrier : MonoBehaviour
 
     private static bool PlantTestKeyPressed()
     {
+#if !UNITY_EDITOR && !DEVELOPMENT_BUILD
+        // Debug shortcut only: never let shipped builds force a plant.
+        return false;
+#endif
 #if ENABLE_INPUT_SYSTEM
         if (Keyboard.current != null && Keyboard.current.pKey.wasPressedThisFrame)
         {
