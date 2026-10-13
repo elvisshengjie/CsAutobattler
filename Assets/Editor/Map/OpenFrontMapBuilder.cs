@@ -180,7 +180,7 @@ public static class OpenFrontMapBuilder
 
     private static void BuildSkirt(Material material)
     {
-        Mesh mesh = BuildHeightMesh("OpenFrontSkirt", -84f, 84f, -64f, 64f, 1f, true);
+        Mesh mesh = BuildHeightMesh("OpenFrontSkirt", -102f, 102f, -82f, 82f, 1.5f, true);
         mesh = SaveMesh(mesh, "OpenFrontSkirt");
         GameObject skirt = new GameObject("TerrainSkirt");
         skirt.transform.SetParent(root, false);
@@ -221,8 +221,9 @@ public static class OpenFrontMapBuilder
                 // interior so cliffs never poke through.
                 bool interior = Mathf.Abs(x) < OpenFrontLayout.HalfX - 2f &&
                                 Mathf.Abs(z) < OpenFrontLayout.HalfZ - 2f;
-                bool underTerrain = Mathf.Abs(x) <= OpenFrontLayout.HalfX &&
-                                    Mathf.Abs(z) <= OpenFrontLayout.HalfZ;
+                // Exact heights on the terrain's last row so the edge is seamless.
+                bool underTerrain = Mathf.Abs(x) < OpenFrontLayout.HalfX - 0.75f &&
+                                    Mathf.Abs(z) < OpenFrontLayout.HalfZ - 0.75f;
                 float drop = !skirt ? 0f : interior ? 4f : underTerrain ? 0.12f : 0f;
                 vertices[iz * countX + ix] = new Vector3(x, y - drop, z);
                 colors[iz * countX + ix] = new Color(OpenFrontLayout.Dirt(x, z), 0f, 0f, 1f);
@@ -252,19 +253,20 @@ public static class OpenFrontMapBuilder
         return mesh;
     }
 
-    /// <summary>Stores the mesh as an asset and returns the persistent instance.</summary>
+    /// <summary>
+    /// Stores the mesh as a fresh asset (CopySerialized into an existing mesh of
+    /// a different size proved unreliable). The builder reassigns every scene
+    /// reference afterwards.
+    /// </summary>
     private static Mesh SaveMesh(Mesh mesh, string name)
     {
         string path = $"{OutputFolder}/{name}.asset";
-        Mesh existing = AssetDatabase.LoadAssetAtPath<Mesh>(path);
-        if (existing == null)
+        if (AssetDatabase.LoadAssetAtPath<Mesh>(path) != null)
         {
-            AssetDatabase.CreateAsset(mesh, path);
-            return mesh;
+            AssetDatabase.DeleteAsset(path);
         }
-        EditorUtility.CopySerialized(mesh, existing);
-        Object.DestroyImmediate(mesh);
-        return existing;
+        AssetDatabase.CreateAsset(mesh, path);
+        return mesh;
     }
 
     public static float GroundY(float x, float z) => OpenFrontLayout.Height(x, z);
