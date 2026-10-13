@@ -192,12 +192,20 @@ public sealed class RedTeamStatsSlotUI : MonoBehaviour
         if (agent != null)
         {
             AgentPortraitData portraitData = agent.GetComponent<AgentPortraitData>();
-            if (portraitData != null)
+            Sprite explicitSprite = portraitData != null ? portraitData.GetPortraitSprite() : null;
+            if (explicitSprite != null)
             {
-                portraitSprite = portraitData.GetPortraitSprite();
-                portraitColor = portraitSprite != null
-                    ? Color.white
-                    : portraitData.GetPortraitColor();
+                portraitSprite = explicitSprite;
+                portraitColor = Color.white;
+            }
+            else if (AgentPortraitData.TryGetRenderedPortrait(agent.gameObject, out Sprite rendered))
+            {
+                portraitSprite = rendered;
+                portraitColor = Color.white;
+            }
+            else if (portraitData != null)
+            {
+                portraitColor = portraitData.GetPortraitColor();
             }
             else
             {

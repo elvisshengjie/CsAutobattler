@@ -89,10 +89,10 @@ public sealed class CampaignRoundDefinition
         {
             Round(
                 "Opening Skirmish",
-                "Two defenders hold the map. Learn your starter's ability.",
-                "None",
-                "No enemy buffs.",
-                2, 1f, 1f,
+                "Two green defenders hold the map. Learn your starter's ability.",
+                "Rookies",
+                "-20% health and -15% damage. A fair first fight, not a free one.",
+                2, 0.8f, 0.85f,
                 CampaignEnemyTactic.BasicHold,
                 Enemy(AgentRoleType.Defender, WeaponType.Rifle, CharacterTier.C, false),
                 Enemy(AgentRoleType.Flanker, WeaponType.SMG, CharacterTier.C, false)),

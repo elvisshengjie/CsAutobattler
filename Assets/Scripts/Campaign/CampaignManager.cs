@@ -34,6 +34,9 @@ public sealed class CampaignManager : MonoBehaviour
         new List<CampaignUpgradeKind>();
     private readonly Dictionary<int, Texture2D> characterPortraitTextures =
         new Dictionary<int, Texture2D>();
+    // Rendered from the real character models by UiArtRenderer (editor tool).
+    private readonly Dictionary<string, Texture2D> renderedUiTextures =
+        new Dictionary<string, Texture2D>();
 
     private CampaignRoundDefinition[] rounds;
     private CampaignScreen screen;
@@ -66,6 +69,7 @@ public sealed class CampaignManager : MonoBehaviour
     private Texture2D campaignButtonPressedTexture;
     private Texture2D campaignAccentTexture;
     private Texture2D menuBackgroundTexture;
+    private Texture2D menuShadeTexture;
     private GUIStyle campaignPanelStyle;
     private GUIStyle campaignCardStyle;
     private GUIStyle campaignButtonStyle;
@@ -839,11 +843,19 @@ public sealed class CampaignManager : MonoBehaviour
 
     private void DrawMainMenu()
     {
-        GUI.DrawTexture(
-            new Rect(0f, 0f, Screen.width, Screen.height),
-            menuBackgroundTexture,
-            ScaleMode.StretchToFill,
-            false);
+        Texture2D keyArt = LoadUiTexture("MenuKeyArt");
+        Rect fullScreen = new Rect(0f, 0f, Screen.width, Screen.height);
+        if (keyArt != null)
+        {
+            GUI.DrawTexture(fullScreen, keyArt, ScaleMode.ScaleAndCrop, false);
+            // Darken the top for the title and the bottom for the buttons while
+            // leaving the squad in the middle readable.
+            GUI.DrawTexture(fullScreen, GetMenuShadeTexture(), ScaleMode.StretchToFill, true);
+        }
+        else
+        {
+            GUI.DrawTexture(fullScreen, menuBackgroundTexture, ScaleMode.StretchToFill, false);
+        }
 
         const float referenceWidth = 1920f;
         const float referenceHeight = 1080f;
@@ -880,12 +892,12 @@ public sealed class CampaignManager : MonoBehaviour
         }
         else
         {
-            if (DrawMenuButton(new Rect(660f, 405f, 600f, 125f), "▶   PLAY"))
+            if (DrawMenuButton(new Rect(660f, 740f, 600f, 110f), "▶   PLAY"))
             {
                 StartNewCampaign();
             }
 
-            if (DrawMenuButton(new Rect(725f, 560f, 470f, 94f), "◆   HOW TO PLAY"))
+            if (DrawMenuButton(new Rect(725f, 880f, 470f, 84f), "◆   HOW TO PLAY"))
             {
                 showMenuHelp = true;
             }
@@ -957,6 +969,80 @@ public sealed class CampaignManager : MonoBehaviour
         }
     }
 
+    private Texture2D GetMenuShadeTexture()
+    {
+        if (menuShadeTexture != null)
+        {
+            return menuShadeTexture;
+        }
+
+        const int height = 256;
+        menuShadeTexture = new Texture2D(1, height, TextureFormat.RGBA32, false)
+        {
+            name = "MenuShade",
+            hideFlags = HideFlags.HideAndDontSave,
+            wrapMode = TextureWrapMode.Clamp,
+            filterMode = FilterMode.Bilinear
+        };
+        for (int y = 0; y < height; y++)
+        {
+            // Texture rows run bottom-up: dark footer, clear middle, dark header.
+            float t = y / (height - 1f);
+            float bottom = Mathf.SmoothStep(0.92f, 0.1f, Mathf.InverseLerp(0f, 0.42f, t));
+            float top = Mathf.SmoothStep(0.1f, 0.85f, Mathf.InverseLerp(0.62f, 1f, t));
+            menuShadeTexture.SetPixel(0, y, new Color(0.02f, 0.02f, 0.025f, Mathf.Max(bottom, top)));
+        }
+        menuShadeTexture.Apply(false, true);
+        return menuShadeTexture;
+    }
+
+    private Texture2D LoadUiTexture(string textureName)
+    {
+        if (!renderedUiTextures.TryGetValue(textureName, out Texture2D texture))
+        {
+            texture = Resources.Load<Texture2D>("UI/" + textureName);
+            renderedUiTextures[textureName] = texture;
+        }
+        return texture;
+    }
+
+    private static Color GetTierColor(CharacterTier tier)
+    {
+        return tier switch
+        {
+            CharacterTier.A => new Color(1f, 0.74f, 0.22f, 1f),
+            CharacterTier.B => new Color(0.38f, 0.66f, 1f, 1f),
+            _ => new Color(0.72f, 0.75f, 0.78f, 1f)
+        };
+    }
+
+    private void DrawEnemyLineup()
+    {
+        GUILayout.BeginHorizontal();
+        foreach (CampaignEnemyUnit enemy in CurrentRound.enemies)
+        {
+            GUILayout.BeginVertical(GUILayout.Width(104f));
+            Rect rect = GUILayoutUtility.GetRect(96f, 96f, GUILayout.Width(96f), GUILayout.Height(96f));
+            DrawSolidRect(rect, new Color(0.08f, 0.14f, 0.26f, 1f));
+            DrawSolidRect(new Rect(rect.x, rect.y, rect.width, 3f), GetTierColor(enemy.tier));
+            Texture2D portrait = LoadUiTexture($"Portrait_Enemy_{enemy.weapon}");
+            if (portrait != null)
+            {
+                GUI.DrawTexture(rect, portrait, ScaleMode.ScaleToFit, true);
+            }
+            GUIStyle label = new GUIStyle(CharacterSubtitleStyle())
+            {
+                fontSize = 12,
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = GetTierColor(enemy.tier) }
+            };
+            GUILayout.Label($"{enemy.tier} {enemy.role}\n{enemy.weapon}", label, GUILayout.Width(96f));
+            GUILayout.EndVertical();
+        }
+        GUILayout.FlexibleSpace();
+        GUILayout.EndHorizontal();
+    }
+
     private static void DrawSolidRect(Rect rect, Color color)
     {
         Color previousColor = GUI.color;
@@ -988,6 +1074,7 @@ public sealed class CampaignManager : MonoBehaviour
         GUILayout.Label($"Buff: {CurrentRound.enemyBuffName}", CharacterNameStyle());
         if (CurrentRound.enemyBuffName != "None") GUILayout.Label(CurrentRound.enemyBuffDescription);
         GUILayout.Label($"Briefing: {CurrentRound.description}");
+        DrawEnemyLineup();
         GUILayout.EndVertical();
         GUILayout.Space(14f);
         GUILayout.Label("RECRUIT OPERATORS", HeadingStyle());
@@ -1316,16 +1403,31 @@ public sealed class CampaignManager : MonoBehaviour
 
     private void DrawCharacterCardHeader(CampaignCharacter character)
     {
-        GUILayout.Label($"RANK {character.tier}", RankStyle());
+        GUIStyle rank = RankStyle();
+        rank.normal.textColor = GetTierColor(character.tier);
+        GUILayout.Label(character.tier == CharacterTier.A ? "★ RANK A" : $"RANK {character.tier}", rank);
         Rect portraitRect = GUILayoutUtility.GetRect(
             120f,
-            120f,
+            140f,
             GUILayout.ExpandWidth(true));
-        GUI.DrawTexture(
-            portraitRect,
-            GetCharacterPortrait(character),
-            ScaleMode.ScaleToFit,
-            true);
+        Texture2D rendered = LoadUiTexture($"Portrait_Soldier_{character.weapon}");
+        if (rendered != null)
+        {
+            Color roleColor = GetRoleColor(character.role);
+            DrawSolidRect(portraitRect, new Color(roleColor.r * 0.28f, roleColor.g * 0.28f, roleColor.b * 0.28f, 1f));
+            DrawSolidRect(
+                new Rect(portraitRect.x, portraitRect.yMax - 3f, portraitRect.width, 3f),
+                GetTierColor(character.tier));
+            GUI.DrawTexture(portraitRect, rendered, ScaleMode.ScaleToFit, true);
+        }
+        else
+        {
+            GUI.DrawTexture(
+                portraitRect,
+                GetCharacterPortrait(character),
+                ScaleMode.ScaleToFit,
+                true);
+        }
         GUILayout.Label(character.CharacterName.ToUpperInvariant(), CharacterNameStyle());
         GUILayout.Label(
             $"{character.role}  /  {character.weapon}",
@@ -1603,7 +1705,8 @@ public sealed class CampaignManager : MonoBehaviour
             campaignButtonHoverTexture,
             campaignButtonPressedTexture,
             campaignAccentTexture,
-            menuBackgroundTexture
+            menuBackgroundTexture,
+            menuShadeTexture
         };
         foreach (Texture2D texture in textures)
         {

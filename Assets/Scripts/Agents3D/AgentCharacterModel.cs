@@ -18,6 +18,9 @@ public sealed class AgentCharacterModel : MonoBehaviour
     private const string EnemyModelPath = "Characters/Character_Enemy";
     private const float BlendSpeed = 9f;
     private const float NominalRunSpeed = 3.2f;
+    // Visual-only upscale (colliders unchanged) so operators read clearly from
+    // the overhead camera on an 80m map.
+    private const float ReadabilityScale = 1.35f;
 
     // Mixer inputs, in order.
     private static readonly string[] ClipNames =
@@ -42,6 +45,8 @@ public sealed class AgentCharacterModel : MonoBehaviour
         new Dictionary<string, GameObject>();
     private static readonly Dictionary<string, Dictionary<string, AnimationClip>> ClipCache =
         new Dictionary<string, Dictionary<string, AnimationClip>>();
+    private static readonly Dictionary<Material, Material> MatteCache =
+        new Dictionary<Material, Material>();
     private static Material ringMaterialRed;
     private static Material ringMaterialBlue;
     private static Mesh ringMesh;
@@ -127,6 +132,7 @@ public sealed class AgentCharacterModel : MonoBehaviour
 
         BuildGraph(animator, clips);
         modelRenderers = model.GetComponentsInChildren<Renderer>(true);
+        ApplyMatteMaterials(modelRenderers);
         foreach (Renderer renderer in modelRenderers)
         {
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
@@ -206,7 +212,7 @@ public sealed class AgentCharacterModel : MonoBehaviour
         Evaluate(0f);
 
         Bounds modelBounds = MeasureBody();
-        float targetHeight = Mathf.Clamp(agentBounds.size.y * 1.05f, 1.4f, 3f);
+        float targetHeight = Mathf.Clamp(agentBounds.size.y * 1.05f, 1.4f, 3f) * ReadabilityScale;
         float scale = modelBounds.size.y > 0.01f ? targetHeight / modelBounds.size.y : 1f;
         model.localScale *= scale;
 
@@ -274,6 +280,23 @@ public sealed class AgentCharacterModel : MonoBehaviour
         renderer.sharedMaterial = GetRingMaterial(playerTeam);
         renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         renderer.receiveShadows = false;
+    }
+
+    /// <summary>Editor/UI-art helper: hold a single named clip at a normalized time.</summary>
+    public void SetPreviewPose(string clipName, float normalizedTime)
+    {
+        int index = System.Array.IndexOf(ClipNames, clipName);
+        if (!built || index < 0 || index > IdleShootIndex)
+        {
+            return;
+        }
+        for (int i = 0; i <= IdleShootIndex; i++)
+        {
+            weights[i] = i == index ? 1f : 0f;
+        }
+        hitWeight = 0f;
+        times[index] = normalizedTime * ClipLength(index);
+        Evaluate(0f);
     }
 
     public void SetWeapon(WeaponType weaponType)
@@ -448,6 +471,38 @@ public sealed class AgentCharacterModel : MonoBehaviour
         }
         ClipCache[path] = clips;
         return clips;
+    }
+
+    /// <summary>
+    /// The imported FBX materials come in glossy/metallic, which reflects the
+    /// dark sky and turns characters charcoal at low angles. Swap in shared
+    /// matte clones for a clean toon read.
+    /// </summary>
+    public static void ApplyMatteMaterials(Renderer[] renderers)
+    {
+        foreach (Renderer renderer in renderers)
+        {
+            Material[] materials = renderer.sharedMaterials;
+            for (int i = 0; i < materials.Length; i++)
+            {
+                Material source = materials[i];
+                if (source == null)
+                {
+                    continue;
+                }
+                if (!MatteCache.TryGetValue(source, out Material matte) || matte == null)
+                {
+                    matte = new Material(source) { name = source.name + " (Matte)" };
+                    if (matte.HasProperty("_Metallic")) matte.SetFloat("_Metallic", 0f);
+                    if (matte.HasProperty("_Smoothness")) matte.SetFloat("_Smoothness", 0.35f);
+                    if (matte.HasProperty("_SpecularHighlights")) matte.SetFloat("_SpecularHighlights", 1f);
+                    matte.DisableKeyword("_METALLICSPECGLOSSMAP");
+                    MatteCache[source] = matte;
+                }
+                materials[i] = matte;
+            }
+            renderer.sharedMaterials = materials;
+        }
     }
 
     private static Transform FindDeep(Transform root, string childName)
