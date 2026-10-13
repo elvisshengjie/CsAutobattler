@@ -32,7 +32,7 @@ public sealed class HudEditModePreview : MonoBehaviour
             return;
         }
 
-        font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        font = HudLayoutUtility.UiFont;
 
         GameObject canvasObject = new GameObject(
             "EditableHudCanvas",

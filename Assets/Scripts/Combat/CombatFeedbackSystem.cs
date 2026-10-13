@@ -635,14 +635,14 @@ public sealed class CombatFeedbackSystem : MonoBehaviour
 
         numberStyle = new GUIStyle(GUI.skin.label)
         {
+            font = HudLayoutUtility.UiFontBold,
             alignment = TextAnchor.MiddleCenter,
-            fontStyle = FontStyle.Bold,
             fontSize = 22
         };
         bannerStyle = new GUIStyle(GUI.skin.label)
         {
+            font = HudLayoutUtility.UiFontBold,
             alignment = TextAnchor.MiddleCenter,
-            fontStyle = FontStyle.Bold,
             fontSize = 54
         };
         bannerSubtitleStyle = new GUIStyle(GUI.skin.label)

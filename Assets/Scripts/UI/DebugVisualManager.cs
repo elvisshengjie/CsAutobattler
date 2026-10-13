@@ -65,7 +65,7 @@ public class DebugVisualManager : MonoBehaviour
 
     private void AddToggle(Transform parent, string labelText, bool defaultValue, UnityEngine.Events.UnityAction<bool> onValueChanged)
     {
-        Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        Font font = HudLayoutUtility.UiFont;
 
         //  Toggle box for mouse click
         GameObject toggleObj = new GameObject(labelText, typeof(RectTransform), typeof(Image), typeof(Toggle));

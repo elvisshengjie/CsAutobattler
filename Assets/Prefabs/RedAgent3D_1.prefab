@@ -272,6 +272,12 @@ MonoBehaviour:
   rotationSpeed: 720
   separationRadius: 1.5
   separationStrength: 2
+  walkableSurfaceMask:
+    serializedVersion: 2
+    m_Bits: 128
+  surfaceProbeHeight: 6
+  surfaceProbeDistance: 14
+  maximumSurfaceStep: 0.6
   agentRadius: 0.4
   minObstacleClearance: 0.15
   minAgentSeparation: 0.8
@@ -285,8 +291,9 @@ MonoBehaviour:
   avoidanceDistance: 0.8
   avoidanceStrength: 1.5
   avoidanceSideHoldTime: 0.45
+  clearanceEscapeReleaseMargin: 0.12
+  clearanceNormalSmoothing: 10
   minTargetSwitchInterval: 0.75
-  targetSwitchScoreMargin: 2
   stuckDistanceThreshold: 0.05
   stuckTimeThreshold: 3
   hardStuckTimeThreshold: 7

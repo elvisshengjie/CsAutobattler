@@ -631,9 +631,10 @@ public sealed class DeployableTurret : MonoBehaviour
         Vector3 targetPoint = targetCollider != null
             ? targetCollider.bounds.center
             : candidate.transform.position + Vector3.up * 0.8f;
+        // Aim in 3D so turrets can engage targets above or below them.
         Vector3 direction = targetPoint - origin;
-        direction.y = 0f;
-        if (direction.sqrMagnitude < 0.001f)
+        Vector3 flat = new Vector3(direction.x, 0f, direction.z);
+        if (flat.sqrMagnitude < 0.001f)
         {
             return;
         }

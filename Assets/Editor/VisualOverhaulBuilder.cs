@@ -217,6 +217,7 @@ public static class VisualOverhaulBuilder
         material.SetFloat("_Smoothness", smoothness);
         material.SetFloat("_BumpScale", 1.1f);
         material.SetColor("_EmissionColor", emission);
+        material.SetColor("_CapTint", new Color(1f, 1f, 1f, 0f)); // opt-in via SetCap
         EditorUtility.SetDirty(material);
     }
 
@@ -329,33 +330,39 @@ public static class VisualOverhaulBuilder
     /// Use a 60 degree lens at a 60 degree pitch for a readable 2.5D view and
     /// back off until the whole floor fits on screen.
     /// </summary>
+    public static void FrameMainCamera()
+    {
+        Camera main = Camera.main;
+        if (main != null && !main.orthographic)
+        {
+            FrameMap(main);
+            EditorUtility.SetDirty(main.transform);
+        }
+    }
+
     private static void FrameMap(Camera camera)
     {
-        Bounds floor = new Bounds(Vector3.zero, Vector3.zero);
-        foreach (Renderer renderer in Object.FindObjectsByType<Renderer>(FindObjectsInactive.Include))
-        {
-            if (renderer.sharedMaterial != null && renderer.sharedMaterial.name == "Floor_Mat" &&
-                renderer.bounds.size.x * renderer.bounds.size.z > floor.size.x * floor.size.z)
-            {
-                floor = renderer.bounds;
-            }
-        }
-        if (floor.size == Vector3.zero)
+        // Floor3D is the playable ground (blockout floor or Open Front terrain).
+        GameObject floorObject = GameObject.Find("Floor3D");
+        Renderer floorRenderer = floorObject != null ? floorObject.GetComponent<Renderer>() : null;
+        if (floorRenderer == null)
         {
             return;
         }
+        Bounds floor = floorRenderer.bounds;
 
         camera.fieldOfView = 60f;
         camera.aspect = 16f / 9f;
         Quaternion rotation = Quaternion.Euler(60f, 0f, 0f);
         camera.transform.rotation = rotation;
-        Vector3 focus = new Vector3(floor.center.x, floor.max.y, floor.center.z);
+        // Frame the ground plane (y=0), not the top of any raised terrain.
+        Vector3 focus = new Vector3(floor.center.x, 0f, floor.center.z);
         Vector3[] corners =
         {
-            new Vector3(floor.min.x, floor.max.y, floor.min.z),
-            new Vector3(floor.max.x, floor.max.y, floor.min.z),
-            new Vector3(floor.min.x, floor.max.y, floor.max.z),
-            new Vector3(floor.max.x, floor.max.y, floor.max.z)
+            new Vector3(floor.min.x, 0f, floor.min.z),
+            new Vector3(floor.max.x, 0f, floor.min.z),
+            new Vector3(floor.min.x, 0f, floor.max.z),
+            new Vector3(floor.max.x, 0f, floor.max.z)
         };
         for (float distance = 10f; distance < 400f; distance += 1f)
         {

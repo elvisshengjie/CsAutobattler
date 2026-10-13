@@ -270,8 +270,10 @@ public class BulletProjectile : MonoBehaviour
         }
 
         int layer = hitObject.layer;
+        // Walkable3D is the terrain: hills and pit walls stop rounds too.
         if (layer == LayerMask.NameToLayer("Obstacle") ||
-            layer == LayerMask.NameToLayer("Obstacle3D"))
+            layer == LayerMask.NameToLayer("Obstacle3D") ||
+            layer == LayerMask.NameToLayer("Walkable3D"))
         {
             return true;
         }

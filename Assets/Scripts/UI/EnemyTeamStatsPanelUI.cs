@@ -50,7 +50,7 @@ public sealed class EnemyTeamStatsPanelUI : MonoBehaviour
 
     private void Start()
     {
-        Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        Font font = HudLayoutUtility.UiFont;
         for (int i = 0; i < SlotCount; i++) slots[i] = CreateSlot(i + 1, font);
         AssignEnemyAgents();
         nextRefreshTime = Time.unscaledTime + 0.2f;

@@ -267,7 +267,8 @@ public class WeaponSystem : MonoBehaviour
         float rangeAccuracyPenalty = Mathf.Lerp(0.65f, 1.5f, distanceRatio);
         float spread = useFullSpread
             ? loadout.SpreadDegrees
-            : loadout.SpreadDegrees * (1f - normalizedAccuracy) * rangeAccuracyPenalty;
+            : loadout.SpreadDegrees * (1f - normalizedAccuracy) * rangeAccuracyPenalty *
+              GetElevationSpreadMultiplier(targetPoint.y - transform.position.y);
         float randomYaw = Random.Range(-spread, spread);
         Vector3 shotDirection = Quaternion.AngleAxis(randomYaw, Vector3.up) * flatDirection;
 
@@ -281,9 +282,13 @@ public class WeaponSystem : MonoBehaviour
             + shotDirection * muzzleOffset.z
             + transform.right * muzzleOffset.x;
 
-        // The prototype map is flat. Keep shots horizontal so their sphere collider
-        // cannot drift downward and collide with the floor before reaching the target.
+        // Pitch the shot toward the target so fire works between height levels
+        // (plateau, pit, trenches). Spread stays horizontal; terrain in between
+        // still stops the round.
+        Vector3 toTarget = targetPoint - spawnPosition;
+        float flatDistance = new Vector2(toTarget.x, toTarget.z).magnitude;
         shotDirection.y = 0f;
+        shotDirection = shotDirection.normalized * Mathf.Max(0.01f, flatDistance) + Vector3.up * toTarget.y;
         shotDirection.Normalize();
 
         GameObject projectileObject = projectilePrefab != null
@@ -301,6 +306,19 @@ public class WeaponSystem : MonoBehaviour
 
         projectile.Initialize(shotDirection, loadout.Damage, stats.team, gameObject,
             loadout.ProjectileSpeed, loadout.MaximumRange, loadout.MinimumDamageMultiplier);
+    }
+
+    /// <summary>
+    /// High ground pays: firing down at a target 1.5m+ below tightens spread,
+    /// firing up at one 1.5m+ above widens it.
+    /// </summary>
+    public static float GetElevationSpreadMultiplier(float targetHeightAboveShooter)
+    {
+        if (targetHeightAboveShooter < -1.5f)
+        {
+            return 0.75f;
+        }
+        return targetHeightAboveShooter > 1.5f ? 1.2f : 1f;
     }
 
     private Vector3 GetAimPoint(GameObject target)

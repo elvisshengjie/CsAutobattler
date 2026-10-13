@@ -69,7 +69,12 @@ public static class UiArtRenderer
             GameObject soldier = new GameObject("KeyArtSoldier" + i);
             soldier.AddComponent<CapsuleCollider>().center = Vector3.up;
             soldier.transform.SetParent(root.transform);
-            soldier.transform.position = origin + new Vector3(offsets[i], 0f, 14f + depths[i]);
+            Vector3 spot = origin + new Vector3(offsets[i], 0f, 14f + depths[i]);
+            if (Physics.Raycast(spot + Vector3.up * 20f, Vector3.down, out RaycastHit ground, 40f, 1 << 7))
+            {
+                spot.y = ground.point.y; // stand on the terrain
+            }
+            soldier.transform.position = spot;
             soldier.transform.rotation = Quaternion.Euler(0f, 180f + (i - 1.5f) * 6f, 0f);
             AgentCharacterModel.TryApply(soldier, weapons[i]);
             Transform ring = soldier.transform.Find("CharacterModel/TeamRing");
@@ -241,6 +246,7 @@ public static class UiArtRenderer
         RenderTexture rt = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32) { antiAliasing = 4 };
         RenderTexture previous = camera.targetTexture;
         camera.targetTexture = rt;
+        camera.Render(); // warm-up: the first batchmode draw can mis-assign materials
         camera.Render();
         RenderTexture.active = rt;
         Texture2D texture = new Texture2D(width, height, alpha ? TextureFormat.RGBA32 : TextureFormat.RGB24, false);

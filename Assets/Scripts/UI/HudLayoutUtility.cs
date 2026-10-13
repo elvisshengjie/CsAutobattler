@@ -8,6 +8,42 @@ public static class HudLayoutUtility
     public static readonly Color TacticalAccent = new Color(0.91f, 0.69f, 0.32f, 1f);
     public static readonly Color TacticalText = new Color(0.94f, 0.93f, 0.89f, 1f);
 
+    private static Font uiFont;
+    private static Font uiFontBold;
+
+    /// <summary>Rajdhani (SIL OFL) from Resources/Fonts, falling back to Unity's default.</summary>
+    public static Font UiFont
+    {
+        get
+        {
+            if (uiFont == null)
+            {
+                uiFont = Resources.Load<Font>("Fonts/Rajdhani-SemiBold");
+                if (uiFont == null)
+                {
+                    uiFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                }
+            }
+            return uiFont;
+        }
+    }
+
+    public static Font UiFontBold
+    {
+        get
+        {
+            if (uiFontBold == null)
+            {
+                uiFontBold = Resources.Load<Font>("Fonts/Rajdhani-Bold");
+                if (uiFontBold == null)
+                {
+                    uiFontBold = UiFont;
+                }
+            }
+            return uiFontBold;
+        }
+    }
+
     public static void DrawTacticalPanel(Rect rect)
     {
         Color previous = GUI.color;

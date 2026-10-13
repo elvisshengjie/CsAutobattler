@@ -57,7 +57,7 @@ public sealed class TeamTacticUI : MonoBehaviour
         roundManager = RoundManager.Instance != null
             ? RoundManager.Instance
             : FindAnyObjectByType<RoundManager>();
-        font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        font = HudLayoutUtility.UiFont;
         ConfigureGameplayMusic();
         BuildUI();
 

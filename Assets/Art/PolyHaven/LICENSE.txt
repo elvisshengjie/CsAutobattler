@@ -1,3 +1,6 @@
 Textures from Poly Haven (https://polyhaven.com), licensed CC0 1.0 Universal.
 - concrete_tiles: https://polyhaven.com/a/concrete_tiles
 - rock_embedded_concrete_wall: https://polyhaven.com/a/rock_embedded_concrete_wall
+- aerial_grass_rock: https://polyhaven.com/a/aerial_grass_rock
+- brown_mud_dry: https://polyhaven.com/a/brown_mud_dry
+- rock_face_03: https://polyhaven.com/a/rock_face_03

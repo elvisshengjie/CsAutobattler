@@ -1255,8 +1255,8 @@ public sealed class CampaignManager : MonoBehaviour
     {
         return new GUIStyle(GUI.skin.label)
         {
-            fontSize = 32,
-            fontStyle = FontStyle.Bold,
+            font = HudLayoutUtility.UiFontBold,
+            fontSize = 36,
             alignment = TextAnchor.MiddleLeft,
             normal = { textColor = Color.white }
         };
@@ -1345,9 +1345,9 @@ public sealed class CampaignManager : MonoBehaviour
 
         menuTitleStyle = new GUIStyle(GUI.skin.label)
         {
+            font = HudLayoutUtility.UiFontBold,
             alignment = TextAnchor.MiddleCenter,
-            fontSize = 86,
-            fontStyle = FontStyle.Bold,
+            fontSize = 104,
             normal = { textColor = new Color(0.82f, 0.97f, 1f, 1f) }
         };
         menuSubtitleStyle = new GUIStyle(GUI.skin.label)
