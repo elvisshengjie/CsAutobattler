@@ -10,6 +10,16 @@ Recruit a squad, manage your gold, choose your deployment and tactics, and let y
 
 The campaign currently reloads the map between rounds while retaining your roster and run upgrades. A defeat clears your roster, upgrades, shop state, and gold progress, then returns you to the main menu for a fresh run.
 
+## Problem — Agent abilities stopped refreshing after round one
+
+The campaign reloads the map between rounds and keeps the player’s roster. Inactive deployment slots can become active before the current round manager is ready, so relying on their initial enable callback left abilities without the right round binding.
+
+**What failed and how to check it.** Abilities stopped refreshing after round one. To reproduce the issue, deploy a unit with a role ability, use it in round one, then advance and deploy the unit in round two. Check that the ability is available again under the new round rules.
+
+**What I changed and what happened.** I added an explicit ability binding refresh when deploying units. Deployed units now look up the current round manager and synchronise their ability state with the new round.
+
+[Campaign implementation and fix](https://github.com/elvisshengjie/CsAutobattler/commit/c11c64ef1)
+
 ## Gameplay loop
 
 1. Select **Play** and choose one free C-tier starter from three different role offers. You begin with 5 gold.
